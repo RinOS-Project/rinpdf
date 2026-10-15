@@ -528,10 +528,9 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
        if(!paint_corner(prev,poly[i],poly[i+1],ma,mb))return false;
       }
      }
-    }else{
-     for(const auto& join:dashed_joins)
-      if(!paint_corner(join.prev,join.vertex,join.next,join.incoming,join.outgoing))return false;
     }
+    for(const auto& join:dashed_joins)
+     if(!paint_corner(join.prev,join.vertex,join.next,join.incoming,join.outgoing))return false;
    }
    for(size_t k=0;k<path.size();++k){const Rect& rect=path[k];
     Point p0{rect.x,rect.y},p1{rect.x+rect.w,rect.y},p2{rect.x+rect.w,rect.y+rect.h},p3{rect.x,rect.y+rect.h};
