@@ -265,5 +265,14 @@ int main(){
  const char dash_compact[]="[2 2]0 d 0 G 1 w 0 J 0 4 m 8 4 l S";
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(dash_compact),sizeof(dash_compact)-1,8,8,pixels.data(),32))return 150;
  if(channel(1,3,0)==255||channel(3,3,0)!=255)return 151;
+ const char miter_wedge[]="0 j 10 M 0 J 4 w 0 G 4 4 m 10 4 l 10 10 l S";
+ const char bevel_wedge[]="2 j 0 J 4 w 0 G 4 4 m 10 4 l 10 10 l S";
+ const char limited_miter[]="0 j 1 M 0 J 4 w 0 G 4 4 m 10 4 l 10 10 l S";
+ std::vector<unsigned char> mw(16*16*4),bw(16*16*4),lw(16*16*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(miter_wedge),sizeof(miter_wedge)-1,16,16,mw.data(),64))return 152;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(bevel_wedge),sizeof(bevel_wedge)-1,16,16,bw.data(),64))return 153;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(limited_miter),sizeof(limited_miter)-1,16,16,lw.data(),64))return 154;
+ if(mw==bw)return 155;
+ if(lw!=bw)return 156;
  return 0;
 }
