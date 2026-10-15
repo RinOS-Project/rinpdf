@@ -301,3 +301,6 @@ sh scripts/verify-local.sh build-verify-fresh
 ```
 
 もし動的ライブラリ読み込みのエラーが続く場合は、`ldd build-verify-fresh/tests/rinpdf-smoke` で `librinpdf.so` の解決先を確認してください。実際の12テストのPASSは再実行結果を確認するまで未検証です。
+
+## WSL regression follow-up (0.51.4)
+WSLで12テスト中10 PASS、2 FAILが確認されました。`rinpdf-stream` の終了コード3は、Lengthが終端改行を消費しても `endstream` を受理する問題であり、ストリームデータ直後の改行を必須として拒否するよう変更しました。`rinpdf-rectangles` の終了コード28は、2×2 AAの境界画素を完全な黒と期待するテストの問題として、部分被覆を受け入れるよう修正しました。終了コード31の同種の期待値も調整しました。これらの修正後のテスト結果は未確認です。
