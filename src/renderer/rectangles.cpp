@@ -209,13 +209,13 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    size_t stroke_work=0;
    const bool stroke_aa=(size_t)width*height<=262144;
    std::vector<uint8_t> stroke_samples((size_t)width*height,0);
-   auto segment=[&](Point p,Point q,Matrix mat){
+   auto segment=[&](Point p,Point q,Matrix mat,bool join_disk=false){
     double x0=(p.x-box.x0)*sx,y0=(box.y1-p.y)*sy;
     double x1=(q.x-box.x0)*sx,y1=(box.y1-q.y)*sy;
     double dx=x1-x0,dy=y1-y0,denom=dx*dx+dy*dy;
     // A zero-length butt/square segment has no stroke area. Round caps
     // deliberately retain the circular point footprint.
-    if(denom==0&&line_cap!=1)return true;
+    if(denom==0&&line_cap!=1&&!join_disk)return true;
     const double metric=std::hypot(std::hypot(mat.a*sx,mat.b*sy),std::hypot(mat.c*sx,mat.d*sy));
     const double effective_width=line_width==0?(metric>0?1.0/metric:0):line_width;
     const double radius=0.5*effective_width*metric;
@@ -241,10 +241,10 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
       const double ex=(mat.d*vx-mat.c*vy)/determinant,ey=(-mat.b*vx+mat.a*vy)/determinant;
       const double length2=ex*ex+ey*ey;
       double projection=length2>0?(qx*ex+qy*ey)/length2:0;
-      if(line_cap==0&&(projection<0||projection>1))return false;
+      if(!join_disk&&line_cap==0&&(projection<0||projection>1))return false;
       const double extension=length2>0?(effective_width*0.5)/std::sqrt(length2):0;
-      if(line_cap==2&&(projection< -extension||projection>1+extension))return false;
-      const double t=line_cap==1?std::clamp(projection,0.0,1.0):projection;
+      if(!join_disk&&line_cap==2&&(projection< -extension||projection>1+extension))return false;
+      const double t=(join_disk||line_cap==1)?std::clamp(projection,0.0,1.0):projection;
       return std::hypot(qx-t*ex,qy-t*ey)<=effective_width*0.5;
      };
      uint8_t bits=0;
@@ -265,10 +265,10 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     for(size_t k=0;k<polygons.size();++k){
      const auto& poly=polygons[k];
      for(size_t i=1;i+1<poly.size();++i){
-      if(!segment(poly[i],poly[i],polygon_matrices[k][i]))return false;
+      if(!segment(poly[i],poly[i],polygon_matrices[k][i],true))return false;
      }
      if(poly.size()>2&&poly.front().x==poly.back().x&&poly.front().y==poly.back().y){
-      if(!segment(poly.front(),poly.front(),polygon_matrices[k].front()))return false;
+      if(!segment(poly.front(),poly.front(),polygon_matrices[k].front(),true))return false;
      }
     }
    }
@@ -280,7 +280,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     for(size_t k=0;k<path.size();++k){
      const Rect& rect=path[k];
      for(const Point p:{Point{rect.x,rect.y},Point{rect.x+rect.w,rect.y},Point{rect.x+rect.w,rect.y+rect.h},Point{rect.x,rect.y+rect.h}}){
-      if(!segment(p,p,rect_matrices[k]))return false;
+      if(!segment(p,p,rect_matrices[k],true))return false;
      }
     }
    }
