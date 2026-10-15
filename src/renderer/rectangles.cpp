@@ -192,6 +192,10 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
   }else if(word=="S"||word=="s"){
    if(pending_rect_clip||pending_path_clip||!stack.empty()||width>1024||height>1024)return false;
    if(polygons.empty()&&path.empty())continue;
+   // Move-only subpaths contain no drawable segments.
+   bool drawable=!path.empty();
+   for(const auto& poly:polygons)if(poly.size()>1)drawable=true;
+   if(!drawable){path.clear();polygons.clear();polygon_matrices.clear();rect_matrices.clear();mixed_path_ctm=false;continue;}
    if(word=="s"&&!polygons.empty()){
     auto& poly=polygons.back();
     if(poly.size()<2||poly.size()>=4096)return false;
