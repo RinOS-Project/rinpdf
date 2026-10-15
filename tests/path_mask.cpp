@@ -17,5 +17,11 @@ int main(){
  if(intersect_path_masks(first,std::vector<uint8_t>(5,1)))return 6;
  paths={{{0,0},{8,0},{8,8},{0,8}}};
  if(!rasterize_path_mask(paths,8,8,FillRule::NonZero,mask)||mask[63]!=1)return 7;
+ paths.clear();
+ if(!rasterize_path_mask(paths,8,8,FillRule::NonZero,mask)||mask.size()!=64)return 8;
+ for(auto v:mask)if(v!=0)return 9;
+ paths={{{4,4}}};
+ if(!rasterize_path_mask(paths,8,8,FillRule::EvenOdd,mask))return 10;
+ for(auto v:mask)if(v!=0)return 11;
  return 0;
 }
