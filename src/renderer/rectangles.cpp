@@ -377,6 +377,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
       if(!std::isfinite(det)||std::abs(det)<1e-12)return false;
       const double dx=points[i].x-points[i-1].x,dy=points[i].y-points[i-1].y;
       length+=std::hypot((mat.d*dx-mat.c*dy)/det,(-mat.b*dx+mat.a*dy)/det);
+      if(!std::isfinite(length))return false;
      }
      size_t probe=index;
      double left=remaining;
@@ -391,7 +392,10 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
        if(!found)return false;
       }
       const double take=std::min(left,length);
+      if(!std::isfinite(take)||take<=0)return false;
+      const double before=length;
       length-=take;left-=take;
+      if(length==before)return false;
       if(length<=1e-10){seam_on=probe%2==0&&left>1e-10;break;}
      }
     }
