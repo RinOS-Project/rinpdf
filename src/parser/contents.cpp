@@ -6,11 +6,24 @@
 #include "value.h"
 #include <algorithm>
 #include <set>
+#include <cmath>
 namespace rinpdf::parser {
 static const Value* get(const Value& v,const char* name){
  if(v.kind!=Value::Kind::Dictionary)return nullptr;
  auto it=v.dictionary.find(name);
  return it==v.dictionary.end()?nullptr:&it->second;
+}
+
+static bool box_value(const Value& value,MediaBox& box){
+ if(value.kind!=Value::Kind::Array||value.array.size()!=4)return false;
+ double v[4];
+ for(size_t i=0;i<4;++i){
+  if(value.array[i].kind!=Value::Kind::Integer)return false;
+  v[i]=(double)value.array[i].integer;
+  if(!std::isfinite(v[i])||std::abs(v[i])>10000000)return false;
+ }
+ if(v[2]<=v[0]||v[3]<=v[1])return false;
+ box={v[0],v[1],v[2],v[3]};return true;
 }
 struct Reader {
  const uint8_t *data;size_t size;const std::vector<XrefEntry>& xref;
@@ -32,6 +45,30 @@ struct Reader {
   StreamRange range;
   if(!locate_indirect_stream(data,size,*e,xref,range))return false;
   return decode_stream(data,size,range,bytes,limit);
+ }
+ bool walk_box(const Value& ref,size_t depth,size_t& current,size_t target,
+               std::set<size_t>& active,const MediaBox* inherited,MediaBox& output) const {
+  if(depth>64||ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
+  size_t id=(size_t)ref.integer;
+  if(!active.insert(id).second)return false;
+  Value node;
+  if(!object(ref,node)){active.erase(id);return false;}
+  MediaBox own{};
+  const Value *media=get(node,"MediaBox");
+  if(media){if(!box_value(*media,own)){active.erase(id);return false;}inherited=&own;}
+  const Value *type=get(node,"Type");
+  if(!type||type->kind!=Value::Kind::Name){active.erase(id);return false;}
+  if(type->text=="Page"){
+   if(current==target){if(!inherited){active.erase(id);return false;}output=*inherited;}
+   ++current;active.erase(id);return true;
+  }
+  if(type->text!="Pages"){active.erase(id);return false;}
+  const Value *kids=get(node,"Kids");
+  if(!kids||kids->kind!=Value::Kind::Array){active.erase(id);return false;}
+  for(const Value& child:kids->array){
+   if(!walk_box(child,depth+1,current,target,active,inherited,output)){active.erase(id);return false;}
+  }
+  active.erase(id);return true;
  }
  bool walk(const Value& ref,size_t depth,size_t& current,size_t target,
            std::set<size_t>& active,std::vector<uint8_t>& result,size_t limit) const {
@@ -84,4 +121,20 @@ bool read_page_contents(const uint8_t *data,size_t size,size_t index,std::vector
  std::set<size_t> active;size_t current=0;
  return reader.walk(*pages,0,current,index,active,contents,limit)&&index<current;
 }
+bool read_page_box(const uint8_t *data,size_t size,size_t index,MediaBox& box){
+ box={0,0,0,0};if(!data)return false;
+ std::vector<XrefEntry> xref;size_t trailer_pos=0;
+ if(!read_classic_xref(data,size,xref,&trailer_pos))return false;
+ Lexer lexer(data+trailer_pos,size-trailer_pos);Value trailer;
+ if(!parse_value(lexer,trailer))return false;
+ if(get(trailer,"Prev")||get(trailer,"XRefStm")||get(trailer,"Encrypt"))return false;
+ const Value *root=get(trailer,"Root");if(!root)return false;
+ Reader reader{data,size,xref};Value catalog;
+ if(!reader.object(*root,catalog))return false;
+ const Value *type=get(catalog,"Type"),*pages=get(catalog,"Pages");
+ if(!type||type->kind!=Value::Kind::Name||type->text!="Catalog"||!pages)return false;
+ std::set<size_t> active;size_t current=0;
+ return reader.walk_box(*pages,0,current,index,active,nullptr,box)&&index<current;
+}
+
 }
