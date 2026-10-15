@@ -33,6 +33,10 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
  std::vector<double> stack;
  std::vector<Rect> path;
  std::vector<std::vector<Point>> polygons;
+ struct Clip {unsigned x0,y0,x1,y1;};
+ Clip clip{0,0,width,height};
+ std::vector<Clip> clip_stack;
+ bool pending_rect_clip=false;
 
  size_t pos=0;
  while(pos<size){
@@ -47,10 +51,12 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
   if(word=="q"){
    if(!stack.empty()||saved.size()>=64)return false;
    saved.push_back({red,green,blue,a,d,e,f,line_width,stroke_red,stroke_green,stroke_blue,line_cap,line_join,miter_limit});
+   clip_stack.push_back(clip);
 
   }else if(word=="Q"){
    if(!stack.empty()||saved.empty()||(!path.empty()||!polygons.empty()))return false;
    auto color=saved.back();saved.pop_back();red=color.r;green=color.g;blue=color.b;a=color.a;d=color.d;e=color.e;f=color.f;line_width=color.width;stroke_red=color.sr;stroke_green=color.sg;stroke_blue=color.sb;line_cap=color.cap;line_join=color.join;miter_limit=color.miter;
+   clip=clip_stack.back();clip_stack.pop_back();
 
   }else if(word=="cm"){
    if(stack.size()!=6||stack[1]!=0||stack[2]!=0)return false;
@@ -132,8 +138,11 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
   }else if(word=="re"){
    if(stack.size()!=4||path.size()>=4096)return false;
    path.push_back({a*stack[0]+e,d*stack[1]+f,a*stack[2],d*stack[3]});stack.clear();
+  }else if(word=="W"){
+   if(!stack.empty()||pending_rect_clip||path.size()!=1||!polygons.empty())return false;
+   pending_rect_clip=true;
   }else if(word=="S"||word=="s"){
-   if(!stack.empty()||(!polygons.size()&&!path.size())||width>1024||height>1024)return false;
+   if(pending_rect_clip||!stack.empty()||(!polygons.size()&&!path.size())||width>1024||height>1024)return false;
    if(word=="s"&&!polygons.empty()){
     auto& poly=polygons.back();
     if(poly.size()<2||poly.size()>=4096)return false;
@@ -166,7 +175,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
      if(line_cap==2&&(projection< -extension||projection>1+extension))continue;
      double t=line_cap==1?std::clamp(projection,0.0,1.0):projection;
      double distance=std::hypot(px-(x0+t*dx),py-(y0+t*dy));
-     if(distance<=radius){uint8_t* pixel=rgba+(size_t)yy*stride+(size_t)xx*4;pixel[0]=cr;pixel[1]=cg;pixel[2]=cb;pixel[3]=255;}
+     if(distance<=radius&&xx>=clip.x0&&xx<clip.x1&&yy>=clip.y0&&yy<clip.y1){uint8_t* pixel=rgba+(size_t)yy*stride+(size_t)xx*4;pixel[0]=cr;pixel[1]=cg;pixel[2]=cb;pixel[3]=255;}
     }
     return true;
    };
@@ -177,7 +186,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    }
    path.clear();polygons.clear();
   }else if(word=="f"||word=="F"||word=="f*"){
-   if(!stack.empty())return false;
+   if(pending_rect_clip||!stack.empty())return false;
    unsigned char cr=(unsigned char)std::lround(red*255);
    unsigned char cg=(unsigned char)std::lround(green*255);
    unsigned char cb=(unsigned char)std::lround(blue*255);
@@ -226,6 +235,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
      unsigned x_begin=(unsigned)std::clamp(std::ceil(left-0.5),0.0,(double)width);
      unsigned x_end=(unsigned)std::clamp(std::ceil(right-0.5),0.0,(double)width);
      for(unsigned x=x_begin;x<x_end;++x){
+      if(x<clip.x0||x>=clip.x1||y<clip.y0||y>=clip.y1)continue;
       uint8_t* pixel=rgba+(size_t)y*stride+(size_t)x*4;
       pixel[0]=cr;pixel[1]=cg;pixel[2]=cb;pixel[3]=255;
      }
@@ -234,10 +244,24 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    path.clear();polygons.clear();
   }else if(word=="n"){
    if(!stack.empty())return false;
+   if(pending_rect_clip){
+    const Rect& r=path.front();
+    double left=std::clamp((std::min(r.x,r.x+r.w)-box.x0)*sx,0.0,(double)width);
+    double right=std::clamp((std::max(r.x,r.x+r.w)-box.x0)*sx,0.0,(double)width);
+    double top=std::clamp((box.y1-std::max(r.y,r.y+r.h))*sy,0.0,(double)height);
+    double bottom=std::clamp((box.y1-std::min(r.y,r.y+r.h))*sy,0.0,(double)height);
+    clip.x0=std::max(clip.x0,(unsigned)std::clamp(std::ceil(left-0.5),0.0,(double)width));
+    clip.x1=std::min(clip.x1,(unsigned)std::clamp(std::ceil(right-0.5),0.0,(double)width));
+    clip.y0=std::max(clip.y0,(unsigned)std::clamp(std::ceil(top-0.5),0.0,(double)height));
+    clip.y1=std::min(clip.y1,(unsigned)std::clamp(std::ceil(bottom-0.5),0.0,(double)height));
+    if(clip.x1<clip.x0)clip.x1=clip.x0;
+    if(clip.y1<clip.y0)clip.y1=clip.y0;
+    pending_rect_clip=false;
+   }
    path.clear();polygons.clear();
   }else return false; // Do not silently ignore unknown operators.
  }
- return stack.empty()&&path.empty()&&polygons.empty()&&saved.empty();
+ return stack.empty()&&path.empty()&&polygons.empty()&&saved.empty()&&!pending_rect_clip;
 }
 bool render_rectangles(const uint8_t *contents,size_t size,unsigned width,unsigned height,uint8_t *rgba,size_t stride){
  return render_rectangles_box(contents,size,width,height,rgba,stride,{0,0,(double)width,(double)height});
