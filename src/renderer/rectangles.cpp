@@ -280,7 +280,12 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
       double projection=length2>0?(qx*ex+qy*ey)/length2:0;
       if(!join_disk&&line_cap==0&&(projection<0||projection>1))return false;
       const double extension=length2>0?(effective_width*0.5)/std::sqrt(length2):0;
-      if(!join_disk&&line_cap==2&&(projection< -extension||projection>1+extension))return false;
+      if(!join_disk&&line_cap==2){
+       if(projection< -extension||projection>1+extension)return false;
+       // Square caps extend the stroke rectangle, not its circular ends.
+       const double perpendicular=std::abs(qx*ey-qy*ex)/std::sqrt(length2);
+       return perpendicular<=effective_width*0.5;
+      }
       const double t=(join_disk||line_cap==1)?std::clamp(projection,0.0,1.0):projection;
       return std::hypot(qx-t*ex,qy-t*ey)<=effective_width*0.5;
      };
