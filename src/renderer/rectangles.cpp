@@ -21,7 +21,8 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
  if(size>16*1024*1024)return false;
  for(unsigned y=0;y<height;++y)std::memset(rgba+(size_t)y*stride,255,(size_t)width*4);
  double red=0,green=0,blue=0;
- struct Color { double r,g,b; };
+ struct Color { double r,g,b,a,d,e,f; };
+ double a=1,d=1,e=0,f=0;
  std::vector<Color> saved;
  std::vector<double> stack;
  std::vector<Rect> path;
@@ -37,10 +38,15 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
   if(number(word,v)){if(stack.size()>=16)return false;stack.push_back(v);continue;}
   if(word=="q"){
    if(!stack.empty()||saved.size()>=64)return false;
-   saved.push_back({red,green,blue});
+   saved.push_back({red,green,blue,a,d,e,f});
   }else if(word=="Q"){
    if(!stack.empty()||saved.empty()||!path.empty())return false;
-   auto color=saved.back();saved.pop_back();red=color.r;green=color.g;blue=color.b;
+   auto color=saved.back();saved.pop_back();red=color.r;green=color.g;blue=color.b;a=color.a;d=color.d;e=color.e;f=color.f;
+  }else if(word=="cm"){
+   if(stack.size()!=6||stack[1]!=0||stack[2]!=0)return false;
+   double na=a*stack[0],nd=d*stack[3],ne=a*stack[4]+e,nf=d*stack[5]+f;
+   if(!std::isfinite(na)||!std::isfinite(nd)||!std::isfinite(ne)||!std::isfinite(nf)||std::abs(na)>1000000||std::abs(nd)>1000000||std::abs(ne)>10000000||std::abs(nf)>10000000)return false;
+   a=na;d=nd;e=ne;f=nf;stack.clear();
   }else if(word=="rg"){
    if(stack.size()!=3)return false;
    for(double channel:stack)if(channel<0||channel>1)return false;
@@ -57,7 +63,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    red=green=blue=stack[0];stack.clear();
   }else if(word=="re"){
    if(stack.size()!=4||path.size()>=4096)return false;
-   path.push_back({stack[0],stack[1],stack[2],stack[3]});stack.clear();
+   path.push_back({a*stack[0]+e,d*stack[1]+f,a*stack[2],d*stack[3]});stack.clear();
   }else if(word=="f"||word=="F"){
    if(!stack.empty())return false;
    unsigned char cr=(unsigned char)std::lround(red*255);
