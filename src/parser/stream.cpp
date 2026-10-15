@@ -25,8 +25,11 @@ bool locate_stream(const uint8_t *data,size_t size,StreamRange& out){
  if(amount>size-pos)return false;
  size_t end=pos+(size_t)amount;
  size_t marker=end;
+ // The declared stream length must end before the separating EOL.
+ // Otherwise a length that includes the delimiter is silently accepted.
  if(marker<size&&data[marker]=='\r'){++marker;if(marker<size&&data[marker]=='\n')++marker;}
  else if(marker<size&&data[marker]=='\n')++marker;
+ else return false;
  if(!keyword(data,size,marker,"endstream",9))return false;
  marker+=9;
  while(marker<size&&space(data[marker]))++marker;
