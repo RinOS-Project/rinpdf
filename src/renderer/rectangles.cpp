@@ -393,7 +393,22 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
          dashed_joins.push_back({points[i-2],a,b,matrices[i-1],matrices[i]});
         }
        }
-       if(!segment(a,b,matrices[i]))return false;
+       // A dash run may cross a path vertex without acquiring a cap.
+       // Only the start and end of a painted run receive square caps.
+       bool breaks_after=false;
+       if(remaining-take<=1e-12){
+        for(size_t n=1;n<=cycle;++n){
+         const size_t next_index=(index+n)%cycle;
+         if(dash_pattern[next_index%count]>0){
+          breaks_after=(next_index%2)!=0;
+          break;
+         }
+        }
+       }
+       const bool last_piece=i+1==points.size()&&len-(pos+take)<=1e-12;
+       const bool start_cap=!in_on_run;
+       const bool end_cap=breaks_after||last_piece;
+       if(!segment(a,b,matrices[i],false,start_cap,end_cap))return false;
        in_on_run=true;run_end=b;run_matrix=matrices[i];
       }else if(!emit_run())return false;
       pos+=take;remaining-=take;
