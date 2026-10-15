@@ -76,6 +76,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    clip_mask=std::move(clip_mask_stack.back());clip_mask_stack.pop_back();
 
   }else if(word=="cm"){
+   if(!path.empty()||!polygons.empty()||pending_rect_clip||pending_path_clip)return false;
    if(stack.size()!=6)return false;
    const double A=stack[0],B=stack[1],C=stack[2],D=stack[3],E=stack[4],F=stack[5];
    const double na=a*A+cx*B,nb=bx*A+d*B,nc=a*C+cx*D,nd=bx*C+d*D;
