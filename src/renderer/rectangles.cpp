@@ -363,6 +363,9 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
       return true;
      }
     }
+    // For a closed contour whose dash is painted on both sides of the
+    // seam, avoid treating the first and last pieces as independent caps.
+    const bool seam_starts_on=closed&&index%2==0;
     size_t pieces=0;
     bool in_on_run=false;
     Point run_end{};
@@ -427,8 +430,9 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
         }
        }
        const bool last_piece=i+1==points.size()&&len-(pos+take)<=1e-12;
-       const bool start_cap=!in_on_run;
-       const bool end_cap=breaks_after||last_piece;
+       const bool seam_ends_on=last_piece&&!breaks_after;
+       const bool start_cap=!in_on_run&&!(seam_starts_on&&i==1&&pos==0);
+       const bool end_cap=breaks_after||(last_piece&&!(seam_starts_on&&seam_ends_on));
        if(!segment(a,b,matrices[i],false,start_cap,end_cap))return false;
        in_on_run=true;run_end=b;run_matrix=matrices[i];
       }else if(!emit_run())return false;
