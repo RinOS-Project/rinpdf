@@ -472,10 +472,10 @@ int main(){
  std::vector<unsigned char> small_miter_pixels(16*16*4),large_miter_pixels(16*16*4);
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(small_miter),sizeof(small_miter)-1,16,16,small_miter_pixels.data(),64))return 240;
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(large_miter),sizeof(large_miter)-1,16,16,large_miter_pixels.data(),64))return 241;
- const char limited_miter[]="0 j 1 M 0 J 4 w 0 G 3 3 m 10 3 l 10 10 l S";
+ const char fallback_limited_miter[]="0 j 1 M 0 J 4 w 0 G 3 3 m 10 3 l 10 10 l S";
  const char matching_bevel[]="2 j 1 M 0 J 4 w 0 G 3 3 m 10 3 l 10 10 l S";
  std::vector<unsigned char> limited_miter_pixels(16*16*4),matching_bevel_pixels(16*16*4);
- if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(limited_miter),sizeof(limited_miter)-1,16,16,limited_miter_pixels.data(),64))return 242;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(fallback_limited_miter),sizeof(fallback_limited_miter)-1,16,16,limited_miter_pixels.data(),64))return 242;
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(matching_bevel),sizeof(matching_bevel)-1,16,16,matching_bevel_pixels.data(),64))return 243;
  if(limited_miter_pixels!=matching_bevel_pixels)return 244;
  const char scaled_limited_miter[]="3 0 0 1 0 0 cm 0 j 1 M 0 J 2 w 0 G 2 2 m 5 2 l 5 7 l S";
