@@ -23,5 +23,10 @@ int main(){
  paths={{{4,4}}};
  if(!rasterize_path_mask(paths,8,8,FillRule::EvenOdd,mask))return 10;
  for(auto v:mask)if(v!=0)return 11;
+ std::vector<uint8_t> coverage;
+ paths={{{0,0},{1.5,0},{1.5,2},{0,2}}};
+ if(!rasterize_path_coverage_2x(paths,2,2,FillRule::NonZero,coverage))return 12;
+ if(coverage.size()!=4||coverage[0]!=255||coverage[1]!=128||coverage[2]!=255||coverage[3]!=128)return 13;
+ if(rasterize_path_coverage_2x(paths,1024,1024,FillRule::NonZero,coverage))return 14;
  return 0;
 }
