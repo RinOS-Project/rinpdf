@@ -356,7 +356,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
       total_length+=std::hypot((mat.d*dx-mat.c*dy)/det,(-mat.b*dx+mat.a*dy)/det);
       if(!std::isfinite(total_length))return false;
      }
-     if(total_length<remaining){
+     if(total_length<=remaining){
       fully_painted_closed_paths.push_back(path_index);
       for(size_t i=1;i<points.size();++i)
        if(!segment(points[i-1],points[i],matrices[i],false,false,false))return false;
