@@ -41,6 +41,7 @@ extern "C" rinpdf_status rinpdf_document_page_count(const rinpdf_document *d,siz
 
 extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t index,unsigned width,unsigned height,unsigned char *rgba,size_t stride){
  if(!doc||!rgba||width==0||height==0||width>16384||height>16384||stride<(size_t)width*4)return RINPDF_INVALID_ARGUMENT;
+ if((size_t)width*height>16777216)return RINPDF_UNSUPPORTED;
  size_t pages=0;
  if(!rinpdf::parser::count_page_tree(doc->bytes.data(),doc->bytes.size(),pages))return RINPDF_UNSUPPORTED;
  if(index>=pages)return RINPDF_INVALID_ARGUMENT;
