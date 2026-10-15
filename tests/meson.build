@@ -7,3 +7,5 @@ test('rinpdf-stream-object',executable('rinpdf-stream-object','stream_object.cpp
 test('rinpdf-rectangles',executable('rinpdf-rectangles','rectangles.cpp',dependencies:rinpdf_dep))
 test('rinpdf-page-box',executable('rinpdf-page-box','page_box.cpp',dependencies:rinpdf_dep))
 test('rinpdf-rotation',executable('rinpdf-rotation','rotation.cpp',dependencies:rinpdf_dep))
+
+test('rinpdf-path-mask',executable('rinpdf-path-mask','path_mask.cpp',dependencies:rinpdf_dep))
