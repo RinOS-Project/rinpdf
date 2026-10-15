@@ -250,7 +250,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     double dx=x1-x0,dy=y1-y0,denom=dx*dx+dy*dy;
     // A zero-length butt/square segment has no stroke area. Round caps
     // deliberately retain the circular point footprint.
-    if(denom==0&&line_cap!=1&&!join_disk)return true;
+    if(denom==0&&line_cap==0&&!join_disk)return true;
     const double metric=std::hypot(std::hypot(mat.a*sx,mat.b*sy),std::hypot(mat.c*sx,mat.d*sy));
     const double effective_width=line_width==0?(metric>0?1.0/metric:0):line_width;
     const double radius=0.5*effective_width*metric;
@@ -275,6 +275,8 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
       const double qx=(mat.d*ux-mat.c*uy)/determinant,qy=(-mat.b*ux+mat.a*uy)/determinant;
       const double ex=(mat.d*vx-mat.c*vy)/determinant,ey=(-mat.b*vx+mat.a*vy)/determinant;
       const double length2=ex*ex+ey*ey;
+      if(length2==0&&!join_disk&&line_cap==2)
+       return std::abs(qx)<=effective_width*0.5&&std::abs(qy)<=effective_width*0.5;
       double projection=length2>0?(qx*ex+qy*ey)/length2:0;
       if(!join_disk&&line_cap==0&&(projection<0||projection>1))return false;
       const double extension=length2>0?(effective_width*0.5)/std::sqrt(length2):0;
