@@ -92,7 +92,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    for(double value:{na,nb,nc,nd,ne,nf})if(!std::isfinite(value)||std::abs(value)>10000000)return false;
    a=na;bx=nb;cx=nc;d=nd;e=ne;f=nf;stack.clear();
   }else if(word=="w"){
-   if(stack.size()!=1||stack[0]<=0||stack[0]>1024)return false;
+   if(stack.size()!=1||stack[0]<0||stack[0]>1024)return false;
    line_width=stack[0];stack.clear();
   }else if(word=="J"){
    if(stack.size()!=1||stack[0]<0||stack[0]>2||std::floor(stack[0])!=stack[0])return false;
@@ -197,7 +197,9 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     double x0=(p.x-box.x0)*sx,y0=(box.y1-p.y)*sy;
     double x1=(q.x-box.x0)*sx,y1=(box.y1-q.y)*sy;
     double dx=x1-x0,dy=y1-y0,denom=dx*dx+dy*dy;
-    const double radius=0.5*line_width*std::hypot(std::hypot(mat.a*sx,mat.b*sy),std::hypot(mat.c*sx,mat.d*sy));
+    const double metric=std::hypot(std::hypot(mat.a*sx,mat.b*sy),std::hypot(mat.c*sx,mat.d*sy));
+    const double effective_width=line_width==0?(metric>0?1.0/metric:0):line_width;
+    const double radius=0.5*effective_width*metric;
     const double determinant=mat.a*mat.d-mat.b*mat.c;
     if(!std::isfinite(determinant)||std::abs(determinant)<1e-12)return false;
     if(!std::isfinite(denom)||!std::isfinite(radius)||radius>2048)return false;
@@ -221,10 +223,10 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
       const double length2=ex*ex+ey*ey;
       double projection=length2>0?(qx*ex+qy*ey)/length2:0;
       if(line_cap==0&&(projection<0||projection>1))return false;
-      const double extension=length2>0?(line_width*0.5)/std::sqrt(length2):0;
+      const double extension=length2>0?(effective_width*0.5)/std::sqrt(length2):0;
       if(line_cap==2&&(projection< -extension||projection>1+extension))return false;
       const double t=line_cap==1?std::clamp(projection,0.0,1.0):projection;
-      return std::hypot(qx-t*ex,qy-t*ey)<=line_width*0.5;
+      return std::hypot(qx-t*ex,qy-t*ey)<=effective_width*0.5;
      };
      uint8_t bits=0;
      if(stroke_aa){
