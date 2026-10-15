@@ -436,5 +436,11 @@ int main(){
   }
  }
  if(!square_extension)return 227;
+ const char closed_multi_dash[]="[7 3] 2 d 2 J 1 j 2 w 0 G 3 3 m 11 3 l 11 11 l 3 11 l h S";
+ std::vector<unsigned char> closed_multi_pixels(16*16*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(closed_multi_dash),sizeof(closed_multi_dash)-1,16,16,closed_multi_pixels.data(),64))return 228;
+ bool closed_multi_ink=false;
+ for(size_t i=0;i<closed_multi_pixels.size();i+=4)if(closed_multi_pixels[i]<255){closed_multi_ink=true;break;}
+ if(!closed_multi_ink)return 229;
  return 0;
 }
