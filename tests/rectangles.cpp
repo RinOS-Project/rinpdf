@@ -92,7 +92,7 @@ int main(){
  const char unsupported_clip[]="0 0 4 4 re W n";
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(unsupported_clip),sizeof(unsupported_clip)-1,8,8,pixels.data(),32))return 48;
  const char unsupported_clip_evenodd[]="0 0 4 4 re W* n";
- if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(unsupported_clip_evenodd),sizeof(unsupported_clip_evenodd)-1,8,8,pixels.data(),32))return 49;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(unsupported_clip_evenodd),sizeof(unsupported_clip_evenodd)-1,8,8,pixels.data(),32))return 49;
  const char clip_fill[]="q 2 2 3 3 re W n 0 g 0 0 8 8 re f Q";
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(clip_fill),sizeof(clip_fill)-1,8,8,pixels.data(),32))return 50;
  if(channel(0,0,0)!=255||channel(3,3,0)!=0||channel(7,7,0)!=255)return 51;
@@ -101,5 +101,10 @@ int main(){
  if(channel(0,0,0)!=0)return 53;
  const char bad_clip[]="0 0 m 4 0 l 4 4 l h W n";
  if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(bad_clip),sizeof(bad_clip)-1,8,8,pixels.data(),32))return 54;
+ const char evenodd_clip_fill[]="q 2 2 3 3 re W* n 0 g 0 0 8 8 re f Q";
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(evenodd_clip_fill),sizeof(evenodd_clip_fill)-1,8,8,pixels.data(),32))return 55;
+ if(channel(0,0,0)!=255||channel(3,3,0)!=0)return 56;
+ const char pending_state[]="0 0 4 4 re W q n";
+ if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(pending_state),sizeof(pending_state)-1,8,8,pixels.data(),32))return 57;
  return 0;
 }
