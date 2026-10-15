@@ -147,12 +147,12 @@ int main(){
  const char mixed_ctm_fill[]="0 g 1 1 m 2 0 0 2 0 0 cm 3 1 l 3 3 l h f";
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(mixed_ctm_fill),sizeof(mixed_ctm_fill)-1,8,8,pixels.data(),32))return 86;
  const char mixed_ctm_stroke[]="1 1 m 2 0 0 2 0 0 cm 3 1 l S";
- if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(mixed_ctm_stroke),sizeof(mixed_ctm_stroke)-1,8,8,pixels.data(),32))return 87;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(mixed_ctm_stroke),sizeof(mixed_ctm_stroke)-1,8,8,pixels.data(),32))return 87;
  const char reset_ctm[]="1 1 m 2 0 0 2 0 0 cm 3 1 l n 0 g 1 1 2 2 re f";
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(reset_ctm),sizeof(reset_ctm)-1,8,8,pixels.data(),32))return 88;
  const char path_across_q[]="0 g 1 1 m q 2 0 0 2 0 0 cm 3 1 l Q 3 3 l h f";
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(path_across_q),sizeof(path_across_q)-1,8,8,pixels.data(),32))return 89;
  const char path_across_q_stroke[]="1 1 m q 2 0 0 2 0 0 cm 3 1 l Q S";
- if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(path_across_q_stroke),sizeof(path_across_q_stroke)-1,8,8,pixels.data(),32))return 90;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(path_across_q_stroke),sizeof(path_across_q_stroke)-1,8,8,pixels.data(),32))return 90;
  return 0;
 }
