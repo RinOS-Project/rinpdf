@@ -34,3 +34,6 @@ meson test -C build --print-errorlogs
 
 ## MediaBox座標変換 (experimental)
 ページまたは親Pages辞書の整数配列MediaBoxを取得し、RGBA出力解像度に合わせて矩形を線形変換します。PDFの左下原点をRGBAの左上原点へ変換します。実数座標、CropBox、Rotate、UserUnit、一般CTMにはまだ対応していません。未対応の文書はRINPDF_UNSUPPORTEDを返します。
+
+## CTM（実験的）
+CPU矩形レンダラーは `cm` による軸平行な拡大縮小・平行移動と `q` / `Q` によるCTM保存復元に対応します。回転、せん断、任意のアフィン変換、一般パス、CropBox、Rotateは未対応です。対応できない行列は描画成功とせず拒否します。実機およびビルド・テストの動作確認は未実施です。
