@@ -596,11 +596,15 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     if(line_join==2)return paint_triangle(p,u,v);
     const double ux=ax/al,uy=ay/al,vx=bx2/bl,vy=by2/bl;
     const double det=ux*vy-uy*vx;
-    if(std::abs(det)<1e-8)return paint_triangle(p,u,v);
+    // Near-parallel offset lines produce an unbounded miter. Use the
+    // bevel fallback instead of relying on an arbitrary angle cutoff.
+    if(!std::isfinite(det)||std::abs(det)<1e-14)return paint_triangle(p,u,v);
     const double t=((v.x-u.x)*vy-(v.y-u.y)*vx)/det;
+    if(!std::isfinite(t))return paint_triangle(p,u,v);
     const Point tip{u.x+t*ux,u.y+t*uy};
-    if(!std::isfinite(tip.x)||!std::isfinite(tip.y))return false;
-    if(std::hypot(tip.x-p.x,tip.y-p.y)>miter_limit*radius)return paint_triangle(p,u,v);
+    if(!std::isfinite(tip.x)||!std::isfinite(tip.y))return paint_triangle(p,u,v);
+    const double miter_length=std::hypot(tip.x-p.x,tip.y-p.y);
+    if(!std::isfinite(miter_length)||miter_length/radius>miter_limit)return paint_triangle(p,u,v);
     return paint_triangle(p,u,v)&&paint_triangle(u,tip,v);
    };
    if(line_join==0||line_join==2){
