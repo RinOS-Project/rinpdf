@@ -103,12 +103,15 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    if(stack.size()!=1||stack[0]<0||stack[0]>1)return false;
    red=green=blue=stack[0];stack.clear();
   }else if(word=="m"){
+   if(pending_rect_clip)return false;
    if(stack.size()!=2||polygons.size()>=4096)return false;
    polygons.push_back({{a*stack[0]+e,d*stack[1]+f}});stack.clear();
   }else if(word=="l"){
+   if(pending_rect_clip)return false;
    if(stack.size()!=2||polygons.empty()||polygons.back().size()>=4096)return false;
    polygons.back().push_back({a*stack[0]+e,d*stack[1]+f});stack.clear();
   }else if(word=="c"||word=="v"||word=="y"){
+   if(pending_rect_clip)return false;
    const size_t required=word=="c"?6:4;
    if(stack.size()!=required||polygons.empty()||polygons.back().empty()||polygons.back().size()>4096-16)return false;
    auto& poly=polygons.back();
@@ -132,10 +135,12 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    }
    stack.clear();
   }else if(word=="h"){
+   if(pending_rect_clip)return false;
    if(!stack.empty()||polygons.empty()||polygons.back().size()<2)return false;
    if(polygons.back().size()>=4096)return false;
    polygons.back().push_back(polygons.back().front());
   }else if(word=="re"){
+   if(pending_rect_clip)return false;
    if(stack.size()!=4||path.size()>=4096)return false;
    path.push_back({a*stack[0]+e,d*stack[1]+f,a*stack[2],d*stack[3]});stack.clear();
   }else if(word=="W"||word=="W*"){
