@@ -216,5 +216,14 @@ int main(){
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(trailing_move_close),sizeof(trailing_move_close)-1,8,8,closed_pixels.data(),32))return 123;
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(trailing_move_plain),sizeof(trailing_move_plain)-1,8,8,plain_pixels.data(),32))return 124;
  if(closed_pixels!=plain_pixels)return 125;
+ std::string full_closed="0 G 1 w 1 1 m ";
+ for(int i=0;i<4094;++i)full_closed+="1 1 l ";
+ full_closed+="h ";
+ const std::string full_closed_s=full_closed+"s";
+ const std::string full_closed_S=full_closed+"S";
+ std::vector<unsigned char> full_s_pixels(8*8*4),full_S_pixels(8*8*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(full_closed_s.data()),full_closed_s.size(),8,8,full_s_pixels.data(),32))return 126;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(full_closed_S.data()),full_closed_S.size(),8,8,full_S_pixels.data(),32))return 127;
+ if(full_s_pixels!=full_S_pixels)return 128;
  return 0;
 }
