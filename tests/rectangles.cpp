@@ -413,5 +413,15 @@ int main(){
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(diagonal_square),sizeof(diagonal_square)-1,20,20,diagonal_square_pixels.data(),80))return 224;
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(diagonal_butt),sizeof(diagonal_butt)-1,20,20,diagonal_butt_pixels.data(),80))return 225;
  if(diagonal_square_pixels==diagonal_butt_pixels)return 226;
+ // The extra square-cap footprint must include pixels that butt caps
+ // leave untouched; checking inequality alone could hide a regression.
+ bool square_extension=false;
+ for(size_t i=0;i<diagonal_square_pixels.size();i+=4){
+  if(diagonal_square_pixels[i]<255&&diagonal_butt_pixels[i]==255){
+   square_extension=true;
+   break;
+  }
+ }
+ if(!square_extension)return 227;
  return 0;
 }
