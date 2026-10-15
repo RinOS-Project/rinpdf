@@ -58,3 +58,6 @@ CPUレンダラーは `m` (move)、`l` (line)、`h` (close) と `f` (fill) に�
 
 ## Stroking color state (experimental)
 非ストローク色（g/rg/k）とストローク色（G/RG/K）を分離しました。q/Qは線幅と両方の色を保存・復元します。線端J・線結合j・miter limit M・破線dは引き続き未実装です。現状の線分描画は丸い距離判定に基づく近似で、PDF仕様のcap/joinと一致しません。ビルド・テストは未検証です。
+
+## Stroke cap/join state (experimental)
+`J` と `j` は現在の距離判定レンダラーが近似する丸端（1）・丸結合（1）だけを受け付け、それ以外は明示的に拒否します。`M` は有効範囲の値を保持しq/Qで復元しますが、miter結合の描画は未実装です。PDFの初期cap/join値（0）を正しく描ける段階ではありません。破線`d`、butt/square cap、bevel/miter joinは未対応です。ビルド・テスト未検証。
