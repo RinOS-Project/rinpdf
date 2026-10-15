@@ -37,5 +37,14 @@ int main(){
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const uint8_t*>(rect_clip),
  sizeof(rect_clip)-1,4,4,rect_clip_pixels,16))return 14;
  for(unsigned i=0;i<sizeof(clipped);++i)if(rect_clip_pixels[i]!=clipped[i])return 15;
+ uint8_t default_cap[4*4*4]{};
+ uint8_t explicit_cap[4*4*4]{};
+ const char implicit_butt[]="0 G 1 w 1 2 m 3 2 l S";
+ const char explicit_butt[]="0 J 0 G 1 w 1 2 m 3 2 l S";
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const uint8_t*>(implicit_butt),
+ sizeof(implicit_butt)-1,4,4,default_cap,16))return 16;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const uint8_t*>(explicit_butt),
+ sizeof(explicit_butt)-1,4,4,explicit_cap,16))return 17;
+ for(unsigned i=0;i<sizeof(default_cap);++i)if(default_cap[i]!=explicit_cap[i])return 18;
  return 0;
 }
