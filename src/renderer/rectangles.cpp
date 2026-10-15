@@ -289,7 +289,8 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     if(clip_mask.empty())clip_mask=std::move(mask);
     else if(!intersect_path_masks(clip_mask,mask))return false;
     pending_rect_clip=false;
-   }  path.clear();polygons.clear();
+   }
+   path.clear();polygons.clear();
   }else return false; // Do not silently ignore unknown operators.
  }
  return stack.empty()&&path.empty()&&polygons.empty()&&saved.empty()&&!pending_rect_clip&&!pending_path_clip;
