@@ -461,5 +461,11 @@ int main(){
  const char closed_repeated_seam[]="[7 3] 2 d 1 j 1 J 2 w 0 G 3 3 m 3 3 l 11 3 l 11 11 l 3 11 l h S";
  std::vector<unsigned char> repeated_seam_pixels(16*16*4);
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(closed_repeated_seam),sizeof(closed_repeated_seam)-1,16,16,repeated_seam_pixels.data(),64))return 236;
+ const char repeated_closed_miter[]="[7 3] 2 d 0 j 2 J 2 w 0 G 3 3 m 3 3 l 11 3 l 11 11 l 3 11 l h S";
+ const char ordinary_closed_miter[]="[7 3] 2 d 0 j 2 J 2 w 0 G 3 3 m 11 3 l 11 11 l 3 11 l h S";
+ std::vector<unsigned char> repeated_miter_pixels(16*16*4),ordinary_miter_pixels(16*16*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(repeated_closed_miter),sizeof(repeated_closed_miter)-1,16,16,repeated_miter_pixels.data(),64))return 237;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(ordinary_closed_miter),sizeof(ordinary_closed_miter)-1,16,16,ordinary_miter_pixels.data(),64))return 238;
+ if(repeated_miter_pixels!=ordinary_miter_pixels)return 239;
  return 0;
 }
