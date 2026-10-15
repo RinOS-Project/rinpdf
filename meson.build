@@ -1,4 +1,4 @@
-project('rinpdf','cpp',version:'0.45.5',default_options:['cpp_std=c++20','warning_level=3'])
+project('rinpdf','cpp',version:'0.45.6',default_options:['cpp_std=c++20','warning_level=3'])
 inc=include_directories('include')
 zlib_dep=dependency('zlib',required:true)
 sources=files('src/parser/parser.cpp','src/parser/lexer.cpp','src/parser/value.cpp','src/parser/pages.cpp','src/parser/contents.cpp','src/parser/stream.cpp','src/parser/stream_object.cpp','src/parser/flate.cpp','src/parser/xref.cpp','src/parser/object.cpp','src/document/document.cpp','src/renderer/rectangles.cpp','src/renderer/path_mask.cpp','src/security/error.cpp','src/writer/writer.cpp')
