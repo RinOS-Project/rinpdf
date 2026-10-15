@@ -186,5 +186,11 @@ int main(){
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(once_closed),sizeof(once_closed)-1,8,8,once_pixels.data(),32))return 105;
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(twice_closed),sizeof(twice_closed)-1,8,8,twice_pixels.data(),32))return 106;
  if(once_pixels!=twice_pixels)return 107;
+ const char empty_stroke[]="0 G S";
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(empty_stroke),sizeof(empty_stroke)-1,8,8,pixels.data(),32))return 108;
+ if(channel(3,3,0)!=255)return 109;
+ const char move_only_stroke[]="1 1 m S";
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(move_only_stroke),sizeof(move_only_stroke)-1,8,8,pixels.data(),32))return 110;
+ if(channel(3,3,0)!=255)return 111;
  return 0;
 }
