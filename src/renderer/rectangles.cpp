@@ -603,19 +603,27 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     if(!std::isfinite(t))return paint_triangle(p,u,v);
     const Point tip{u.x+t*ux,u.y+t*uy};
     if(!std::isfinite(tip.x)||!std::isfinite(tip.y))return paint_triangle(p,u,v);
-    // The PDF miter limit is a ratio in stroke (user) space.
-    // Device-space Euclidean distances are distorted by anisotropic CTMs.
+    // Miter limit is determined by the angle between the two
+    // user-space tangents, not the Euclidean length after CTM.
+    // For a turn angle theta, the miter/half-width ratio is
+    // 1/cos(theta/2) = sqrt(2/(1+cos(theta))).
+    // This also avoids numerical error from a distant intersection.
     double miter_ratio=0;
-    if(ma.a==mb.a&&ma.b==mb.b&&ma.c==mb.c&&ma.d==mb.d&&line_width>0){
-     const double matrix_det=ma.a*ma.d-ma.b*ma.c;
-     if(!std::isfinite(matrix_det)||std::abs(matrix_det)<1e-12)return false;
-     const double dx=tip.x-p.x,dy=tip.y-p.y;
-     const double tx=(ma.d*dx-ma.c*dy)/matrix_det;
-     const double ty=(-ma.b*dx+ma.a*dy)/matrix_det;
-     miter_ratio=std::hypot(tx,ty)/(line_width*.5);
+    if(ma.a==mb.a&&ma.b==mb.b&&ma.c==mb.c&&ma.d==mb.d){
+     const double md=ma.a*ma.d-ma.b*ma.c;
+     if(!std::isfinite(md)||std::abs(md)<1e-12)return false;
+     const double iax=(ma.d*ax-ma.c*ay)/md;
+     const double iay=(-ma.b*ax+ma.a*ay)/md;
+     const double ibx=(ma.d*bx2-ma.c*by2)/md;
+     const double iby=(-ma.b*bx2+ma.a*by2)/md;
+     const double la=std::hypot(iax,iay),lb=std::hypot(ibx,iby);
+     if(!std::isfinite(la)||!std::isfinite(lb)||la<=0||lb<=0)return false;
+     const double cosine=std::clamp((iax*ibx+iay*iby)/(la*lb),-1.0,1.0);
+     if(cosine<=-1.0+1e-14)return paint_triangle(p,u,v);
+     miter_ratio=std::sqrt(2.0/(1.0+cosine));
     }else{
-     // Mixed CTMs have no single inverse at the join; retain the
-     // conservative device-space bound until a common stroke model exists.
+     // A path assembled under different CTMs has no single stroke
+     // space. Use the existing device-space conservative fallback.
      miter_ratio=std::hypot(tip.x-p.x,tip.y-p.y)/radius;
     }
     if(!std::isfinite(miter_ratio)||miter_ratio>miter_limit)return paint_triangle(p,u,v);
