@@ -310,6 +310,8 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
      if(take<=0)return false;
      phase-=take;remaining-=take;
     }
+    // Resolve exact phase boundaries before consuming the first segment.
+    if(remaining==0&&!advance())return false;
     size_t pieces=0;
     bool in_on_run=false;
     Point run_end{};
