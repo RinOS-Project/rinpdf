@@ -32,5 +32,11 @@ int main(){
  pdf=make_pdf("");
  if(!rinpdf::parser::read_page_box(reinterpret_cast<const unsigned char*>(pdf.data()),pdf.size(),0,box))return 4;
  if(box.x0!=0||box.y0!=0||box.x1!=600||box.y1!=800)return 5;
+ pdf=make_pdf("/Rotate 90");
+ if(!rinpdf::parser::read_page_box(reinterpret_cast<const unsigned char*>(pdf.data()),pdf.size(),0,box)||box.rotation!=90)return 6;
+ pdf=make_pdf("/Rotate -90");
+ if(!rinpdf::parser::read_page_box(reinterpret_cast<const unsigned char*>(pdf.data()),pdf.size(),0,box)||box.rotation!=270)return 7;
+ pdf=make_pdf("/Rotate 45");
+ if(rinpdf::parser::read_page_box(reinterpret_cast<const unsigned char*>(pdf.data()),pdf.size(),0,box))return 8;
  return 0;
 }
