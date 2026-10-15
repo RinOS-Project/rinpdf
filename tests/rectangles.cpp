@@ -30,5 +30,10 @@ int main(){
  if(channel(4,3,0)!=0||channel(0,0,0)!=255)return 15;
  const char shear[]="1 1 0 1 0 0 cm";
  if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(shear),sizeof(shear)-1,8,8,pixels.data(),32))return 16;
+ const char triangle[]="0 g 1 1 m 7 1 l 4 7 l h f";
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(triangle),sizeof(triangle)-1,8,8,pixels.data(),32))return 17;
+ if(channel(4,3,0)!=0||channel(0,0,0)!=255)return 18;
+ const char broken[]="0 0 l f";
+ if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(broken),sizeof(broken)-1,8,8,pixels.data(),32))return 19;
  return 0;
 }
