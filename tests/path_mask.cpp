@@ -1,5 +1,6 @@
 #include "../src/renderer/path_mask.h"
 #include <vector>
+#include <limits>
 using namespace rinpdf::renderer;
 int main(){
  std::vector<std::vector<MaskPoint>> paths={
@@ -42,5 +43,9 @@ int main(){
  if(!rasterize_path_coverage_2x(max_vertices,2,2,FillRule::NonZero,coverage))return 21;
  if(coverage.size()!=4)return 22;
  for(auto value:coverage)if(value!=0)return 23;
+ paths={{{std::numeric_limits<double>::quiet_NaN(),1}}};
+ if(rasterize_path_mask(paths,8,8,FillRule::NonZero,mask))return 24;
+ paths={{{1,std::numeric_limits<double>::infinity()}}};
+ if(rasterize_path_mask(paths,8,8,FillRule::EvenOdd,mask))return 25;
  return 0;
 }
