@@ -618,9 +618,16 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
      const double iby=(-ma.b*bx2+ma.a*by2)/md;
      const double la=std::hypot(iax,iay),lb=std::hypot(ibx,iby);
      if(!std::isfinite(la)||!std::isfinite(lb)||la<=0||lb<=0)return false;
-     const double cosine=std::clamp((iax*ibx+iay*iby)/(la*lb),-1.0,1.0);
-     if(cosine<=-1.0+1e-14)return paint_triangle(p,u,v);
-     miter_ratio=std::sqrt(2.0/(1.0+cosine));
+     // Normalize first: computing dot/(la*lb) can overflow for
+     // finite but strongly anisotropic inverse-transformed tangents.
+     const double nax=iax/la,nay=iay/la,nbx=ibx/lb,nby=iby/lb;
+     const double cosine=std::clamp(nax*nbx+nay*nby,-1.0,1.0);
+     if(!std::isfinite(cosine))return false;
+     // Compare squared values to avoid a large intermediate miter ratio.
+     const double denominator=1.0+cosine;
+     if(denominator<=0||miter_limit*miter_limit*denominator<2.0)
+      return paint_triangle(p,u,v);
+     miter_ratio=std::sqrt(2.0/denominator);
     }else{
      // A path assembled under different CTMs has no single stroke
      // space. Use the existing device-space conservative fallback.
