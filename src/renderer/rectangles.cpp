@@ -193,7 +193,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    if(word=="s"&&!polygons.empty()){
     auto& poly=polygons.back();
     if(poly.size()<2||poly.size()>=4096)return false;
-    poly.push_back(poly.front());polygon_matrices.back().push_back(polygon_matrices.back().front());
+    poly.push_back(poly.front());polygon_matrices.back().push_back(matrix());
    }
    const unsigned char cr=(unsigned char)std::lround(stroke_red*255),cg=(unsigned char)std::lround(stroke_green*255),cb=(unsigned char)std::lround(stroke_blue*255);
    size_t stroke_work=0;
