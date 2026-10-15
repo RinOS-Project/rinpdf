@@ -48,8 +48,10 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
  try{
   std::vector<uint8_t> contents;
   if(!rinpdf::parser::read_page_contents(doc->bytes.data(),doc->bytes.size(),index,contents))return RINPDF_UNSUPPORTED;
+  rinpdf::parser::MediaBox box{};
+  if(!rinpdf::parser::read_page_box(doc->bytes.data(),doc->bytes.size(),index,box))return RINPDF_UNSUPPORTED;
   std::vector<uint8_t> temporary((size_t)width*height*4);
-  if(!rinpdf::renderer::render_rectangles(contents.data(),contents.size(),width,height,temporary.data(),(size_t)width*4))return RINPDF_UNSUPPORTED;
+  if(!rinpdf::renderer::render_rectangles_box(contents.data(),contents.size(),width,height,temporary.data(),(size_t)width*4,{box.x0,box.y0,box.x1,box.y1}))return RINPDF_UNSUPPORTED;
   for(unsigned y=0;y<height;++y)std::memcpy(rgba+(size_t)y*stride,temporary.data()+(size_t)y*width*4,(size_t)width*4);
   return RINPDF_OK;
  }catch(const std::bad_alloc&){return RINPDF_OUT_OF_MEMORY;}
