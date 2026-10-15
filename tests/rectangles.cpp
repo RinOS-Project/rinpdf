@@ -68,8 +68,10 @@ int main(){
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(square),sizeof(square)-1,8,8,pixels.data(),32))return 38;
  const char invalid_cap[]="3 J";
  if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(invalid_cap),sizeof(invalid_cap)-1,8,8,pixels.data(),32))return 39;
- const char unsupported_join[]="2 j";
- if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(unsupported_join),sizeof(unsupported_join)-1,8,8,pixels.data(),32))return 36;
+ const char bevel_join[]="2 j 0 G 1 w 1 1 m 6 1 l S";
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(bevel_join),sizeof(bevel_join)-1,8,8,pixels.data(),32))return 36;
+ const char invalid_join[]="3 j";
+ if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(invalid_join),sizeof(invalid_join)-1,8,8,pixels.data(),32))return 93;
  const char invalid_miter[]="0 M";
  if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(invalid_miter),sizeof(invalid_miter)-1,8,8,pixels.data(),32))return 37;
  std::string excessive="1 J 1 j 1 w 0 G ";
