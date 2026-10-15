@@ -26,6 +26,9 @@ if [ -f "$build_dir/build.ninja" ]; then
 else
   meson setup "$build_dir" -Dbuildtype=debug -Db_sanitize="$sanitizer"
 fi
+# An older configured build may retain the former versioned shared
+# library's SONAME. Reconfiguration is required after this build change.
+# Meson will relink the test binaries against the unversioned librinpdf.so.
 meson compile -C "$build_dir"
 if [ "$#" -ge 2 ]; then
   meson test -C "$build_dir" --print-errorlogs --no-rebuild "$2"
