@@ -43,6 +43,8 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
  std::vector<Clip> clip_stack;
  std::vector<uint8_t> clip_mask;
  std::vector<std::vector<uint8_t>> clip_mask_stack;
+ size_t saved_clip_bytes=0;
+ constexpr size_t max_saved_clip_bytes=32u*1024u*1024u;
  bool pending_rect_clip=false;
  bool pending_path_clip=false;
  bool mixed_path_ctm=false;
@@ -71,8 +73,10 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
   if(word=="q"){
    if((pending_rect_clip||pending_path_clip)||!stack.empty()||saved.size()>=64)return false;
    saved.push_back({red,green,blue,a,bx,cx,d,e,f,line_width,stroke_red,stroke_green,stroke_blue,line_cap,line_join,miter_limit});
+   if(clip_mask.size()>max_saved_clip_bytes-saved_clip_bytes)return false;
    clip_stack.push_back(clip);
    clip_mask_stack.push_back(clip_mask);
+   saved_clip_bytes+=clip_mask.size();
 
   }else if(word=="Q"){
    if((pending_rect_clip||pending_path_clip)||!stack.empty()||saved.empty())return false;
@@ -80,6 +84,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    if((!path.empty()||!polygons.empty())&&(a!=color.a||bx!=color.bx||cx!=color.cx||d!=color.d||e!=color.e||f!=color.f))mixed_path_ctm=true;
    red=color.r;green=color.g;blue=color.b;a=color.a;bx=color.bx;cx=color.cx;d=color.d;e=color.e;f=color.f;line_width=color.width;stroke_red=color.sr;stroke_green=color.sg;stroke_blue=color.sb;line_cap=color.cap;line_join=color.join;miter_limit=color.miter;
    clip=clip_stack.back();clip_stack.pop_back();
+   saved_clip_bytes-=clip_mask_stack.back().size();
    clip_mask=std::move(clip_mask_stack.back());clip_mask_stack.pop_back();
 
   }else if(word=="cm"){
