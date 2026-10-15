@@ -130,7 +130,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    if(pending_path_clip)return false;
    if(pending_rect_clip)return false;
    if(stack.size()!=2||polygons.empty()||polygons.back().size()>=4096)return false;
-   polygons.back().push_back({a*stack[0]+e,d*stack[1]+f});stack.clear();
+   polygons.back().push_back(transform(stack[0],stack[1]));stack.clear();
   }else if(word=="c"||word=="v"||word=="y"){
    if(pending_path_clip||pending_rect_clip)return false;
    const size_t required=word=="c"?6:4;
@@ -164,7 +164,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
   }else if(word=="re"){
    if(pending_path_clip)return false;
    if(pending_rect_clip)return false;
-   if(stack.size()!=4||path.size()>=4096)return false;
+   if(stack.size()!=4||path.size()>=4096||polygons.size()>=4096)return false;
    {const Point p=transform(stack[0],stack[1]);const Point q=transform(stack[0]+stack[2],stack[1]+stack[3]);
    if(bx!=0||cx!=0){polygons.push_back({p,transform(stack[0]+stack[2],stack[1]),q,transform(stack[0],stack[1]+stack[3])});}
    else path.push_back({p.x,p.y,q.x-p.x,q.y-p.y});stack.clear();}
