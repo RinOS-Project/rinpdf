@@ -371,5 +371,13 @@ int main(){
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(zero_first_dash),sizeof(zero_first_dash)-1,8,8,zero_first_a.data(),32))return 203;
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(zero_first_shifted),sizeof(zero_first_shifted)-1,8,8,zero_first_b.data(),32))return 204;
  if(zero_first_a!=zero_first_b)return 205;
+ const char closed_butt_caps[]="1 j 0 J 2 w 0 G 3 3 m 11 3 l 11 11 l 3 11 l h S";
+ const char closed_square_caps[]="1 j 2 J 2 w 0 G 3 3 m 11 3 l 11 11 l 3 11 l h S";
+ const char closed_round_caps[]="1 j 1 J 2 w 0 G 3 3 m 11 3 l 11 11 l 3 11 l h S";
+ std::vector<unsigned char> closed_butt_pixels(16*16*4),closed_square_pixels(16*16*4),closed_round_pixels(16*16*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(closed_butt_caps),sizeof(closed_butt_caps)-1,16,16,closed_butt_pixels.data(),64))return 206;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(closed_square_caps),sizeof(closed_square_caps)-1,16,16,closed_square_pixels.data(),64))return 207;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(closed_round_caps),sizeof(closed_round_caps)-1,16,16,closed_round_pixels.data(),64))return 208;
+ if(closed_butt_pixels!=closed_square_pixels||closed_butt_pixels!=closed_round_pixels)return 209;
  return 0;
 }
