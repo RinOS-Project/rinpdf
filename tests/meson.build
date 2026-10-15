@@ -4,3 +4,4 @@ test('rinpdf-lexer',executable('rinpdf-lexer','lexer.cpp',dependencies:rinpdf_de
 test('rinpdf-value',executable('rinpdf-value','value.cpp',dependencies:rinpdf_dep))
 test('rinpdf-stream',executable('rinpdf-stream','stream.cpp',dependencies:rinpdf_dep))
 test('rinpdf-stream-object',executable('rinpdf-stream-object','stream_object.cpp',dependencies:rinpdf_dep))
+test('rinpdf-rectangles',executable('rinpdf-rectangles','rectangles.cpp',dependencies:rinpdf_dep))
