@@ -381,6 +381,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
      }
      size_t probe=index;
      double left=remaining;
+     bool resolved=false;
      for(size_t n=0;n<65536&&length>1e-10;++n){
       if(left<=1e-12){
        bool found=false;
@@ -396,8 +397,15 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
       const double before=length;
       length-=take;left-=take;
       if(length==before)return false;
-      if(length<=1e-10){seam_on=probe%2==0&&left>1e-10;break;}
+      if(length<=1e-10){
+       seam_on=probe%2==0&&left>1e-10;
+       resolved=true;
+       break;
+      }
      }
+     // Do not silently render an incorrect cap when the finite traversal
+     // budget cannot resolve the state at the closed contour seam.
+     if(!resolved)return false;
     }
     const bool joined_seam=first_on&&seam_on;
     size_t pieces=0;
