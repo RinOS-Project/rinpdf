@@ -168,5 +168,11 @@ int main(){
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(default_join),sizeof(default_join)-1,8,8,first.data(),32))return 96;
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(explicit_miter),sizeof(explicit_miter)-1,8,8,second.data(),32))return 97;
  if(first!=second)return 98;
+ const char round_rect[]="1 j 0 J 2 w 0 G 2 2 3 3 re S";
+ const char round_poly[]="1 j 0 J 2 w 0 G 2 2 m 5 2 l 5 5 l 2 5 l h S";
+ std::vector<unsigned char> rect_join_pixels(8*8*4),poly_join_pixels(8*8*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(round_rect),sizeof(round_rect)-1,8,8,rect_join_pixels.data(),32))return 99;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(round_poly),sizeof(round_poly)-1,8,8,poly_join_pixels.data(),32))return 100;
+ if(rect_join_pixels!=poly_join_pixels)return 101;
  return 0;
 }
