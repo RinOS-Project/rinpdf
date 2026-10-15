@@ -490,16 +490,20 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     if(!emit_run())return false;
     if(joined_seam&&points.size()>3){
      const Point& p=points.front();
-     const Point& prev=points[points.size()-2];
-     const Point& next=points[1];
-     // Repeated endpoints have no defined tangent at the seam.
-     if(std::hypot(p.x-prev.x,p.y-prev.y)<=1e-10||
-        std::hypot(next.x-p.x,next.y-p.y)<=1e-10)return true;
-     if(line_join==1){
-      if(!segment(p,p,matrices.back(),true))return false;
-     }else if(line_join==0||line_join==2){
-      if(dashed_joins.size()>=4096)return false;
-      dashed_joins.push_back({points[points.size()-2],p,points[1],matrices.back(),matrices[1]});
+     // Skip repeated vertices to recover the actual incoming and outgoing
+     // tangents. The previous guard discarded a valid seam join entirely.
+     size_t incoming=points.size()-2;
+     while(incoming>0&&std::hypot(p.x-points[incoming].x,p.y-points[incoming].y)<=1e-10)--incoming;
+     size_t outgoing=1;
+     while(outgoing+1<points.size()&&std::hypot(p.x-points[outgoing].x,p.y-points[outgoing].y)<=1e-10)++outgoing;
+     if(std::hypot(p.x-points[incoming].x,p.y-points[incoming].y)>1e-10&&
+        std::hypot(p.x-points[outgoing].x,p.y-points[outgoing].y)>1e-10){
+      if(line_join==1){
+       if(!segment(p,p,matrices.back(),true))return false;
+      }else if(line_join==0||line_join==2){
+       if(dashed_joins.size()>=4096)return false;
+       dashed_joins.push_back({points[incoming],p,points[outgoing],matrices[incoming+1],matrices[outgoing]});
+      }
      }
     }
     return true;
