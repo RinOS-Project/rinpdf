@@ -44,5 +44,9 @@ int main(){
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(shorthand_y),sizeof(shorthand_y)-1,8,8,pixels.data(),32))return 23;
  const char malformed_curve[]="0 0 m 1 2 3 c";
  if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(malformed_curve),sizeof(malformed_curve)-1,8,8,pixels.data(),32))return 24;
+ const char clipped[]="0 g -100 -100 m 4 2 l 4 6 l h f";
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(clipped),sizeof(clipped)-1,8,8,pixels.data(),32))return 25;
+ std::vector<unsigned char> large(2048*1024*4);
+ if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(triangle),sizeof(triangle)-1,2048,1024,large.data(),2048*4))return 26;
  return 0;
 }
