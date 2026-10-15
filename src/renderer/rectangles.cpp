@@ -311,6 +311,15 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
      phase-=take;remaining-=take;
     }
     size_t pieces=0;
+    bool in_on_run=false;
+    Point run_end{};
+    Matrix run_matrix{};
+    auto emit_run=[&]()->bool{
+     if(!in_on_run)return true;
+     if(line_cap==1&&!segment(run_end,run_end,run_matrix,true))return false;
+     in_on_run=false;
+     return true;
+    };
     for(size_t i=1;i<points.size();++i){
      const Point p=points[i-1],q=points[i];
      double len=std::hypot(q.x-p.x,q.y-p.y);
@@ -326,12 +335,14 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
        const double t0=pos/len,t1=(pos+take)/len;
        Point a{p.x+(q.x-p.x)*t0,p.y+(q.y-p.y)*t0};
        Point b{p.x+(q.x-p.x)*t1,p.y+(q.y-p.y)*t1};
+       if(!in_on_run&&line_cap==1&&!segment(a,a,matrices[i],true))return false;
        if(!segment(a,b,matrices[i]))return false;
-      }
+       in_on_run=true;run_end=b;run_matrix=matrices[i];
+      }else if(!emit_run())return false;
       pos+=take;remaining-=take;
      }
     }
-    return true;
+    return emit_run();
    };
    for(size_t k=0;k<polygons.size();++k)if(!stroke_path(polygons[k],polygon_matrices[k]))return false;
    // Round joins are disks at connected vertices. Keep the union in
