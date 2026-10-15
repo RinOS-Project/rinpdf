@@ -381,7 +381,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
      }
      size_t probe=index;
      double left=remaining;
-     bool resolved=false;
+     bool resolved=length<=1e-10;
      for(size_t n=0;n<65536&&length>1e-10;++n){
       if(left<=1e-12){
        bool found=false;
