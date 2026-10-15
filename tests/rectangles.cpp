@@ -89,5 +89,9 @@ int main(){
  const char nonzero[]="0 g 0 0 m 8 0 l 8 8 l 0 8 l h 2 2 m 6 2 l 6 6 l 2 6 l h f";
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(nonzero),sizeof(nonzero)-1,8,8,pixels.data(),32))return 46;
  if(channel(3,3,0)!=0)return 47;
+ const char unsupported_clip[]="0 0 4 4 re W n";
+ if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(unsupported_clip),sizeof(unsupported_clip)-1,8,8,pixels.data(),32))return 48;
+ const char unsupported_clip_evenodd[]="0 0 4 4 re W* n";
+ if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(unsupported_clip_evenodd),sizeof(unsupported_clip_evenodd)-1,8,8,pixels.data(),32))return 49;
  return 0;
 }
