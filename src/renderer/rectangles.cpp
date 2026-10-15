@@ -20,6 +20,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
  if(!std::isfinite(sx)||!std::isfinite(sy))return false;
  if(!rgba||(!contents&&size)||!width||!height||width>16384||height>16384||stride<(size_t)width*4)return false;
  if(size>16*1024*1024)return false;
+ if((size_t)width*height>16777216)return false;
  for(unsigned y=0;y<height;++y)std::memset(rgba+(size_t)y*stride,255,(size_t)width*4);
  double red=0,green=0,blue=0;
  struct Color { double r,g,b,a,d,e,f; };
@@ -118,6 +119,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    }
    for(const auto& poly:polygons){
     if(poly.size()<3)return false;
+    if((size_t)width*height>1048576)return false;
     for(unsigned y=0;y<height;++y){
      double scan=(double)y+0.5;
      std::vector<double> intersections;
@@ -133,7 +135,9 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
      for(size_t i=0;i+1<intersections.size();i+=2){
       double lo=std::clamp(intersections[i],0.0,(double)width);
       double hi=std::clamp(intersections[i+1],0.0,(double)width);
-      for(unsigned x=(unsigned)std::ceil(lo-0.5);x<width&&(double)x+0.5<hi;++x){
+      unsigned x_begin=(unsigned)std::clamp(std::ceil(lo-0.5),0.0,(double)width);
+      unsigned x_end=(unsigned)std::clamp(std::ceil(hi-0.5),0.0,(double)width);
+      for(unsigned x=x_begin;x<x_end;++x){
        uint8_t* pixel=rgba+(size_t)y*stride+(size_t)x*4;
        pixel[0]=cr;pixel[1]=cg;pixel[2]=cb;pixel[3]=255;
       }
