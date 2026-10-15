@@ -447,5 +447,11 @@ int main(){
  std::vector<unsigned char> seam_round_pixels(16*16*4),seam_miter_pixels(16*16*4);
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(closed_round_seam),sizeof(closed_round_seam)-1,16,16,seam_round_pixels.data(),64))return 230;
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(closed_miter_seam),sizeof(closed_miter_seam)-1,16,16,seam_miter_pixels.data(),64))return 231;
+ const char closed_zero_perimeter[]="[2 2] 0 d 1 j 1 J 2 w 0 G 4 4 m 4 4 l 4 4 l h S";
+ std::vector<unsigned char> zero_perimeter_pixels(8*8*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(closed_zero_perimeter),sizeof(closed_zero_perimeter)-1,8,8,zero_perimeter_pixels.data(),32))return 232;
+ const char closed_seam_gap[]="[2 2] 2 d 0 j 2 J 2 w 0 G 2 2 m 6 2 l 6 6 l 2 6 l h S";
+ std::vector<unsigned char> seam_gap_pixels(8*8*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(closed_seam_gap),sizeof(closed_seam_gap)-1,8,8,seam_gap_pixels.data(),32))return 233;
  return 0;
 }
