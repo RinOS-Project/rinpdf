@@ -172,7 +172,9 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
   }else if(word=="h"){
    if(pending_path_clip)return false;
    if(pending_rect_clip)return false;
-   if(!stack.empty()||polygons.empty()||polygons.back().size()<2)return false;
+   if(!stack.empty()||polygons.empty())return false;
+   // Closing a move-only subpath does not create a drawable segment.
+   if(polygons.back().size()==1)continue;
    if(polygons.back().size()>=4096)return false;
    const Point first=polygons.back().front(),last=polygons.back().back();
    if(first.x!=last.x||first.y!=last.y){polygons.back().push_back(first);polygon_matrices.back().push_back(matrix());}
