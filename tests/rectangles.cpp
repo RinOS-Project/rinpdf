@@ -35,5 +35,14 @@ int main(){
  if(channel(4,3,0)!=0||channel(0,0,0)!=255)return 18;
  const char broken[]="0 0 l f";
  if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(broken),sizeof(broken)-1,8,8,pixels.data(),32))return 19;
+ const char cubic[]="0 g 1 1 m 1 6 6 6 6 1 c h f";
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(cubic),sizeof(cubic)-1,8,8,pixels.data(),32))return 20;
+ if(channel(3,4,0)!=0||channel(0,0,0)!=255)return 21;
+ const char shorthand_v[]="0 g 1 1 m 4 7 7 1 v h f";
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(shorthand_v),sizeof(shorthand_v)-1,8,8,pixels.data(),32))return 22;
+ const char shorthand_y[]="0 g 1 1 m 4 7 7 1 y h f";
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(shorthand_y),sizeof(shorthand_y)-1,8,8,pixels.data(),32))return 23;
+ const char malformed_curve[]="0 0 m 1 2 3 c";
+ if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(malformed_curve),sizeof(malformed_curve)-1,8,8,pixels.data(),32))return 24;
  return 0;
 }
