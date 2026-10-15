@@ -51,6 +51,31 @@ bool rasterize_path_mask(const std::vector<std::vector<MaskPoint>>& subpaths,
  mask=std::move(result);
  return true;
 }
+bool rasterize_path_coverage_2x(const std::vector<std::vector<MaskPoint>>& subpaths,
+ unsigned width,unsigned height,FillRule rule,std::vector<uint8_t>& coverage){
+ coverage.clear();
+ if(!width||!height||(size_t)width*height>262144)return false;
+ std::vector<std::vector<MaskPoint>> scaled;
+ scaled.reserve(subpaths.size());
+ for(const auto& path:subpaths){
+  auto& dest=scaled.emplace_back();
+  dest.reserve(path.size());
+  for(const auto& point:path){
+   if(!std::isfinite(point.x)||!std::isfinite(point.y))return false;
+   dest.push_back({point.x*2,point.y*2});
+  }
+ }
+ std::vector<uint8_t> samples;
+ if(!rasterize_path_mask(scaled,width*2,height*2,rule,samples))return false;
+ std::vector<uint8_t> result((size_t)width*height);
+ for(unsigned y=0;y<height;++y)for(unsigned x=0;x<width;++x){
+  size_t i=(size_t)(y*2)*(width*2)+x*2;
+  unsigned sum=samples[i]+samples[i+1]+samples[i+width*2]+samples[i+width*2+1];
+  result[(size_t)y*width+x]=(uint8_t)((sum*255+2)/4);
+ }
+ coverage=std::move(result);
+ return true;
+}
 bool intersect_path_masks(std::vector<uint8_t>& current,const std::vector<uint8_t>& incoming){
  if(current.size()!=incoming.size())return false;
  for(size_t i=0;i<current.size();++i)current[i]=(uint8_t)(current[i]&&incoming[i]);
