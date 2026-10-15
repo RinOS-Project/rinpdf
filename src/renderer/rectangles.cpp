@@ -1,4 +1,5 @@
 #include "rectangles.h"
+#include "path_mask.h"
 #include <algorithm>
 #include <charconv>
 #include <cmath>
@@ -197,54 +198,25 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    unsigned char cb=(unsigned char)std::lround(blue*255);
    if((size_t)width*height>1048576)return false;
 
-   // Build one edge set across rectangles and all subpaths.
-   // The signed crossing count implements nonzero winding; parity implements f*.
-   struct Edge {double x0,y0,x1,y1;int winding;};
-   std::vector<Edge> edges;
-   auto edge=[&](Point p,Point q)->bool{
-    double x0=(p.x-box.x0)*sx,x1=(q.x-box.x0)*sx;
-    double y0=(box.y1-p.y)*sy,y1=(box.y1-q.y)*sy;
-    if(!std::isfinite(x0)||!std::isfinite(x1)||!std::isfinite(y0)||!std::isfinite(y1))return false;
-    if(y0==y1)return true;
-    if(edges.size()>=65536)return false;
-    edges.push_back({x0,y0,x1,y1,y1>y0?1:-1});return true;
-   };
+   std::vector<std::vector<MaskPoint>> shapes;
    for(const Rect& rect:path){
-    Point p0{rect.x,rect.y},p1{rect.x+rect.w,rect.y},p2{rect.x+rect.w,rect.y+rect.h},p3{rect.x,rect.y+rect.h};
-    if(!edge(p0,p1)||!edge(p1,p2)||!edge(p2,p3)||!edge(p3,p0))return false;
+    shapes.push_back({{(rect.x-box.x0)*sx,(box.y1-rect.y)*sy},
+      {(rect.x+rect.w-box.x0)*sx,(box.y1-rect.y)*sy},
+      {(rect.x+rect.w-box.x0)*sx,(box.y1-rect.y-rect.h)*sy},
+      {(rect.x-box.x0)*sx,(box.y1-rect.y-rect.h)*sy}});
    }
    for(const auto& poly:polygons){
-    if(poly.size()<2)return false;
-    for(size_t i=1;i<poly.size();++i)if(!edge(poly[i-1],poly[i]))return false;
-    if(!edge(poly.back(),poly.front()))return false;
+    std::vector<MaskPoint> shape;
+    for(const Point& point:poly)shape.push_back({(point.x-box.x0)*sx,(box.y1-point.y)*sy});
+    shapes.push_back(std::move(shape));
    }
-   struct Crossing {double x;int winding;};
-   for(unsigned y=0;y<height;++y){
-    double scan=(double)y+0.5;
-    std::vector<Crossing> crossings;
-    for(const Edge& e:edges){
-     if((e.y0<=scan&&scan<e.y1)||(e.y1<=scan&&scan<e.y0)){
-      double x=e.x0+(scan-e.y0)*(e.x1-e.x0)/(e.y1-e.y0);
-      if(!std::isfinite(x))return false;
-      crossings.push_back({x,e.winding});
-     }
-    }
-    std::sort(crossings.begin(),crossings.end(),[](const Crossing& lhs,const Crossing& rhs){return lhs.x<rhs.x;});
-    int winding=0;
-    for(size_t i=0;i+1<crossings.size();++i){
-     winding+=crossings[i].winding;
-     bool inside=word=="f*" ? (winding%2!=0) : (winding!=0);
-     if(!inside)continue;
-     double left=std::clamp(crossings[i].x,0.0,(double)width);
-     double right=std::clamp(crossings[i+1].x,0.0,(double)width);
-     unsigned x_begin=(unsigned)std::clamp(std::ceil(left-0.5),0.0,(double)width);
-     unsigned x_end=(unsigned)std::clamp(std::ceil(right-0.5),0.0,(double)width);
-     for(unsigned x=x_begin;x<x_end;++x){
-      if(x<clip.x0||x>=clip.x1||y<clip.y0||y>=clip.y1)continue;
-      uint8_t* pixel=rgba+(size_t)y*stride+(size_t)x*4;
-      pixel[0]=cr;pixel[1]=cg;pixel[2]=cb;pixel[3]=255;
-     }
-    }
+   std::vector<uint8_t> mask;
+   if(!rasterize_path_mask(shapes,width,height,word=="f*"?FillRule::EvenOdd:FillRule::NonZero,mask))return false;
+   for(size_t i=0;i<mask.size();++i){
+    unsigned x=(unsigned)(i%width),y=(unsigned)(i/width);
+    if(!mask[i]||x<clip.x0||x>=clip.x1||y<clip.y0||y>=clip.y1)continue;
+    uint8_t* pixel=rgba+(size_t)y*stride+(size_t)x*4;
+    pixel[0]=cr;pixel[1]=cg;pixel[2]=cb;pixel[3]=255;
    }
    path.clear();polygons.clear();
   }else if(word=="n"){
