@@ -74,7 +74,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
   else while(pos<size&&!space(contents[pos])&&contents[pos]!='['&&contents[pos]!=']')++pos;
   std::string word(reinterpret_cast<const char*>(contents+begin),pos-begin);
   double v=0;
-  if(number(word,v)){if(reading_dash){if(dash_values.size()>=32)return false;dash_values.push_back(v);}else{if(stack.size()>=16)return false;stack.push_back(v);}continue;}
+  if(number(word,v)){if(reading_dash){if(dash_values.size()>=32)return false;dash_values.push_back(v);}else{if(dash_array_ready&&stack.size()>=1)return false;if(stack.size()>=16)return false;stack.push_back(v);}continue;}
   if(word=="["){if(reading_dash||dash_array_ready||!stack.empty())return false;reading_dash=true;dash_values.clear();continue;}
   if(word=="]"){if(!reading_dash)return false;reading_dash=false;dash_array_ready=true;continue;}
   // Only numeric elements are legal inside a dash array.
