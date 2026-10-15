@@ -388,7 +388,8 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     const double x1=(p1.x-box.x0)*sx,y1=(box.y1-p1.y)*sy;
     const double x2=(p2.x-box.x0)*sx,y2=(box.y1-p2.y)*sy;
     const double area=(x1-x0)*(y2-y0)-(y1-y0)*(x2-x0);
-    if(!std::isfinite(area)||std::abs(area)<1e-10)return true;
+    if(!std::isfinite(x0)||!std::isfinite(y0)||!std::isfinite(x1)||!std::isfinite(y1)||!std::isfinite(x2)||!std::isfinite(y2)||!std::isfinite(area))return false;
+    if(std::abs(area)<1e-10)return true;
     unsigned xb=(unsigned)std::clamp(std::floor(std::min({x0,x1,x2})-1),0.0,(double)width);
     unsigned xe=(unsigned)std::clamp(std::ceil(std::max({x0,x1,x2})+1),0.0,(double)width);
     unsigned yb=(unsigned)std::clamp(std::floor(std::min({y0,y1,y2})-1),0.0,(double)height);
