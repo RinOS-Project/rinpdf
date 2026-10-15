@@ -1,5 +1,5 @@
 #include "rinpdf/document.h"
-#include "../parser/parser.h"
+#include "../parser/pages.h"
 #include <cstdio>
 #include <cstring>
 #include <new>
@@ -32,6 +32,6 @@ extern "C" rinpdf_status rinpdf_document_version(const rinpdf_document *d,unsign
 extern "C" rinpdf_status rinpdf_document_page_count(const rinpdf_document *d,size_t *count){
  if(!d||!count)return RINPDF_INVALID_ARGUMENT;
  size_t result=0;
- if(!rinpdf::parser::count_pages(d->bytes.data(),d->bytes.size(),result))return RINPDF_UNSUPPORTED;
+ if(!rinpdf::parser::count_page_tree(d->bytes.data(),d->bytes.size(),result))return RINPDF_UNSUPPORTED;
  *count=result;return RINPDF_OK;
 }
