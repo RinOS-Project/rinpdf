@@ -37,5 +37,10 @@ int main(){
  std::vector<std::vector<MaskPoint>> max_vertices(16,std::vector<MaskPoint>(4096,{0,0}));
  if(!rasterize_path_mask(max_vertices,8,8,FillRule::NonZero,mask))return 17;
  for(auto value:mask)if(value!=0)return 18;
+ if(rasterize_path_coverage_2x(too_many_paths,2,2,FillRule::NonZero,coverage))return 19;
+ if(rasterize_path_coverage_2x(too_many_vertices,2,2,FillRule::EvenOdd,coverage))return 20;
+ if(!rasterize_path_coverage_2x(max_vertices,2,2,FillRule::NonZero,coverage))return 21;
+ if(coverage.size()!=4)return 22;
+ for(auto value:coverage)if(value!=0)return 23;
  return 0;
 }
