@@ -25,5 +25,10 @@ int main(){
  if(!rinpdf::renderer::render_rectangles_box(reinterpret_cast<const unsigned char*>(scaled),sizeof(scaled)-1,8,8,pixels.data(),32,{100,200,140,240}))return 11;
  if(channel(1,5,0)!=0||channel(6,6,0)!=255)return 12;
  if(rinpdf::renderer::render_rectangles_box(reinterpret_cast<const unsigned char*>(scaled),sizeof(scaled)-1,8,8,pixels.data(),32,{0,0,0,10}))return 13;
+ const char transform[]="q 2 0 0 2 1 1 cm 0 g 1 1 2 2 re f Q";
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(transform),sizeof(transform)-1,8,8,pixels.data(),32))return 14;
+ if(channel(4,3,0)!=0||channel(0,0,0)!=255)return 15;
+ const char shear[]="1 1 0 1 0 0 cm";
+ if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(shear),sizeof(shear)-1,8,8,pixels.data(),32))return 16;
  return 0;
 }
