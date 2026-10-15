@@ -1,0 +1,87 @@
+#include "contents.h"
+#include "xref.h"
+#include "object.h"
+#include "stream_object.h"
+#include "stream.h"
+#include "value.h"
+#include <algorithm>
+#include <set>
+namespace rinpdf::parser {
+static const Value* get(const Value& v,const char* name){
+ if(v.kind!=Value::Kind::Dictionary)return nullptr;
+ auto it=v.dictionary.find(name);
+ return it==v.dictionary.end()?nullptr:&it->second;
+}
+struct Reader {
+ const uint8_t *data;size_t size;const std::vector<XrefEntry>& xref;
+ bool entry(const Value& ref,const XrefEntry*& out) const {
+  if(ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
+  auto it=std::find_if(xref.begin(),xref.end(),[&](const XrefEntry& e){
+   return e.in_use&&e.object==(size_t)ref.integer&&e.generation==ref.generation;
+  });
+  if(it==xref.end())return false;out=&*it;return true;
+ }
+ bool object(const Value& ref,Value& out) const {
+  const XrefEntry *e=nullptr;if(!entry(ref,e))return false;
+  size_t a=0,b=0;if(!resolve_object(data,size,*e,a,b)||b<=a)return false;
+  Lexer l(data+a,b-a);
+  return parse_value(l,out)&&l.next().kind==TokenKind::End;
+ }
+ bool stream(const Value& ref,std::vector<uint8_t>& bytes,size_t limit) const {
+  const XrefEntry *e=nullptr;if(!entry(ref,e))return false;
+  StreamRange range;
+  if(!locate_indirect_stream(data,size,*e,xref,range))return false;
+  return decode_stream(data,size,range,bytes,limit);
+ }
+ bool walk(const Value& ref,size_t depth,size_t& current,size_t target,
+           std::set<size_t>& active,std::vector<uint8_t>& result,size_t limit) const {
+  if(depth>64||ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
+  size_t id=(size_t)ref.integer;
+  if(!active.insert(id).second)return false;
+  Value node;
+  if(!object(ref,node)){active.erase(id);return false;}
+  const Value *type=get(node,"Type");
+  if(!type||type->kind!=Value::Kind::Name){active.erase(id);return false;}
+  if(type->text=="Page"){
+   bool ok=true;
+   if(current==target){
+    const Value *contents=get(node,"Contents");
+    if(contents){
+     if(contents->kind==Value::Kind::Reference)ok=stream(*contents,result,limit);
+     else if(contents->kind==Value::Kind::Array){
+      for(const Value& child:contents->array){
+       std::vector<uint8_t> part;
+       if(!stream(child,part,limit-result.size())){ok=false;break;}
+       result.insert(result.end(),part.begin(),part.end());
+       if(result.size()<limit)result.push_back('\n');
+      }
+     }else ok=false;
+    }
+   }
+   ++current;active.erase(id);return ok;
+  }
+  if(type->text!="Pages"){active.erase(id);return false;}
+  const Value *kids=get(node,"Kids");
+  if(!kids||kids->kind!=Value::Kind::Array){active.erase(id);return false;}
+  for(const Value& child:kids->array){
+   if(!walk(child,depth+1,current,target,active,result,limit)){active.erase(id);return false;}
+  }
+  active.erase(id);return true;
+ }
+};
+bool read_page_contents(const uint8_t *data,size_t size,size_t index,std::vector<uint8_t>& contents,size_t limit){
+ contents.clear();if(!data||limit==0)return false;
+ std::vector<XrefEntry> xref;size_t trailer_pos=0;
+ if(!read_classic_xref(data,size,xref,&trailer_pos))return false;
+ Lexer lexer(data+trailer_pos,size-trailer_pos);Value trailer;
+ if(!parse_value(lexer,trailer))return false;
+ if(get(trailer,"Prev")||get(trailer,"XRefStm")||get(trailer,"Encrypt"))return false;
+ const Value *root=get(trailer,"Root");if(!root)return false;
+ Reader reader{data,size,xref};Value catalog;
+ if(!reader.object(*root,catalog))return false;
+ const Value *type=get(catalog,"Type"),*pages=get(catalog,"Pages");
+ if(!type||type->kind!=Value::Kind::Name||type->text!="Catalog"||!pages)return false;
+ std::set<size_t> active;size_t current=0;
+ return reader.walk(*pages,0,current,index,active,contents,limit)&&index<current;
+}
+}
