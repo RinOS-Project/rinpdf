@@ -61,3 +61,6 @@ CPUレンダラーは `m` (move)、`l` (line)、`h` (close) と `f` (fill) に�
 
 ## Stroke cap/join state (experimental)
 `J` と `j` は現在の距離判定レンダラーが近似する丸端（1）・丸結合（1）だけを受け付け、それ以外は明示的に拒否します。`M` は有効範囲の値を保持しq/Qで復元しますが、miter結合の描画は未実装です。PDFの初期cap/join値（0）を正しく描ける段階ではありません。破線`d`、butt/square cap、bevel/miter joinは未対応です。ビルド・テスト未検証。
+
+## Stroke caps (experimental)
+`J` は0=butt、1=round、2=squareに対応しました。距離ベースのCPUラスタライザで線分方向の投影を用いて端の延長範囲を制御します。線結合 `j` は依然として丸結合のみ、破線 `d` とアンチエイリアスは未実装です。既定の線端設定や結合部のPDF仕様完全準拠は未検証です。ビルド・テスト実行は未確認です。
