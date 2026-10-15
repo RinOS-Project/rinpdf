@@ -250,6 +250,8 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     if(denom==0&&line_cap==0&&!join_disk)return true;
     const double metric=std::hypot(std::hypot(mat.a*sx,mat.b*sy),std::hypot(mat.c*sx,mat.d*sy));
     const double effective_width=line_width==0?(metric>0?1.0/metric:0):line_width;
+    // Frobenius norm bounds the transformed unit normals. This is a
+    // conservative raster bound, not a substitute for exact coverage.
     const double radius=0.5*effective_width*metric;
     const double determinant=mat.a*mat.d-mat.b*mat.c;
     if(!std::isfinite(determinant)||std::abs(determinant)<1e-12)return false;
@@ -274,6 +276,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
       const double qx=(mat.d*ux-mat.c*uy)/determinant,qy=(-mat.b*ux+mat.a*uy)/determinant;
       const double ex=(mat.d*vx-mat.c*vy)/determinant,ey=(-mat.b*vx+mat.a*vy)/determinant;
       const double length2=ex*ex+ey*ey;
+      if(!std::isfinite(length2)||!std::isfinite(qx)||!std::isfinite(qy))return false;
       if(length2==0&&!join_disk&&line_cap==2)
        return std::abs(qx)<=effective_width*0.5&&std::abs(qy)<=effective_width*0.5;
       double projection=length2>0?(qx*ex+qy*ey)/length2:0;
