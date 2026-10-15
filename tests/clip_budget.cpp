@@ -8,7 +8,7 @@ int main(){
  const std::string prefix="0 0 1024 1024 re W n ";
  std::string valid=prefix;
  for(unsigned i=0;i<64;++i)valid+="q ";
- for(unsigned i=0;i<32;++i)valid+="Q ";
+ for(unsigned i=0;i<64;++i)valid+="Q ";
  if(!rinpdf::renderer::render_rectangles(
   reinterpret_cast<const uint8_t*>(valid.data()),valid.size(),
   side,side,pixels.data(),side*4))return 1;
