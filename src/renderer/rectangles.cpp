@@ -69,7 +69,8 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
   if(pos==size)break;
   if(contents[pos]=='%'){while(pos<size&&contents[pos]!='\n'&&contents[pos]!='\r')++pos;continue;}
   size_t begin=pos;
-  while(pos<size&&!space(contents[pos]))++pos;
+  if(contents[pos]=='['||contents[pos]==']')++pos;
+  else while(pos<size&&!space(contents[pos])&&contents[pos]!='['&&contents[pos]!=']')++pos;
   std::string word(reinterpret_cast<const char*>(contents+begin),pos-begin);
   double v=0;
   if(number(word,v)){if(reading_dash){if(dash_values.size()>=32)return false;dash_values.push_back(v);}else{if(stack.size()>=16)return false;stack.push_back(v);}continue;}
@@ -103,7 +104,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    double total=0;
    for(double value:dash_values){if(!std::isfinite(value)||value<0||value>1000000)return false;total+=value;}
    if(!std::isfinite(total)||total>1000000||(!dash_values.empty()&&total<=0)||stack[0]<0)return false;
-   dash_pattern=dash_values;dash_phase=total>0?std::fmod(stack[0],total):0;
+   dash_pattern=dash_values;dash_phase=total>0?std::fmod(stack[0],total*(dash_values.size()%2?2:1)):0;
    dash_values.clear();stack.clear();
   }else if(word=="w"){
    if(stack.size()!=1||stack[0]<0||stack[0]>1024)return false;
