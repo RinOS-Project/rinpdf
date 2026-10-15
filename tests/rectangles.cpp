@@ -29,8 +29,8 @@ int main(){
  const char transform[]="q 2 0 0 2 1 1 cm 0 g 1 1 2 2 re f Q";
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(transform),sizeof(transform)-1,8,8,pixels.data(),32))return 14;
  if(channel(4,3,0)!=0||channel(0,0,0)!=255)return 15;
- const char shear[]="1 1 0 1 0 0 cm";
- if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(shear),sizeof(shear)-1,8,8,pixels.data(),32))return 16;
+ const char shear[]="1 1 0 1 0 0 cm 0 g 1 1 2 2 re f";
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(shear),sizeof(shear)-1,8,8,pixels.data(),32))return 16;
  const char triangle[]="0 g 1 1 m 7 1 l 4 7 l h f";
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(triangle),sizeof(triangle)-1,8,8,pixels.data(),32))return 17;
  if(channel(4,3,0)!=0||channel(0,0,0)!=255)return 18;
@@ -137,5 +137,10 @@ int main(){
  const char restored_empty_clip[]="q W n Q 0 g 0 0 8 8 re f";
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(restored_empty_clip),sizeof(restored_empty_clip)-1,8,8,pixels.data(),32))return 80;
  if(channel(3,3,0)!=0)return 81;
+ const char rotated_rect[]="0 1 -1 0 8 0 cm 0 g 1 1 2 2 re f";
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(rotated_rect),sizeof(rotated_rect)-1,8,8,pixels.data(),32))return 82;
+ if(channel(5,5,0)!=0||channel(1,1,0)!=255)return 83;
+ const char rotated_stroke[]="0 1 -1 0 8 0 cm 1 1 m 3 3 l S";
+ if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(rotated_stroke),sizeof(rotated_stroke)-1,8,8,pixels.data(),32))return 84;
  return 0;
 }
