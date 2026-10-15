@@ -280,5 +280,16 @@ int main(){
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(closed_miter),sizeof(closed_miter)-1,16,16,cm_pixels.data(),64))return 157;
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(closed_bevel),sizeof(closed_bevel)-1,16,16,cb_pixels.data(),64))return 158;
  if(cm_pixels==cb_pixels)return 159;
+ const char rect_miter[]="0 j 0 J 3 w 0 G 3 3 8 8 re S";
+ const char poly_miter[]="0 j 0 J 3 w 0 G 3 3 m 11 3 l 11 11 l 3 11 l h S";
+ const char rect_bevel[]="2 j 0 J 3 w 0 G 3 3 8 8 re S";
+ const char poly_bevel[]="2 j 0 J 3 w 0 G 3 3 m 11 3 l 11 11 l 3 11 l h S";
+ std::vector<unsigned char> rm(16*16*4),pm(16*16*4),rb(16*16*4),pb(16*16*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(rect_miter),sizeof(rect_miter)-1,16,16,rm.data(),64))return 160;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(poly_miter),sizeof(poly_miter)-1,16,16,pm.data(),64))return 161;
+ if(rm!=pm)return 162;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(rect_bevel),sizeof(rect_bevel)-1,16,16,rb.data(),64))return 163;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(poly_bevel),sizeof(poly_bevel)-1,16,16,pb.data(),64))return 164;
+ if(rb!=pb)return 165;
  return 0;
 }
