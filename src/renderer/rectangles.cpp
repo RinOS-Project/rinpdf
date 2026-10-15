@@ -278,20 +278,18 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     pending_path_clip=false;
    }
    if(pending_rect_clip){
-    const Rect& r=path.front();
-    double left=std::clamp((std::min(r.x,r.x+r.w)-box.x0)*sx,0.0,(double)width);
-    double right=std::clamp((std::max(r.x,r.x+r.w)-box.x0)*sx,0.0,(double)width);
-    double top=std::clamp((box.y1-std::max(r.y,r.y+r.h))*sy,0.0,(double)height);
-    double bottom=std::clamp((box.y1-std::min(r.y,r.y+r.h))*sy,0.0,(double)height);
-    clip.x0=std::max(clip.x0,(unsigned)std::clamp(std::ceil(left-0.5),0.0,(double)width));
-    clip.x1=std::min(clip.x1,(unsigned)std::clamp(std::ceil(right-0.5),0.0,(double)width));
-    clip.y0=std::max(clip.y0,(unsigned)std::clamp(std::ceil(top-0.5),0.0,(double)height));
-    clip.y1=std::min(clip.y1,(unsigned)std::clamp(std::ceil(bottom-0.5),0.0,(double)height));
-    if(clip.x1<clip.x0)clip.x1=clip.x0;
-    if(clip.y1<clip.y0)clip.y1=clip.y0;
+    auto shapes=shapes_from_path();
+    std::vector<uint8_t> mask;
+    if((size_t)width*height<=262144){
+     if(!rasterize_path_coverage_2x(shapes,width,height,pending_rule,mask))return false;
+    }else{
+     if(!rasterize_path_mask(shapes,width,height,pending_rule,mask))return false;
+     for(auto& value:mask)value=value?255:0;
+    }
+    if(clip_mask.empty())clip_mask=std::move(mask);
+    else if(!intersect_path_masks(clip_mask,mask))return false;
     pending_rect_clip=false;
-   }
-   path.clear();polygons.clear();
+   }  path.clear();polygons.clear();
   }else return false; // Do not silently ignore unknown operators.
  }
  return stack.empty()&&path.empty()&&polygons.empty()&&saved.empty()&&!pending_rect_clip&&!pending_path_clip;
