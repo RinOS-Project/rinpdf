@@ -33,6 +33,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
  std::vector<double> dash_pattern;
  double dash_phase=0;
  bool reading_dash=false;
+ bool dash_array_ready=false;
  std::vector<double> dash_values;
  double stroke_red=0,stroke_green=0,stroke_blue=0;
  std::vector<Color> saved;
@@ -74,10 +75,11 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
   std::string word(reinterpret_cast<const char*>(contents+begin),pos-begin);
   double v=0;
   if(number(word,v)){if(reading_dash){if(dash_values.size()>=32)return false;dash_values.push_back(v);}else{if(stack.size()>=16)return false;stack.push_back(v);}continue;}
-  if(word=="["){if(reading_dash||!stack.empty())return false;reading_dash=true;dash_values.clear();continue;}
-  if(word=="]"){if(!reading_dash)return false;reading_dash=false;continue;}
+  if(word=="["){if(reading_dash||dash_array_ready||!stack.empty())return false;reading_dash=true;dash_values.clear();continue;}
+  if(word=="]"){if(!reading_dash)return false;reading_dash=false;dash_array_ready=true;continue;}
   // Only numeric elements are legal inside a dash array.
   if(reading_dash)return false;
+  if(dash_array_ready&&word!="d"&&!(number(word,v)))return false;
   if(word=="q"){
    if((pending_rect_clip||pending_path_clip)||!stack.empty()||saved.size()>=64)return false;
    saved.push_back({red,green,blue,a,bx,cx,d,e,f,line_width,stroke_red,stroke_green,stroke_blue,line_cap,line_join,miter_limit,dash_pattern,dash_phase});
@@ -102,12 +104,12 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    for(double value:{na,nb,nc,nd,ne,nf})if(!std::isfinite(value)||std::abs(value)>10000000)return false;
    a=na;bx=nb;cx=nc;d=nd;e=ne;f=nf;stack.clear();
   }else if(word=="d"){
-   if(reading_dash||stack.size()!=1||dash_values.size()>32)return false;
+   if(reading_dash||!dash_array_ready||stack.size()!=1||dash_values.size()>32)return false;
    double total=0;
    for(double value:dash_values){if(!std::isfinite(value)||value<0||value>1000000)return false;total+=value;}
    if(!std::isfinite(total)||total>1000000||(!dash_values.empty()&&total<=0)||stack[0]<0)return false;
    dash_pattern=dash_values;dash_phase=total>0?std::fmod(stack[0],total*(dash_values.size()%2?2:1)):0;
-   dash_values.clear();stack.clear();
+   dash_values.clear();dash_array_ready=false;stack.clear();
   }else if(word=="w"){
    if(stack.size()!=1||stack[0]<0||stack[0]>1024)return false;
    line_width=stack[0];stack.clear();
@@ -524,7 +526,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    path.clear();polygons.clear();polygon_matrices.clear();rect_matrices.clear();mixed_path_ctm=false;
   }else return false; // Do not silently ignore unknown operators.
  }
- return !reading_dash&&dash_values.empty()&&stack.empty()&&path.empty()&&polygons.empty()&&saved.empty()&&!pending_rect_clip&&!pending_path_clip;
+ return !reading_dash&&!dash_array_ready&&dash_values.empty()&&stack.empty()&&path.empty()&&polygons.empty()&&saved.empty()&&!pending_rect_clip&&!pending_path_clip;
 }
 bool render_rectangles(const uint8_t *contents,size_t size,unsigned width,unsigned height,uint8_t *rgba,size_t stride){
  return render_rectangles_box(contents,size,width,height,rgba,stride,{0,0,(double)width,(double)height});
