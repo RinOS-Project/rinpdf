@@ -225,6 +225,17 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
      }
     }
    }
+   // Normalize rectangle stroke paths to closed polygons so every join
+   // style shares the same vertex processing and closing-corner logic.
+   for(size_t k=0;k<path.size();++k){
+    const Rect& rect=path[k];
+    const Point p0{rect.x,rect.y},p1{rect.x+rect.w,rect.y};
+    const Point p2{rect.x+rect.w,rect.y+rect.h},p3{rect.x,rect.y+rect.h};
+    polygons.push_back({p0,p1,p2,p3,p0});
+    polygon_matrices.push_back(std::vector<Matrix>(5,rect_matrices[k]));
+   }
+   path.clear();
+   rect_matrices.clear();
    const unsigned char cr=(unsigned char)std::lround(stroke_red*255),cg=(unsigned char)std::lround(stroke_green*255),cb=(unsigned char)std::lround(stroke_blue*255);
    size_t stroke_work=0;
    const bool stroke_aa=(size_t)width*height<=262144;
