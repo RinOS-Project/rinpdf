@@ -382,6 +382,8 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
      size_t probe=index;
      double left=remaining;
      bool resolved=length<=1e-10;
+     // A zero-length contour has no incoming or outgoing tangent.
+     if(resolved)seam_on=false;
      for(size_t n=0;n<65536&&length>1e-10;++n){
       if(left<=1e-12){
        bool found=false;
@@ -488,6 +490,11 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     if(!emit_run())return false;
     if(joined_seam&&points.size()>3){
      const Point& p=points.front();
+     const Point& prev=points[points.size()-2];
+     const Point& next=points[1];
+     // Repeated endpoints have no defined tangent at the seam.
+     if(std::hypot(p.x-prev.x,p.y-prev.y)<=1e-10||
+        std::hypot(next.x-p.x,next.y-p.y)<=1e-10)return true;
      if(line_join==1){
       if(!segment(p,p,matrices.back(),true))return false;
      }else if(line_join==0||line_join==2){
