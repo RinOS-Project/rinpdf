@@ -76,6 +76,8 @@ int main(){
  excessive+="0 0 m ";
  for(int i=0;i<300;++i)excessive+=std::to_string(i%8)+" 1 l ";
  excessive+="S";
- if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(excessive.data()),excessive.size(),256,256,large.data(),256*4))return 40;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(excessive.data()),excessive.size(),256,256,large.data(),256*4))return 40;
+ const char offscreen[]="1 J 1 w 0 G -1000 -1000 m -900 -900 l S";
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(offscreen),sizeof(offscreen)-1,8,8,pixels.data(),32))return 41;
  return 0;
 }
