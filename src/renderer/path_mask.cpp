@@ -10,7 +10,11 @@ bool rasterize_path_mask(const std::vector<std::vector<MaskPoint>>& subpaths,
  if(subpaths.empty()){mask.assign((size_t)width*height,0);return true;}
  struct Edge {double x0,y0,x1,y1;int direction;};
  std::vector<Edge> edges;
+ if(subpaths.size()>4096)return false;
+ size_t total_vertices=0;
  for(const auto& path:subpaths){
+  if(path.size()>65536-total_vertices)return false;
+  total_vertices+=path.size();
   if(path.size()>4096)return false;
   if(path.size()<2)continue;
   for(size_t i=0;i<path.size();++i){
