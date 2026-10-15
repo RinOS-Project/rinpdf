@@ -49,12 +49,12 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
   double v=0;
   if(number(word,v)){if(stack.size()>=16)return false;stack.push_back(v);continue;}
   if(word=="q"){
-   if(!stack.empty()||saved.size()>=64)return false;
+   if(pending_rect_clip||!stack.empty()||saved.size()>=64)return false;
    saved.push_back({red,green,blue,a,d,e,f,line_width,stroke_red,stroke_green,stroke_blue,line_cap,line_join,miter_limit});
    clip_stack.push_back(clip);
 
   }else if(word=="Q"){
-   if(!stack.empty()||saved.empty()||(!path.empty()||!polygons.empty()))return false;
+   if(pending_rect_clip||!stack.empty()||saved.empty()||(!path.empty()||!polygons.empty()))return false;
    auto color=saved.back();saved.pop_back();red=color.r;green=color.g;blue=color.b;a=color.a;d=color.d;e=color.e;f=color.f;line_width=color.width;stroke_red=color.sr;stroke_green=color.sg;stroke_blue=color.sb;line_cap=color.cap;line_join=color.join;miter_limit=color.miter;
    clip=clip_stack.back();clip_stack.pop_back();
 
