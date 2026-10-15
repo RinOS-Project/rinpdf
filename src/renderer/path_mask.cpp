@@ -78,7 +78,7 @@ bool rasterize_path_coverage_2x(const std::vector<std::vector<MaskPoint>>& subpa
 }
 bool intersect_path_masks(std::vector<uint8_t>& current,const std::vector<uint8_t>& incoming){
  if(current.size()!=incoming.size())return false;
- for(size_t i=0;i<current.size();++i)current[i]=(uint8_t)(current[i]&&incoming[i]);
+ for(size_t i=0;i<current.size();++i)current[i]=(uint8_t)((unsigned(current[i])*unsigned(incoming[i])+127)/255);
  return true;
 }
 }
