@@ -69,6 +69,29 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
   }else if(word=="l"){
    if(stack.size()!=2||polygons.empty()||polygons.back().size()>=4096)return false;
    polygons.back().push_back({a*stack[0]+e,d*stack[1]+f});stack.clear();
+  }else if(word=="c"||word=="v"||word=="y"){
+   const size_t required=word=="c"?6:4;
+   if(stack.size()!=required||polygons.empty()||polygons.back().empty()||polygons.back().size()>4096-16)return false;
+   auto& poly=polygons.back();
+   Point start=poly.back();
+   auto transform=[&](double x,double y){return Point{a*x+e,d*y+f};};
+   Point p1{},p2{},p3{};
+   if(word=="c"){
+    p1=transform(stack[0],stack[1]);p2=transform(stack[2],stack[3]);p3=transform(stack[4],stack[5]);
+   }else if(word=="v"){
+    p1=start;p2=transform(stack[0],stack[1]);p3=transform(stack[2],stack[3]);
+   }else{
+    p1=transform(stack[0],stack[1]);p2=transform(stack[2],stack[3]);p3=p2;
+   }
+   if(!std::isfinite(p1.x)||!std::isfinite(p1.y)||!std::isfinite(p2.x)||!std::isfinite(p2.y)||!std::isfinite(p3.x)||!std::isfinite(p3.y))return false;
+   for(unsigned step=1;step<=16;++step){
+    double t=(double)step/16,u=1-t;
+    Point point{u*u*u*start.x+3*u*u*t*p1.x+3*u*t*t*p2.x+t*t*t*p3.x,
+                u*u*u*start.y+3*u*u*t*p1.y+3*u*t*t*p2.y+t*t*t*p3.y};
+    if(!std::isfinite(point.x)||!std::isfinite(point.y))return false;
+    poly.push_back(point);
+   }
+   stack.clear();
   }else if(word=="h"){
    if(!stack.empty()||polygons.empty()||polygons.back().size()<2)return false;
    if(polygons.back().size()>=4096)return false;
