@@ -33,9 +33,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
  std::vector<double> stack;
  std::vector<Rect> path;
  std::vector<std::vector<Point>> polygons;
- std::vector<uint8_t> clip((size_t)width*height,1);
- std::vector<std::vector<uint8_t>> saved_clips;
- bool pending_clip=false;
+
  size_t pos=0;
  while(pos<size){
   while(pos<size&&space(contents[pos]))++pos;
@@ -49,11 +47,11 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
   if(word=="q"){
    if(!stack.empty()||saved.size()>=64)return false;
    saved.push_back({red,green,blue,a,d,e,f,line_width,stroke_red,stroke_green,stroke_blue,line_cap,line_join,miter_limit});
-   saved_clips.push_back(clip);
+
   }else if(word=="Q"){
    if(!stack.empty()||saved.empty()||(!path.empty()||!polygons.empty()))return false;
    auto color=saved.back();saved.pop_back();red=color.r;green=color.g;blue=color.b;a=color.a;d=color.d;e=color.e;f=color.f;line_width=color.width;stroke_red=color.sr;stroke_green=color.sg;stroke_blue=color.sb;line_cap=color.cap;line_join=color.join;miter_limit=color.miter;
-   clip=std::move(saved_clips.back());saved_clips.pop_back();
+
   }else if(word=="cm"){
    if(stack.size()!=6||stack[1]!=0||stack[2]!=0)return false;
    double na=a*stack[0],nd=d*stack[3],ne=a*stack[4]+e,nf=d*stack[5]+f;
@@ -178,17 +176,13 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     if(!segment(p0,p1)||!segment(p1,p2)||!segment(p2,p3)||!segment(p3,p0))return false;
    }
    path.clear();polygons.clear();
-  }else if(word=="W"||word=="W*"){
-   if(!stack.empty()||pending_clip)return false;
-   // Clipping will be applied at the next path-ending operator.
-   pending_clip=true;
   }else if(word=="f"||word=="F"||word=="f*"){
    if(!stack.empty())return false;
    unsigned char cr=(unsigned char)std::lround(red*255);
    unsigned char cg=(unsigned char)std::lround(green*255);
    unsigned char cb=(unsigned char)std::lround(blue*255);
    if((size_t)width*height>1048576)return false;
-   std::vector<uint8_t> coverage((size_t)width*height,0);
+
    // Build one edge set across rectangles and all subpaths.
    // The signed crossing count implements nonzero winding; parity implements f*.
    struct Edge {double x0,y0,x1,y1;int winding;};
@@ -232,23 +226,18 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
      unsigned x_begin=(unsigned)std::clamp(std::ceil(left-0.5),0.0,(double)width);
      unsigned x_end=(unsigned)std::clamp(std::ceil(right-0.5),0.0,(double)width);
      for(unsigned x=x_begin;x<x_end;++x){
-      coverage[(size_t)y*width+x]=1;
+      uint8_t* pixel=rgba+(size_t)y*stride+(size_t)x*4;
+      pixel[0]=cr;pixel[1]=cg;pixel[2]=cb;pixel[3]=255;
      }
     }
    }
-   for(size_t i=0;i<coverage.size();++i){
-    if(pending_clip)clip[i]=(uint8_t)(clip[i]&&coverage[i]);
-    else if(clip[i]){uint8_t* pixel=rgba+(i/width)*stride+(i%width)*4;pixel[0]=cr;pixel[1]=cg;pixel[2]=cb;pixel[3]=255;}
-   }
-   pending_clip=false;
    path.clear();polygons.clear();
   }else if(word=="n"){
    if(!stack.empty())return false;
-   if(pending_clip)return false;
    path.clear();polygons.clear();
   }else return false; // Do not silently ignore unknown operators.
  }
- return stack.empty()&&path.empty()&&polygons.empty()&&saved.empty()&&!pending_clip;
+ return stack.empty()&&path.empty()&&polygons.empty()&&saved.empty();
 }
 bool render_rectangles(const uint8_t *contents,size_t size,unsigned width,unsigned height,uint8_t *rgba,size_t stride){
  return render_rectangles_box(contents,size,width,height,rgba,stride,{0,0,(double)width,(double)height});
