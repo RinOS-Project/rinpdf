@@ -285,7 +285,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     pixel[2]=(uint8_t)((alpha*cb+(255-alpha)*pixel[2]+127)/255);
     pixel[3]=255;
    }
-   path.clear();polygons.clear();
+   path.clear();polygons.clear();polygon_matrices.clear();rect_matrices.clear();mixed_path_ctm=false;
   }else if(word=="n"){
    if(!stack.empty())return false;
    if(pending_path_clip){
@@ -314,7 +314,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     else if(!intersect_path_masks(clip_mask,mask))return false;
     pending_rect_clip=false;
    }
-   path.clear();polygons.clear();
+   path.clear();polygons.clear();polygon_matrices.clear();rect_matrices.clear();mixed_path_ctm=false;
   }else return false; // Do not silently ignore unknown operators.
  }
  return stack.empty()&&path.empty()&&polygons.empty()&&saved.empty()&&!pending_rect_clip&&!pending_path_clip;
