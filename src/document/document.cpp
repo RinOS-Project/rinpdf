@@ -50,9 +50,20 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
   if(!rinpdf::parser::read_page_contents(doc->bytes.data(),doc->bytes.size(),index,contents))return RINPDF_UNSUPPORTED;
   rinpdf::parser::MediaBox box{};
   if(!rinpdf::parser::read_page_box(doc->bytes.data(),doc->bytes.size(),index,box))return RINPDF_UNSUPPORTED;
+  const unsigned rotation=box.rotation;
+  const unsigned source_width=(rotation==90||rotation==270)?height:width;
+  const unsigned source_height=(rotation==90||rotation==270)?width:height;
   std::vector<uint8_t> temporary((size_t)width*height*4);
-  if(!rinpdf::renderer::render_rectangles_box(contents.data(),contents.size(),width,height,temporary.data(),(size_t)width*4,{box.x0,box.y0,box.x1,box.y1}))return RINPDF_UNSUPPORTED;
-  for(unsigned y=0;y<height;++y)std::memcpy(rgba+(size_t)y*stride,temporary.data()+(size_t)y*width*4,(size_t)width*4);
+  if(!rinpdf::renderer::render_rectangles_box(contents.data(),contents.size(),source_width,source_height,temporary.data(),(size_t)source_width*4,{box.x0,box.y0,box.x1,box.y1}))return RINPDF_UNSUPPORTED;
+  for(unsigned y=0;y<height;++y){
+   for(unsigned x=0;x<width;++x){
+    unsigned sx=x,sy=y;
+    if(rotation==90){sx=y;sy=source_height-1-x;}
+    else if(rotation==180){sx=source_width-1-x;sy=source_height-1-y;}
+    else if(rotation==270){sx=source_width-1-y;sy=x;}
+    std::memcpy(rgba+(size_t)y*stride+(size_t)x*4,temporary.data()+((size_t)sy*source_width+sx)*4,4);
+   }
+  }
   return RINPDF_OK;
  }catch(const std::bad_alloc&){return RINPDF_OUT_OF_MEMORY;}
 }
