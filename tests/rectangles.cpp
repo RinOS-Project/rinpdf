@@ -338,5 +338,16 @@ int main(){
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(dashed_bevel_corner),sizeof(dashed_bevel_corner)-1,16,16,dbc.data(),64))return 187;
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(solid_bevel_corner),sizeof(solid_bevel_corner)-1,16,16,sbc.data(),64))return 188;
  if(dbc!=sbc)return 189;
+ const char rotated_miter[]="0 1 -1 0 16 0 cm 0 j 0 J 2 w 0 G 2 2 m 8 2 l 8 8 l S";
+ const char explicit_rotated_miter[]="0 j 0 J 2 w 0 G 14 2 m 14 8 l 8 8 l S";
+ const char rotated_bevel[]="0 1 -1 0 16 0 cm 2 j 0 J 2 w 0 G 2 2 m 8 2 l 8 8 l S";
+ const char explicit_rotated_bevel[]="2 j 0 J 2 w 0 G 14 2 m 14 8 l 8 8 l S";
+ std::vector<unsigned char> rot_a(16*16*4),rot_b(16*16*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(rotated_miter),sizeof(rotated_miter)-1,16,16,rot_a.data(),64))return 190;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(explicit_rotated_miter),sizeof(explicit_rotated_miter)-1,16,16,rot_b.data(),64))return 191;
+ if(rot_a!=rot_b)return 192;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(rotated_bevel),sizeof(rotated_bevel)-1,16,16,rot_a.data(),64))return 193;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(explicit_rotated_bevel),sizeof(explicit_rotated_bevel)-1,16,16,rot_b.data(),64))return 194;
+ if(rot_a!=rot_b)return 195;
  return 0;
 }
