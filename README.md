@@ -290,3 +290,14 @@ RINPDF_VERIFY_MODE=asan sh scripts/verify-local.sh build-verify-asan rinpdf-rect
 ```
 
 このコマンドは対象テストのコンパイルと実行を行いますが、他のテストの成功は保証しません。2026-10-15時点でGitHubのDNS解決が失敗したため、この環境ではコンパイルと実行は確認できていません。
+
+## WSL DrvFS shared-library loading fix
+WSLでWindowsドライブ上（例: `/mnt/e/rinpdf`）からビルドした際、Mesonのversioned共有ライブラリが必要とする `librinpdf.so.0` のSONAMEリンクを動的ローダーが見つけられず、全テストが終了コード127で失敗する場合があります。Mesonの `library(..., version: ...)` を外し、開発用共有ライブラリを `librinpdf.so` としてリンクするよう変更しました。これはABI互換性保証の代替ではありません。
+
+変更後は最新のmainを取得し、旧ビルド設定を避けて新規ディレクトリで再検証してください。
+
+```sh
+sh scripts/verify-local.sh build-verify-fresh
+```
+
+もし動的ライブラリ読み込みのエラーが続く場合は、`ldd build-verify-fresh/tests/rinpdf-smoke` で `librinpdf.so` の解決先を確認してください。実際の12テストのPASSは再実行結果を確認するまで未検証です。
