@@ -400,18 +400,16 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     bool in_on_run=false;
     Point run_end{};
     Matrix run_matrix{};
-    bool first_run=true;
     std::vector<std::pair<Point,Matrix>> on_run_vertices;
     auto emit_run=[&]()->bool{
      if(!in_on_run)return true;
-     if(line_cap==1&&!(joined_seam&&first_run)&&!segment(run_end,run_end,run_matrix,true))return false;
+     if(line_cap==1&&!segment(run_end,run_end,run_matrix,true))return false;
      if(line_join==1){
       for(const auto& vertex:on_run_vertices)
        if(!segment(vertex.first,vertex.first,vertex.second,true))return false;
      }
      on_run_vertices.clear();
      in_on_run=false;
-     first_run=false;
      return true;
     };
     for(size_t i=1;i<points.size();++i){
@@ -438,7 +436,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
        Point a{p.x+(q.x-p.x)*t0,p.y+(q.y-p.y)*t0};
        Point b{p.x+(q.x-p.x)*t1,p.y+(q.y-p.y)*t1};
        if(!in_on_run){
-        if(line_cap==1&&!segment(a,a,matrices[i],true))return false;
+        if(line_cap==1&&!(joined_seam&&i==1&&pos==0)&&!segment(a,a,matrices[i],true))return false;
        }else if(pos==0){
         if(line_join==1){
          if(on_run_vertices.size()>=4096)return false;
@@ -462,8 +460,8 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
         }
        }
        const bool last_piece=i+1==points.size()&&len-(pos+take)<=1e-12;
-       const bool start_cap=!in_on_run;
-       const bool end_cap=breaks_after||last_piece;
+       const bool start_cap=!in_on_run&&!(joined_seam&&i==1&&pos==0);
+       const bool end_cap=breaks_after||(last_piece&&!joined_seam);
        if(!segment(a,b,matrices[i],false,start_cap,end_cap))return false;
        in_on_run=true;run_end=b;run_matrix=matrices[i];
       }else if(!emit_run())return false;
