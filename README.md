@@ -37,3 +37,6 @@ meson test -C build --print-errorlogs
 
 ## CTM（実験的）
 CPU矩形レンダラーは `cm` による軸平行な拡大縮小・平行移動と `q` / `Q` によるCTM保存復元に対応します。回転、せん断、任意のアフィン変換、一般パス、CropBox、Rotateは未対応です。対応できない行列は描画成功とせず拒否します。実機およびビルド・テストの動作確認は未実施です。
+
+## CropBox表示領域 (experimental)
+`read_page_box` はページまたは親Pages辞書のCropBoxを継承し、MediaBoxとの交差領域をRGBA描画のビューポートとして返します。CropBoxがなければMediaBoxを使用します。交差領域が空なら描画を拒否します。座標は現状整数配列のみです。/Rotate、/UserUnit、実数のページ境界、一般パスの描画には未対応です。CropBox用回帰テストは追加しましたが実行未確認です。
