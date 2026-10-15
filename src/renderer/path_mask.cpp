@@ -16,6 +16,9 @@ bool rasterize_path_mask(const std::vector<std::vector<MaskPoint>>& subpaths,
   if(path.size()>65536-total_vertices)return false;
   total_vertices+=path.size();
   if(path.size()>4096)return false;
+  // Validate even move-only points: degenerate geometry is still untrusted input.
+  for(const auto& point:path)
+   if(!std::isfinite(point.x)||!std::isfinite(point.y))return false;
   if(path.size()<2)continue;
   for(size_t i=0;i<path.size();++i){
    const auto& p=path[i];const auto& q=path[(i+1)%path.size()];
