@@ -25,6 +25,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
  double red=0,green=0,blue=0;
  struct Color { double r,g,b,a,d,e,f; };
  double a=1,d=1,e=0,f=0;
+ double line_width=1;
  std::vector<Color> saved;
  std::vector<double> stack;
  std::vector<Rect> path;
@@ -50,6 +51,9 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    double na=a*stack[0],nd=d*stack[3],ne=a*stack[4]+e,nf=d*stack[5]+f;
    if(!std::isfinite(na)||!std::isfinite(nd)||!std::isfinite(ne)||!std::isfinite(nf)||std::abs(na)>1000000||std::abs(nd)>1000000||std::abs(ne)>10000000||std::abs(nf)>10000000)return false;
    a=na;d=nd;e=ne;f=nf;stack.clear();
+  }else if(word=="w"){
+   if(stack.size()!=1||stack[0]<=0||stack[0]>1024)return false;
+   line_width=stack[0];stack.clear();
   }else if(word=="rg"){
    if(stack.size()!=3)return false;
    for(double channel:stack)if(channel<0||channel>1)return false;
@@ -100,6 +104,34 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
   }else if(word=="re"){
    if(stack.size()!=4||path.size()>=4096)return false;
    path.push_back({a*stack[0]+e,d*stack[1]+f,a*stack[2],d*stack[3]});stack.clear();
+  }else if(word=="S"||word=="s"){
+   if(!stack.empty()||(!polygons.size()&&!path.size())||width>1024||height>1024)return false;
+   if(word=="s"&&!polygons.empty()){
+    auto& poly=polygons.back();
+    if(poly.size()<2||poly.size()>=4096)return false;
+    poly.push_back(poly.front());
+   }
+   const unsigned char cr=(unsigned char)std::lround(red*255),cg=(unsigned char)std::lround(green*255),cb=(unsigned char)std::lround(blue*255);
+   auto segment=[&](Point p,Point q){
+    double x0=(p.x-box.x0)*sx,y0=(box.y1-p.y)*sy;
+    double x1=(q.x-box.x0)*sx,y1=(box.y1-q.y)*sy;
+    double dx=x1-x0,dy=y1-y0,denom=dx*dx+dy*dy;
+    double radius=0.5*line_width*std::max(std::abs(a*sx),std::abs(d*sy));
+    if(!std::isfinite(denom)||!std::isfinite(radius)||radius>2048)return false;
+    for(unsigned yy=0;yy<height;++yy)for(unsigned xx=0;xx<width;++xx){
+     double px=xx+0.5,py=yy+0.5;
+     double t=denom>0?std::clamp(((px-x0)*dx+(py-y0)*dy)/denom,0.0,1.0):0;
+     double distance=std::hypot(px-(x0+t*dx),py-(y0+t*dy));
+     if(distance<=radius){uint8_t* pixel=rgba+(size_t)yy*stride+(size_t)xx*4;pixel[0]=cr;pixel[1]=cg;pixel[2]=cb;pixel[3]=255;}
+    }
+    return true;
+   };
+   for(const auto& poly:polygons)for(size_t i=1;i<poly.size();++i)if(!segment(poly[i-1],poly[i]))return false;
+   for(const Rect& rect:path){
+    Point p0{rect.x,rect.y},p1{rect.x+rect.w,rect.y},p2{rect.x+rect.w,rect.y+rect.h},p3{rect.x,rect.y+rect.h};
+    if(!segment(p0,p1)||!segment(p1,p2)||!segment(p2,p3)||!segment(p3,p0))return false;
+   }
+   path.clear();polygons.clear();
   }else if(word=="f"||word=="F"){
    if(!stack.empty())return false;
    unsigned char cr=(unsigned char)std::lround(red*255);
