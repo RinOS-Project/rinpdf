@@ -403,5 +403,9 @@ int main(){
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(closed_full_dash),sizeof(closed_full_dash)-1,16,16,full_dash_pixels.data(),64))return 219;
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(closed_solid_miter),sizeof(closed_solid_miter)-1,16,16,solid_miter_pixels.data(),64))return 220;
  if(full_dash_pixels!=solid_miter_pixels)return 221;
+ const char closed_exact_dash[]="[32 2] 0 d 0 j 2 J 2 w 0 G 3 3 m 11 3 l 11 11 l 3 11 l h S";
+ std::vector<unsigned char> exact_dash_pixels(16*16*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(closed_exact_dash),sizeof(closed_exact_dash)-1,16,16,exact_dash_pixels.data(),64))return 222;
+ if(exact_dash_pixels!=solid_miter_pixels)return 223;
  return 0;
 }
