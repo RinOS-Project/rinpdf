@@ -161,7 +161,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    if(stack.size()!=4||path.size()>=4096)return false;
    path.push_back({a*stack[0]+e,d*stack[1]+f,a*stack[2],d*stack[3]});stack.clear();
   }else if(word=="W"||word=="W*"){
-   if(!stack.empty()||pending_rect_clip||pending_path_clip||(path.empty()&&polygons.empty()))return false;
+   if(!stack.empty()||pending_rect_clip||pending_path_clip)return false;
    pending_rule=word=="W*"?FillRule::EvenOdd:FillRule::NonZero;
    pending_rect_clip=path.size()==1&&polygons.empty();
    pending_path_clip=!pending_rect_clip;
