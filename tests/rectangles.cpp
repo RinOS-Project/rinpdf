@@ -207,5 +207,14 @@ int main(){
  const char zero_round[]="1 J 0 G 2 w 3 3 m 3 3 l S";
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(zero_round),sizeof(zero_round)-1,8,8,pixels.data(),32))return 119;
  if(channel(3,4,0)==255)return 120;
+ const char move_only_close[]="1 1 m h S";
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(move_only_close),sizeof(move_only_close)-1,8,8,pixels.data(),32))return 121;
+ if(channel(3,3,0)!=255)return 122;
+ const char trailing_move_close[]="0 G 1 w 1 1 m 5 1 l 2 2 m h S";
+ const char trailing_move_plain[]="0 G 1 w 1 1 m 5 1 l 2 2 m S";
+ std::vector<unsigned char> closed_pixels(8*8*4),plain_pixels(8*8*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(trailing_move_close),sizeof(trailing_move_close)-1,8,8,closed_pixels.data(),32))return 123;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(trailing_move_plain),sizeof(trailing_move_plain)-1,8,8,plain_pixels.data(),32))return 124;
+ if(closed_pixels!=plain_pixels)return 125;
  return 0;
 }
