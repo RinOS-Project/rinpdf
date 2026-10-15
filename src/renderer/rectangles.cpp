@@ -392,7 +392,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
       Point tip{u.x+t*ux,u.y+t*uy};
       if(!std::isfinite(tip.x)||!std::isfinite(tip.y))return false;
       if(std::hypot(tip.x-p.x,tip.y-p.y)>miter_limit*radius){if(!paint_triangle(p,u,v))return false;}
-      else if(!paint_triangle(u,tip,v))return false;
+      else {if(!paint_triangle(p,u,v)||!paint_triangle(u,tip,v))return false;}
      }
     }
    }
