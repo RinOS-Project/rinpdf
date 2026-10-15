@@ -327,5 +327,16 @@ int main(){
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(scaled_dash),sizeof(scaled_dash)-1,16,16,scaled_pixels.data(),64))return 181;
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(device_dash),sizeof(device_dash)-1,16,16,device_pixels.data(),64))return 182;
  if(scaled_pixels!=device_pixels)return 183;
+ const char dashed_miter_corner[]="[20 2] 0 d 0 j 0 J 2 w 0 G 2 2 m 8 2 l 8 8 l S";
+ const char solid_miter_corner[]="0 j 0 J 2 w 0 G 2 2 m 8 2 l 8 8 l S";
+ const char dashed_bevel_corner[]="[20 2] 0 d 2 j 0 J 2 w 0 G 2 2 m 8 2 l 8 8 l S";
+ const char solid_bevel_corner[]="2 j 0 J 2 w 0 G 2 2 m 8 2 l 8 8 l S";
+ std::vector<unsigned char> dmc(16*16*4),smc(16*16*4),dbc(16*16*4),sbc(16*16*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(dashed_miter_corner),sizeof(dashed_miter_corner)-1,16,16,dmc.data(),64))return 184;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(solid_miter_corner),sizeof(solid_miter_corner)-1,16,16,smc.data(),64))return 185;
+ if(dmc!=smc)return 186;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(dashed_bevel_corner),sizeof(dashed_bevel_corner)-1,16,16,dbc.data(),64))return 187;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(solid_bevel_corner),sizeof(solid_bevel_corner)-1,16,16,sbc.data(),64))return 188;
+ if(dbc!=sbc)return 189;
  return 0;
 }
