@@ -200,12 +200,12 @@ int main(){
  if(trailing_s_pixels!=trailing_hs_pixels)return 114;
  const char zero_butt[]="0 J 0 G 2 w 3 3 m 3 3 l S";
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(zero_butt),sizeof(zero_butt)-1,8,8,pixels.data(),32))return 115;
- if(channel(3,4,0)!=255)return 116;
+ if(channel(3,5,0)!=255)return 116;
  const char zero_square[]="2 J 0 G 2 w 3 3 m 3 3 l S";
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(zero_square),sizeof(zero_square)-1,8,8,pixels.data(),32))return 117;
- if(channel(3,4,0)!=255)return 118;
+ if(channel(3,5,0)!=255)return 118;
  const char zero_round[]="1 J 0 G 2 w 3 3 m 3 3 l S";
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(zero_round),sizeof(zero_round)-1,8,8,pixels.data(),32))return 119;
- if(channel(3,4,0)==255)return 120;
+ if(channel(3,5,0)==255)return 120;
  return 0;
 }
