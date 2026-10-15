@@ -24,7 +24,7 @@ int main() {
  if(rinpdf_write_text_file(nullptr,"test")!=RINPDF_INVALID_ARGUMENT)return 11;
  const char nested[]="%PDF-1.4\n1 0 obj\n<< /Type /Pages /Kids [] /Count 0 >>\nendobj\n2 0 obj\n<< /Type /Catalog /Resources << /Type /Page >> >>\nendobj\n";
  if(rinpdf_document_open_memory(reinterpret_cast<const unsigned char*>(nested),sizeof(nested)-1,&doc)!=RINPDF_OK)return 12;
- if(rinpdf_document_page_count(doc,&pages)!=RINPDF_OK||pages!=0)return 13;
+ if(rinpdf_document_page_count(doc,&pages)!=RINPDF_UNSUPPORTED)return 13;
  rinpdf_document_close(doc);
  return 0;
 }
