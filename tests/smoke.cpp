@@ -1,6 +1,7 @@
 #include "rinpdf/rinpdf.h"
 #include <cstdio>
 #include <cstring>
+#include <vector>
 int main() {
  const char *path="rinpdf-smoke.pdf";
  if(rinpdf_write_text_file(path,"Hello (RinOS) \\ PDF")!=RINPDF_OK)return 1;
@@ -10,6 +11,8 @@ int main() {
  if(rinpdf_document_version(doc,&major,&minor)!=RINPDF_OK||major!=1||minor!=4)return 3;
  size_t pages=0;
  if(rinpdf_document_page_count(doc,&pages)!=RINPDF_OK||pages!=1)return 4;
+ std::vector<unsigned char> pixels(16*16*4);
+ if(rinpdf_render_page(doc,0,16,16,pixels.data(),64)!=RINPDF_UNSUPPORTED)return 14;
  rinpdf_document_close(doc);
  std::remove(path);
  const unsigned char header[]={'%','P','D','F','-','1','.','7'};
