@@ -244,7 +244,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    size_t stroke_work=0;
    const bool stroke_aa=(size_t)width*height<=262144;
    std::vector<uint8_t> stroke_samples((size_t)width*height,0);
-   auto segment=[&](Point p,Point q,Matrix mat,bool join_disk=false){
+   auto segment=[&](Point p,Point q,Matrix mat,bool join_disk=false,bool start_cap=true,bool end_cap=true){
     double x0=(p.x-box.x0)*sx,y0=(box.y1-p.y)*sy;
     double x1=(q.x-box.x0)*sx,y1=(box.y1-q.y)*sy;
     double dx=x1-x0,dy=y1-y0,denom=dx*dx+dy*dy;
@@ -278,10 +278,11 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
       if(length2==0&&!join_disk&&line_cap==2)
        return std::abs(qx)<=effective_width*0.5&&std::abs(qy)<=effective_width*0.5;
       double projection=length2>0?(qx*ex+qy*ey)/length2:0;
-      if(!join_disk&&line_cap==0&&(projection<0||projection>1))return false;
+      if(!join_disk&&((!start_cap&&projection<0)||(!end_cap&&projection>1)||
+        (line_cap==0&&(projection<0||projection>1))))return false;
       const double extension=length2>0?(effective_width*0.5)/std::sqrt(length2):0;
       if(!join_disk&&line_cap==2){
-       if(projection< -extension||projection>1+extension)return false;
+       if(projection<(start_cap?-extension:0)||projection>(end_cap?1+extension:1))return false;
        // Square caps extend the stroke rectangle, not its circular ends.
        const double perpendicular=std::abs(qx*ey-qy*ex)/std::sqrt(length2);
        return perpendicular<=effective_width*0.5;
@@ -304,7 +305,14 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    std::vector<DashedJoin> dashed_joins;
    auto stroke_path=[&](const std::vector<Point>& points,const std::vector<Matrix>& matrices)->bool{
     if(points.size()!=matrices.size())return false;
-    if(dash_pattern.empty()){for(size_t i=1;i<points.size();++i)if(!segment(points[i-1],points[i],matrices[i]))return false;return true;}
+    if(dash_pattern.empty()){
+     const bool closed=points.size()>2&&points.front().x==points.back().x&&points.front().y==points.back().y;
+     for(size_t i=1;i<points.size();++i){
+      const bool start_cap=!closed&&i==1,end_cap=!closed&&i+1==points.size();
+      if(!segment(points[i-1],points[i],matrices[i],false,start_cap,end_cap))return false;
+     }
+     return true;
+    }
     const size_t count=dash_pattern.size(),cycle=count*(count%2?2:1);
     size_t index=0;
     double remaining=dash_pattern[0],phase=dash_phase;
