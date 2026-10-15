@@ -1,6 +1,7 @@
 #include "../src/renderer/rectangles.h"
 #include <cstring>
 #include <vector>
+#include <string>
 int main(){
  std::vector<unsigned char> pixels(8*8*4);
  const char content[]="0 g 2 2 4 4 re f";
@@ -71,5 +72,10 @@ int main(){
  if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(unsupported_join),sizeof(unsupported_join)-1,8,8,pixels.data(),32))return 36;
  const char invalid_miter[]="0 M";
  if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(invalid_miter),sizeof(invalid_miter)-1,8,8,pixels.data(),32))return 37;
+ std::string excessive="1 J 1 j 1 w 0 G ";
+ excessive+="0 0 m ";
+ for(int i=0;i<300;++i)excessive+=std::to_string(i%8)+" 1 l ";
+ excessive+="S";
+ if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(excessive.data()),excessive.size(),256,256,large.data(),256*4))return 40;
  return 0;
 }
