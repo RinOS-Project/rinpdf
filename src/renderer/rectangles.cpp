@@ -278,6 +278,66 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
      }
     }
    }
+   // Join geometry in device space. Supported for uniform, axis-aligned CTM.
+   auto paint_triangle=[&](Point p0,Point p1,Point p2)->bool{
+    const double x0=(p0.x-box.x0)*sx,y0=(box.y1-p0.y)*sy;
+    const double x1=(p1.x-box.x0)*sx,y1=(box.y1-p1.y)*sy;
+    const double x2=(p2.x-box.x0)*sx,y2=(box.y1-p2.y)*sy;
+    const double area=(x1-x0)*(y2-y0)-(y1-y0)*(x2-x0);
+    if(!std::isfinite(area)||std::abs(area)<1e-10)return true;
+    unsigned xb=(unsigned)std::clamp(std::floor(std::min({x0,x1,x2})-1),0.0,(double)width);
+    unsigned xe=(unsigned)std::clamp(std::ceil(std::max({x0,x1,x2})+1),0.0,(double)width);
+    unsigned yb=(unsigned)std::clamp(std::floor(std::min({y0,y1,y2})-1),0.0,(double)height);
+    unsigned ye=(unsigned)std::clamp(std::ceil(std::max({y0,y1,y2})+1),0.0,(double)height);
+    size_t work=(size_t)(xe-xb)*(ye-yb);
+    if(work>16777216-stroke_work)return false;
+    stroke_work+=work;
+    for(unsigned yy=yb;yy<ye;++yy)for(unsigned xx=xb;xx<xe;++xx){
+     auto inside=[&](double px,double py){
+      double e0=(x1-x0)*(py-y0)-(y1-y0)*(px-x0);
+      double e1=(x2-x1)*(py-y1)-(y2-y1)*(px-x1);
+      double e2=(x0-x2)*(py-y2)-(y0-y2)*(px-x2);
+      return area>0?(e0>=0&&e1>=0&&e2>=0):(e0<=0&&e1<=0&&e2<=0);
+     };
+     uint8_t bits=0;
+     if(stroke_aa){
+      if(inside(xx+.25,yy+.25))bits|=1;
+      if(inside(xx+.75,yy+.25))bits|=2;
+      if(inside(xx+.25,yy+.75))bits|=4;
+      if(inside(xx+.75,yy+.75))bits|=8;
+     }else if(inside(xx+.5,yy+.5))bits=15;
+     stroke_samples[(size_t)yy*width+xx]|=bits;
+    }
+    return true;
+   };
+   if(line_join==0||line_join==2){
+    for(size_t k=0;k<polygons.size();++k){
+     const auto& poly=polygons[k];
+     for(size_t i=1;i+1<poly.size();++i){
+      const Point p=poly[i],prev=poly[i-1],next=poly[i+1];
+      double ax=p.x-prev.x,ay=p.y-prev.y,bx2=next.x-p.x,by2=next.y-p.y;
+      double al=std::hypot(ax,ay),bl=std::hypot(bx2,by2);
+      if(al<1e-10||bl<1e-10)continue;
+      const Matrix ma=polygon_matrices[k][i],mb=polygon_matrices[k][i+1];
+      if(ma.b!=0||ma.c!=0||mb.b!=0||mb.c!=0||ma.a!=ma.d||mb.a!=mb.d||ma.a!=mb.a)return false;
+      double cross=ax*by2-ay*bx2;
+      if(std::abs(cross)<1e-10)continue;
+      double side=cross>0?-1.0:1.0;
+      double radius=line_width==0?0.5/std::max(sx,sy):line_width*std::abs(ma.a)*.5;
+      Point u{p.x+side*(-ay/al)*radius,p.y+side*(ax/al)*radius};
+      Point v{p.x+side*(-by2/bl)*radius,p.y+side*(bx2/bl)*radius};
+      if(line_join==2){if(!paint_triangle(p,u,v))return false;continue;}
+      double ux=ax/al,uy=ay/al,vx=bx2/bl,vy=by2/bl;
+      double det=ux*vy-uy*vx;
+      if(std::abs(det)<1e-8){if(!paint_triangle(p,u,v))return false;continue;}
+      double t=((v.x-u.x)*vy-(v.y-u.y)*vx)/det;
+      Point tip{u.x+t*ux,u.y+t*uy};
+      if(!std::isfinite(tip.x)||!std::isfinite(tip.y))return false;
+      if(std::hypot(tip.x-p.x,tip.y-p.y)>miter_limit*radius){if(!paint_triangle(p,u,v))return false;}
+      else if(!paint_triangle(u,tip,v))return false;
+     }
+    }
+   }
    for(size_t k=0;k<path.size();++k){const Rect& rect=path[k];
     Point p0{rect.x,rect.y},p1{rect.x+rect.w,rect.y},p2{rect.x+rect.w,rect.y+rect.h},p3{rect.x,rect.y+rect.h};
     if(!segment(p0,p1,rect_matrices[k])||!segment(p1,p2,rect_matrices[k])||!segment(p2,p3,rect_matrices[k])||!segment(p3,p0,rect_matrices[k]))return false;
