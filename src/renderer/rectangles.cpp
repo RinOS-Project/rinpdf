@@ -137,7 +137,10 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     poly.push_back(poly.front());
    }
    const unsigned char cr=(unsigned char)std::lround(stroke_red*255),cg=(unsigned char)std::lround(stroke_green*255),cb=(unsigned char)std::lround(stroke_blue*255);
+   size_t stroke_work=0;
    auto segment=[&](Point p,Point q){
+    if(stroke_work>16777216-(size_t)width*height)return false;
+    stroke_work+=(size_t)width*height;
     double x0=(p.x-box.x0)*sx,y0=(box.y1-p.y)*sy;
     double x1=(q.x-box.x0)*sx,y1=(box.y1-q.y)*sy;
     double dx=x1-x0,dy=y1-y0,denom=dx*dx+dy*dy;
