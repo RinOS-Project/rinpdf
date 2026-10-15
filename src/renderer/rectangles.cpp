@@ -173,7 +173,8 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    if(pending_rect_clip)return false;
    if(!stack.empty()||polygons.empty()||polygons.back().size()<2)return false;
    if(polygons.back().size()>=4096)return false;
-   polygons.back().push_back(polygons.back().front());polygon_matrices.back().push_back(matrix());
+   const Point first=polygons.back().front(),last=polygons.back().back();
+   if(first.x!=last.x||first.y!=last.y){polygons.back().push_back(first);polygon_matrices.back().push_back(matrix());}
   }else if(word=="re"){
    if(pending_path_clip)return false;
    if(pending_rect_clip)return false;
@@ -193,7 +194,8 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    if(word=="s"&&!polygons.empty()){
     auto& poly=polygons.back();
     if(poly.size()<2||poly.size()>=4096)return false;
-    poly.push_back(poly.front());polygon_matrices.back().push_back(matrix());
+    const Point first=poly.front(),last=poly.back();
+    if(first.x!=last.x||first.y!=last.y){poly.push_back(first);polygon_matrices.back().push_back(matrix());}
    }
    const unsigned char cr=(unsigned char)std::lround(stroke_red*255),cg=(unsigned char)std::lround(stroke_green*255),cb=(unsigned char)std::lround(stroke_blue*255);
    size_t stroke_work=0;
