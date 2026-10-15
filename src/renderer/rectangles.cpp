@@ -263,6 +263,14 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     Point p0{rect.x,rect.y},p1{rect.x+rect.w,rect.y},p2{rect.x+rect.w,rect.y+rect.h},p3{rect.x,rect.y+rect.h};
     if(!segment(p0,p1,rect_matrices[k])||!segment(p1,p2,rect_matrices[k])||!segment(p2,p3,rect_matrices[k])||!segment(p3,p0,rect_matrices[k]))return false;
    }
+   if(line_join==1){
+    for(size_t k=0;k<path.size();++k){
+     const Rect& rect=path[k];
+     for(const Point p:{Point{rect.x,rect.y},Point{rect.x+rect.w,rect.y},Point{rect.x+rect.w,rect.y+rect.h},Point{rect.x,rect.y+rect.h}}){
+      if(!segment(p,p,rect_matrices[k]))return false;
+     }
+    }
+   }
    for(size_t i=0;i<stroke_samples.size();++i){
     unsigned x=(unsigned)(i%width),y=(unsigned)(i/width);
     if(x<clip.x0||x>=clip.x1||y<clip.y0||y>=clip.y1||(!clip_mask.empty()&&!clip_mask[i]))continue;
