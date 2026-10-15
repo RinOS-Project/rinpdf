@@ -66,7 +66,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    clip_mask_stack.push_back(clip_mask);
 
   }else if(word=="Q"){
-   if(pending_rect_clip||!stack.empty()||saved.empty()||(!path.empty()||!polygons.empty()))return false;
+   if((pending_rect_clip||pending_path_clip)||!stack.empty()||saved.empty()||(!path.empty()||!polygons.empty()))return false;
    auto color=saved.back();saved.pop_back();red=color.r;green=color.g;blue=color.b;a=color.a;d=color.d;e=color.e;f=color.f;line_width=color.width;stroke_red=color.sr;stroke_green=color.sg;stroke_blue=color.sb;line_cap=color.cap;line_join=color.join;miter_limit=color.miter;
    clip=clip_stack.back();clip_stack.pop_back();
    clip_mask=std::move(clip_mask_stack.back());clip_mask_stack.pop_back();
@@ -116,15 +116,17 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    if(stack.size()!=1||stack[0]<0||stack[0]>1)return false;
    red=green=blue=stack[0];stack.clear();
   }else if(word=="m"){
+   if(pending_path_clip)return false;
    if(pending_rect_clip||pending_path_clip)return false;
    if(stack.size()!=2||polygons.size()>=4096)return false;
    polygons.push_back({{a*stack[0]+e,d*stack[1]+f}});stack.clear();
   }else if(word=="l"){
+   if(pending_path_clip)return false;
    if(pending_rect_clip)return false;
    if(stack.size()!=2||polygons.empty()||polygons.back().size()>=4096)return false;
    polygons.back().push_back({a*stack[0]+e,d*stack[1]+f});stack.clear();
   }else if(word=="c"||word=="v"||word=="y"){
-   if(pending_rect_clip)return false;
+   if(pending_path_clip||pending_rect_clip)return false;
    const size_t required=word=="c"?6:4;
    if(stack.size()!=required||polygons.empty()||polygons.back().empty()||polygons.back().size()>4096-16)return false;
    auto& poly=polygons.back();
@@ -148,11 +150,13 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    }
    stack.clear();
   }else if(word=="h"){
+   if(pending_path_clip)return false;
    if(pending_rect_clip)return false;
    if(!stack.empty()||polygons.empty()||polygons.back().size()<2)return false;
    if(polygons.back().size()>=4096)return false;
    polygons.back().push_back(polygons.back().front());
   }else if(word=="re"){
+   if(pending_path_clip)return false;
    if(pending_rect_clip)return false;
    if(stack.size()!=4||path.size()>=4096)return false;
    path.push_back({a*stack[0]+e,d*stack[1]+f,a*stack[2],d*stack[3]});stack.clear();
