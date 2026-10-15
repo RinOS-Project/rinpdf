@@ -3,6 +3,8 @@
 #include "rinpdf/rinpdf.h"
 #include <cstdio>
 #include <vector>
+#include <string>
+#include <cstring>
 int main(){
  const char *path="rinpdf-xref.pdf";
  if(rinpdf_write_text_file(path,"xref test")!=RINPDF_OK)return 1;
@@ -20,6 +22,18 @@ int main(){
  if(rinpdf::parser::resolve_object(data.data(),data.size(),entries[0],begin,end))return 8;
  auto corrupt=entries[1];corrupt.object=999;
  if(rinpdf::parser::resolve_object(data.data(),data.size(),corrupt,begin,end))return 9;
+ rinpdf_document *doc=nullptr;
+ if(rinpdf_document_open_memory(data.data(),data.size(),&doc)!=RINPDF_OK)return 11;
+ size_t pages=0;
+ if(rinpdf_document_page_count(doc,&pages)!=RINPDF_OK||pages!=1)return 12;
+ rinpdf_document_close(doc);
+ std::string modified(reinterpret_cast<const char*>(data.data()),data.size());
+ size_t root=modified.rfind("/Root 1 0 R");
+ if(root==std::string::npos)return 13;
+ modified.replace(root,11,"/Root 9 0 R");
+ if(rinpdf_document_open_memory(reinterpret_cast<const unsigned char*>(modified.data()),modified.size(),&doc)!=RINPDF_OK)return 14;
+ if(rinpdf_document_page_count(doc,&pages)!=RINPDF_UNSUPPORTED)return 15;
+ rinpdf_document_close(doc);
  const unsigned char bad[]="%PDF-1.4\nstartxref\n999999\n%%EOF\n";
  if(rinpdf::parser::read_classic_xref(bad,sizeof(bad)-1,entries))return 10;
  return 0;
