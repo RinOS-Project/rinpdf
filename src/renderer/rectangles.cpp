@@ -257,7 +257,9 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     const double determinant=mat.a*mat.d-mat.b*mat.c;
     if(!std::isfinite(determinant)||std::abs(determinant)<1e-12)return false;
     if(!std::isfinite(denom)||!std::isfinite(radius)||radius>2048)return false;
-    double extra=radius+1;
+    // A square cap extends half a width along and across the segment.
+    // Its diagonal reaches sqrt(2) times the half-width from an endpoint.
+    double extra=radius*(line_cap==2&&!join_disk?std::sqrt(2.0):1.0)+1;
     double low_x=std::min(x0,x1)-extra,high_x=std::max(x0,x1)+extra;
     double low_y=std::min(y0,y1)-extra,high_y=std::max(y0,y1)+extra;
     if(!std::isfinite(low_x)||!std::isfinite(high_x)||!std::isfinite(low_y)||!std::isfinite(high_y))return false;
