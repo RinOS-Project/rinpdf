@@ -407,5 +407,11 @@ int main(){
  std::vector<unsigned char> exact_dash_pixels(16*16*4);
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(closed_exact_dash),sizeof(closed_exact_dash)-1,16,16,exact_dash_pixels.data(),64))return 222;
  if(exact_dash_pixels!=solid_miter_pixels)return 223;
+ const char diagonal_square[]="2 J 0 G 6 w 8 8 m 12 12 l S";
+ const char diagonal_butt[]="0 J 0 G 6 w 8 8 m 12 12 l S";
+ std::vector<unsigned char> diagonal_square_pixels(20*20*4),diagonal_butt_pixels(20*20*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(diagonal_square),sizeof(diagonal_square)-1,20,20,diagonal_square_pixels.data(),80))return 224;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(diagonal_butt),sizeof(diagonal_butt)-1,20,20,diagonal_butt_pixels.data(),80))return 225;
+ if(diagonal_square_pixels==diagonal_butt_pixels)return 226;
  return 0;
 }
