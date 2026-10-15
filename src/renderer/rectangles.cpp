@@ -561,9 +561,17 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     const double al=std::hypot(ax,ay),bl=std::hypot(bx2,by2);
     if(!std::isfinite(al)||!std::isfinite(bl))return false;
     if(al<1e-10||bl<1e-10)return true;
-    const double cross=ax*by2-ay*bx2;
-    if(std::abs(cross)<1e-10)return true;
-    const double side=cross>0?-1.0:1.0;
+    // Normalize before testing collinearity: the raw cross product
+    // changes quadratically with segment length and loses small turns.
+    const double ux0=ax/al,uy0=ay/al,ux1=bx2/bl,uy1=by2/bl;
+    const double turn=ux0*uy1-uy0*ux1;
+    const double alignment=ux0*ux1+uy0*uy1;
+    if(!std::isfinite(turn)||!std::isfinite(alignment))return false;
+    if(std::abs(turn)<1e-12&&alignment>0)return true;
+    // A reversal has no finite miter intersection. Its caps are handled
+    // by the stroke rasterizer; avoid producing an unbounded triangle.
+    if(std::abs(turn)<1e-12)return true;
+    const double side=turn>0?-1.0:1.0;
     // Compute each offset from its own segment CTM. The path points
     // are already transformed; the inverse maps each tangent back to
     // the user-space direction used to define stroke width.
