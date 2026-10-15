@@ -59,6 +59,13 @@ bool rasterize_path_coverage_2x(const std::vector<std::vector<MaskPoint>>& subpa
  unsigned width,unsigned height,FillRule rule,std::vector<uint8_t>& coverage){
  coverage.clear();
  if(!width||!height||(size_t)width*height>262144)return false;
+ // Validate aggregate geometry before allocating a scaled copy.
+ if(subpaths.size()>4096)return false;
+ size_t total_vertices=0;
+ for(const auto& path:subpaths){
+  if(path.size()>4096||path.size()>65536-total_vertices)return false;
+  total_vertices+=path.size();
+ }
  std::vector<std::vector<MaskPoint>> scaled;
  scaled.reserve(subpaths.size());
  for(const auto& path:subpaths){
