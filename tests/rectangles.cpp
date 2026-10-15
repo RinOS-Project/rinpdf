@@ -106,5 +106,13 @@ int main(){
  if(channel(0,0,0)!=255||channel(3,3,0)!=0)return 56;
  const char pending_state[]="0 0 4 4 re W q n";
  if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(pending_state),sizeof(pending_state)-1,8,8,pixels.data(),32))return 57;
+ const char modified_clip[]="0 0 4 4 re W 1 1 2 2 re n";
+ if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(modified_clip),sizeof(modified_clip)-1,8,8,pixels.data(),32))return 58;
+ const char nested_clip[]="q 1 1 6 6 re W n q 2 2 2 2 re W* n 0 g 0 0 8 8 re f Q 0 0 8 8 re f Q";
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(nested_clip),sizeof(nested_clip)-1,8,8,pixels.data(),32))return 59;
+ if(channel(0,0,0)!=255||channel(1,1,0)!=0||channel(3,3,0)!=0)return 60;
+ const char empty_clip[]="q 20 20 4 4 re W n 0 g 0 0 8 8 re f Q";
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(empty_clip),sizeof(empty_clip)-1,8,8,pixels.data(),32))return 61;
+ if(channel(3,3,0)!=255)return 62;
  return 0;
 }
