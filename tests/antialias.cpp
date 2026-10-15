@@ -46,5 +46,13 @@ int main(){
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const uint8_t*>(explicit_butt),
  sizeof(explicit_butt)-1,4,4,explicit_cap,16))return 17;
  for(unsigned i=0;i<sizeof(default_cap);++i)if(default_cap[i]!=explicit_cap[i])return 18;
+ uint8_t hairline[4*4*4]{};
+ const char hairline_stroke[]="0 G 0 w 0 J 0 2 m 4 2 l S";
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const uint8_t*>(hairline_stroke),
+ sizeof(hairline_stroke)-1,4,4,hairline,16))return 19;
+ if(hairline[(1*4+2)*4]==255||hairline[(2*4+2)*4]==255)return 20;
+ const char negative_hairline[]="-0.1 w";
+ if(rinpdf::renderer::render_rectangles(reinterpret_cast<const uint8_t*>(negative_hairline),
+ sizeof(negative_hairline)-1,4,4,hairline,16))return 21;
  return 0;
 }
