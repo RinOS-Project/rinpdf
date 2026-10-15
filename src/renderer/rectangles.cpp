@@ -13,6 +13,7 @@ static bool number(const std::string& s,double& v){
 }
 static bool space(unsigned char c){return c==0||c==9||c==10||c==12||c==13||c==32;}
 struct Rect {double x,y,w,h;};
+struct Point {double x,y;};
 bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,unsigned height,uint8_t *rgba,size_t stride,PageBox box){
  if(!std::isfinite(box.x0)||!std::isfinite(box.y0)||!std::isfinite(box.x1)||!std::isfinite(box.y1)||box.x1<=box.x0||box.y1<=box.y0)return false;
  const double sx=(double)width/(box.x1-box.x0),sy=(double)height/(box.y1-box.y0);
@@ -26,6 +27,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
  std::vector<Color> saved;
  std::vector<double> stack;
  std::vector<Rect> path;
+ std::vector<std::vector<Point>> polygons;
  size_t pos=0;
  while(pos<size){
   while(pos<size&&space(contents[pos]))++pos;
@@ -40,7 +42,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    if(!stack.empty()||saved.size()>=64)return false;
    saved.push_back({red,green,blue,a,d,e,f});
   }else if(word=="Q"){
-   if(!stack.empty()||saved.empty()||!path.empty())return false;
+   if(!stack.empty()||saved.empty()||(!path.empty()||!polygons.empty()))return false;
    auto color=saved.back();saved.pop_back();red=color.r;green=color.g;blue=color.b;a=color.a;d=color.d;e=color.e;f=color.f;
   }else if(word=="cm"){
    if(stack.size()!=6||stack[1]!=0||stack[2]!=0)return false;
@@ -61,6 +63,16 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
   }else if(word=="g"){
    if(stack.size()!=1||stack[0]<0||stack[0]>1)return false;
    red=green=blue=stack[0];stack.clear();
+  }else if(word=="m"){
+   if(stack.size()!=2||polygons.size()>=4096)return false;
+   polygons.push_back({{a*stack[0]+e,d*stack[1]+f}});stack.clear();
+  }else if(word=="l"){
+   if(stack.size()!=2||polygons.empty()||polygons.back().size()>=4096)return false;
+   polygons.back().push_back({a*stack[0]+e,d*stack[1]+f});stack.clear();
+  }else if(word=="h"){
+   if(!stack.empty()||polygons.empty()||polygons.back().size()<2)return false;
+   if(polygons.back().size()>=4096)return false;
+   polygons.back().push_back(polygons.back().front());
   }else if(word=="re"){
    if(stack.size()!=4||path.size()>=4096)return false;
    path.push_back({a*stack[0]+e,d*stack[1]+f,a*stack[2],d*stack[3]});stack.clear();
@@ -81,13 +93,37 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
      }
     }
    }
-   path.clear();
+   for(const auto& poly:polygons){
+    if(poly.size()<3)return false;
+    for(unsigned y=0;y<height;++y){
+     double scan=(double)y+0.5;
+     std::vector<double> intersections;
+     for(size_t i=0;i<poly.size();++i){
+      const Point& p0=poly[i];const Point& p1=poly[(i+1)%poly.size()];
+      double x0=(p0.x-box.x0)*sx,x1=(p1.x-box.x0)*sx;
+      double y0=(box.y1-p0.y)*sy,y1=(box.y1-p1.y)*sy;
+      if((y0<=scan&&y1>scan)||(y1<=scan&&y0>scan))
+       intersections.push_back(x0+(scan-y0)*(x1-x0)/(y1-y0));
+     }
+     std::sort(intersections.begin(),intersections.end());
+     if(intersections.size()%2)return false;
+     for(size_t i=0;i+1<intersections.size();i+=2){
+      double lo=std::clamp(intersections[i],0.0,(double)width);
+      double hi=std::clamp(intersections[i+1],0.0,(double)width);
+      for(unsigned x=(unsigned)std::ceil(lo-0.5);x<width&&(double)x+0.5<hi;++x){
+       uint8_t* pixel=rgba+(size_t)y*stride+(size_t)x*4;
+       pixel[0]=cr;pixel[1]=cg;pixel[2]=cb;pixel[3]=255;
+      }
+     }
+    }
+   }
+   path.clear();polygons.clear();
   }else if(word=="n"){
    if(!stack.empty())return false;
-   path.clear();
+   path.clear();polygons.clear();
   }else return false; // Do not silently ignore unknown operators.
  }
- return stack.empty()&&path.empty()&&saved.empty();
+ return stack.empty()&&path.empty()&&polygons.empty()&&saved.empty();
 }
 bool render_rectangles(const uint8_t *contents,size_t size,unsigned width,unsigned height,uint8_t *rgba,size_t stride){
  return render_rectangles_box(contents,size,width,height,rgba,stride,{0,0,(double)width,(double)height});
