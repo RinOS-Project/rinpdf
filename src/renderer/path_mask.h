@@ -9,5 +9,8 @@ enum class FillRule { NonZero, EvenOdd };
 // Returns false for malformed geometry or excessive work.
 bool rasterize_path_mask(const std::vector<std::vector<MaskPoint>>& subpaths,
  unsigned width,unsigned height,FillRule rule,std::vector<uint8_t>& mask);
+// 2x2 supersampled coverage in [0,255], limited to 262144 output pixels.
+bool rasterize_path_coverage_2x(const std::vector<std::vector<MaskPoint>>& subpaths,
+ unsigned width,unsigned height,FillRule rule,std::vector<uint8_t>& coverage);
 bool intersect_path_masks(std::vector<uint8_t>& current,const std::vector<uint8_t>& incoming);
 }
