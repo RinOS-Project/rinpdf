@@ -42,6 +42,13 @@ bool render_rectangles(const uint8_t *contents,size_t size,unsigned width,unsign
    if(stack.size()!=3)return false;
    for(double channel:stack)if(channel<0||channel>1)return false;
    red=stack[0];green=stack[1];blue=stack[2];stack.clear();
+  }else if(word=="k"){
+   if(stack.size()!=4)return false;
+   for(double channel:stack)if(channel<0||channel>1)return false;
+   red=(1-stack[0])*(1-stack[3]);
+   green=(1-stack[1])*(1-stack[3]);
+   blue=(1-stack[2])*(1-stack[3]);
+   stack.clear();
   }else if(word=="g"){
    if(stack.size()!=1||stack[0]<0||stack[0]>1)return false;
    red=green=blue=stack[0];stack.clear();
