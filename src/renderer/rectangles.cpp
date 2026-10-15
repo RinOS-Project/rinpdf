@@ -198,9 +198,12 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    if(!drawable){path.clear();polygons.clear();polygon_matrices.clear();rect_matrices.clear();mixed_path_ctm=false;continue;}
    if(word=="s"&&!polygons.empty()){
     auto& poly=polygons.back();
-    if(poly.size()<2||poly.size()>=4096)return false;
-    const Point first=poly.front(),last=poly.back();
-    if(first.x!=last.x||first.y!=last.y){poly.push_back(first);polygon_matrices.back().push_back(matrix());}
+    // A final move-only subpath has no closing segment.
+    if(poly.size()>1){
+     if(poly.size()>=4096)return false;
+     const Point first=poly.front(),last=poly.back();
+     if(first.x!=last.x||first.y!=last.y){poly.push_back(first);polygon_matrices.back().push_back(matrix());}
+    }
    }
    const unsigned char cr=(unsigned char)std::lround(stroke_red*255),cg=(unsigned char)std::lround(stroke_green*255),cb=(unsigned char)std::lround(stroke_blue*255);
    size_t stroke_work=0;
