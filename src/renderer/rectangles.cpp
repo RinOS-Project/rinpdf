@@ -189,12 +189,6 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     if(poly.size()<2||poly.size()>=4096)return false;
     poly.push_back(poly.front());polygon_matrices.back().push_back(polygon_matrices.back().front());
    }
-   // Miter and bevel join geometry is not implemented yet.
-   // Accept isolated segments, but do not silently render incorrect corners.
-   if(line_join!=1){
-    for(const auto& poly:polygons)if(poly.size()>2)return false;
-    if(!path.empty())return false;
-   }
    const unsigned char cr=(unsigned char)std::lround(stroke_red*255),cg=(unsigned char)std::lround(stroke_green*255),cb=(unsigned char)std::lround(stroke_blue*255);
    size_t stroke_work=0;
    const bool stroke_aa=(size_t)width*height<=262144;
