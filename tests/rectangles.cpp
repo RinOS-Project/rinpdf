@@ -297,5 +297,11 @@ int main(){
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(dash_butt_cap),sizeof(dash_butt_cap)-1,16,16,butt_dash.data(),64))return 166;
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(dash_round_cap),sizeof(dash_round_cap)-1,16,16,round_dash.data(),64))return 167;
  if(butt_dash==round_dash)return 168;
+ const char dash_round_corner[]="[20 2] 0 d 1 j 0 J 2 w 0 G 2 2 m 8 2 l 8 8 l S";
+ const char solid_round_corner[]="1 j 0 J 2 w 0 G 2 2 m 8 2 l 8 8 l S";
+ std::vector<unsigned char> dashed_corner(16*16*4),solid_corner(16*16*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(dash_round_corner),sizeof(dash_round_corner)-1,16,16,dashed_corner.data(),64))return 169;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(solid_round_corner),sizeof(solid_round_corner)-1,16,16,solid_corner.data(),64))return 170;
+ if(dashed_corner!=solid_corner)return 171;
  return 0;
 }
