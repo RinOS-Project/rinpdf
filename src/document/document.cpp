@@ -1,5 +1,8 @@
 #include "rinpdf/document.h"
 #include "../parser/pages.h"
+#include "../parser/contents.h"
+#include "../renderer/rectangles.h"
+#include "rinpdf/render.h"
 #include <cstdio>
 #include <cstring>
 #include <new>
@@ -34,4 +37,19 @@ extern "C" rinpdf_status rinpdf_document_page_count(const rinpdf_document *d,siz
  size_t result=0;
  if(!rinpdf::parser::count_page_tree(d->bytes.data(),d->bytes.size(),result))return RINPDF_UNSUPPORTED;
  *count=result;return RINPDF_OK;
+}
+
+extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t index,unsigned width,unsigned height,unsigned char *rgba,size_t stride){
+ if(!doc||!rgba||width==0||height==0||width>16384||height>16384||stride<(size_t)width*4)return RINPDF_INVALID_ARGUMENT;
+ size_t pages=0;
+ if(!rinpdf::parser::count_page_tree(doc->bytes.data(),doc->bytes.size(),pages))return RINPDF_UNSUPPORTED;
+ if(index>=pages)return RINPDF_INVALID_ARGUMENT;
+ try{
+  std::vector<uint8_t> contents;
+  if(!rinpdf::parser::read_page_contents(doc->bytes.data(),doc->bytes.size(),index,contents))return RINPDF_UNSUPPORTED;
+  std::vector<uint8_t> temporary((size_t)width*height*4);
+  if(!rinpdf::renderer::render_rectangles(contents.data(),contents.size(),width,height,temporary.data(),(size_t)width*4))return RINPDF_UNSUPPORTED;
+  for(unsigned y=0;y<height;++y)std::memcpy(rgba+(size_t)y*stride,temporary.data()+(size_t)y*width*4,(size_t)width*4);
+  return RINPDF_OK;
+ }catch(const std::bad_alloc&){return RINPDF_OUT_OF_MEMORY;}
 }
