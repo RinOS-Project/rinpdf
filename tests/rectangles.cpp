@@ -21,5 +21,9 @@ int main(){
  if(channel(1,5,0)!=255||channel(1,5,1)!=0||channel(1,5,2)!=0)return 9;
  const char invalid_cmyk[]="0 0 0 2 k";
  if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(invalid_cmyk),sizeof(invalid_cmyk)-1,8,8,pixels.data(),32))return 10;
+ const char scaled[]="0 g 100 200 20 20 re f";
+ if(!rinpdf::renderer::render_rectangles_box(reinterpret_cast<const unsigned char*>(scaled),sizeof(scaled)-1,8,8,pixels.data(),32,{100,200,140,240}))return 11;
+ if(channel(1,5,0)!=0||channel(6,6,0)!=255)return 12;
+ if(rinpdf::renderer::render_rectangles_box(reinterpret_cast<const unsigned char*>(scaled),sizeof(scaled)-1,8,8,pixels.data(),32,{0,0,0,10}))return 13;
  return 0;
 }
