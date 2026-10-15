@@ -287,8 +287,8 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
        const double perpendicular=std::abs(qx*ey-qy*ex)/std::sqrt(length2);
        return perpendicular<=effective_width*0.5;
       }
-      const double t=(join_disk||line_cap==1)?
-       std::clamp(projection,start_cap?0.0:-1e20,end_cap?1.0:1e20):projection;
+      const double t=join_disk?std::clamp(projection,0.0,1.0):
+       (line_cap==1?(start_cap&&projection<0?0.0:end_cap&&projection>1?1.0:projection):projection);
       return std::hypot(qx-t*ex,qy-t*ey)<=effective_width*0.5;
      };
      uint8_t bits=0;
