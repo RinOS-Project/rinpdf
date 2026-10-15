@@ -1,4 +1,5 @@
 #include "stream.h"
+#include "flate.h"
 #include <cstring>
 #include <utility>
 namespace rinpdf::parser {
@@ -32,5 +33,17 @@ bool locate_stream(const uint8_t *data,size_t size,StreamRange& out){
  if(marker!=size)return false;
  out.dictionary=std::move(dict);out.offset=pos;out.length=(size_t)amount;
  return true;
+}
+bool decode_stream(const uint8_t *data,size_t size,const StreamRange& range,std::vector<uint8_t>& output,size_t max_output){
+ output.clear();
+ if(!data||range.offset>size||range.length>size-range.offset||max_output==0)return false;
+ auto filter=range.dictionary.dictionary.find("Filter");
+ if(filter==range.dictionary.dictionary.end()){
+  if(range.length>max_output)return false;
+  output.assign(data+range.offset,data+range.offset+range.length);
+  return true;
+ }
+ if(filter->second.kind!=Value::Kind::Name||filter->second.text!="FlateDecode")return false;
+ return flate_decode(data+range.offset,range.length,output,max_output);
 }
 }
