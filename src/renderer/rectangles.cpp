@@ -253,6 +253,14 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
      }
     }
    }
+   if(line_join==0||line_join==2){
+    // Explicitly reject complex joins until their geometry can be rasterized.
+    // A single segment has no join and remains supported.
+    for(const auto& poly:polygons){
+     if(poly.size()>2)return false;
+    }
+    if(!path.empty())return false;
+   }
    for(size_t k=0;k<path.size();++k){const Rect& rect=path[k];
     Point p0{rect.x,rect.y},p1{rect.x+rect.w,rect.y},p2{rect.x+rect.w,rect.y+rect.h},p3{rect.x,rect.y+rect.h};
     if(!segment(p0,p1,rect_matrices[k])||!segment(p1,p2,rect_matrices[k])||!segment(p2,p3,rect_matrices[k])||!segment(p3,p0,rect_matrices[k]))return false;
