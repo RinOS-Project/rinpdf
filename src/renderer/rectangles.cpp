@@ -213,6 +213,9 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     double x0=(p.x-box.x0)*sx,y0=(box.y1-p.y)*sy;
     double x1=(q.x-box.x0)*sx,y1=(box.y1-q.y)*sy;
     double dx=x1-x0,dy=y1-y0,denom=dx*dx+dy*dy;
+    // A zero-length butt/square segment has no stroke area. Round caps
+    // deliberately retain the circular point footprint.
+    if(denom==0&&line_cap!=1)return true;
     const double metric=std::hypot(std::hypot(mat.a*sx,mat.b*sy),std::hypot(mat.c*sx,mat.d*sy));
     const double effective_width=line_width==0?(metric>0?1.0/metric:0):line_width;
     const double radius=0.5*effective_width*metric;
