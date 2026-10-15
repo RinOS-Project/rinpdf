@@ -334,7 +334,15 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     };
     for(size_t i=1;i<points.size();++i){
      const Point p=points[i-1],q=points[i];
-     double len=std::hypot(q.x-p.x,q.y-p.y);
+     // Dash lengths are measured in user-space units, not in the
+     // transformed device-space coordinates stored in the current path.
+     const Matrix mat=matrices[i];
+     const double determinant=mat.a*mat.d-mat.b*mat.c;
+     if(!std::isfinite(determinant)||std::abs(determinant)<1e-12)return false;
+     const double dx=q.x-p.x,dy=q.y-p.y;
+     const double ux=(mat.d*dx-mat.c*dy)/determinant;
+     const double uy=(-mat.b*dx+mat.a*dy)/determinant;
+     const double len=std::hypot(ux,uy);
      if(!std::isfinite(len))return false;
      if(len==0)continue;
      double pos=0;
