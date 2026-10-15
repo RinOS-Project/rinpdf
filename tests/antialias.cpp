@@ -32,5 +32,10 @@ int main(){
  sizeof(clip)-1,4,4,clipped,16))return 12;
  auto cp=[&](unsigned x,unsigned y){return clipped[(y*4+x)*4];};
  if(cp(1,1)!=0||cp(2,1)!=127||cp(3,1)!=255)return 13;
+ uint8_t rect_clip_pixels[4*4*4]{};
+ const char rect_clip[]="q 0 0 2.5 4 re W n 0 g 0 0 4 4 re f Q";
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const uint8_t*>(rect_clip),
+ sizeof(rect_clip)-1,4,4,rect_clip_pixels,16))return 14;
+ for(unsigned i=0;i<sizeof(clipped);++i)if(rect_clip_pixels[i]!=clipped[i])return 15;
  return 0;
 }
