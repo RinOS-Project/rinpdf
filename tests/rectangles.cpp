@@ -59,5 +59,13 @@ int main(){
  if(channel(1,2,0)!=255||channel(1,2,2)!=0)return 32;
  const char state[]="q 3 w 1 0 0 RG Q 0 g 1 1 m 6 1 l S";
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(state),sizeof(state)-1,8,8,pixels.data(),32))return 33;
+ const char round[]="1 J 1 j 10 M 2 w 1 1 m 6 1 l S";
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(round),sizeof(round)-1,8,8,pixels.data(),32))return 34;
+ const char unsupported_cap[]="0 J";
+ if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(unsupported_cap),sizeof(unsupported_cap)-1,8,8,pixels.data(),32))return 35;
+ const char unsupported_join[]="2 j";
+ if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(unsupported_join),sizeof(unsupported_join)-1,8,8,pixels.data(),32))return 36;
+ const char invalid_miter[]="0 M";
+ if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(invalid_miter),sizeof(invalid_miter)-1,8,8,pixels.data(),32))return 37;
  return 0;
 }
