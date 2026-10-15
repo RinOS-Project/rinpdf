@@ -426,11 +426,18 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     const double al=std::hypot(ax,ay),bl=std::hypot(bx2,by2);
     if(!std::isfinite(al)||!std::isfinite(bl))return false;
     if(al<1e-10||bl<1e-10)return true;
-    if(ma.b!=0||ma.c!=0||mb.b!=0||mb.c!=0||ma.a!=ma.d||mb.a!=mb.d||ma.a!=mb.a)return false;
+    // A similarity transform (rotation/reflection with uniform scale)
+    // preserves circular stroke widths and join angles.
+    if(ma.a!=mb.a||ma.b!=mb.b||ma.c!=mb.c||ma.d!=mb.d)return false;
+    const double col0=std::hypot(ma.a,ma.b),col1=std::hypot(ma.c,ma.d);
+    const double dot=ma.a*ma.c+ma.b*ma.d;
+    if(!std::isfinite(col0)||!std::isfinite(col1)||col0<=0||
+       std::abs(col0-col1)>1e-8*col0||std::abs(dot)>1e-8*col0*col1||
+       std::abs(sx-sy)>1e-8*std::max(sx,sy))return false;
     const double cross=ax*by2-ay*bx2;
     if(std::abs(cross)<1e-10)return true;
     const double side=cross>0?-1.0:1.0;
-    const double radius=line_width==0?0.5/std::max(sx,sy):line_width*std::abs(ma.a)*.5;
+    const double radius=line_width==0?0.5/std::max(sx,sy):line_width*col0*.5;
     const Point u{p.x+side*(-ay/al)*radius,p.y+side*(ax/al)*radius};
     const Point v{p.x+side*(-by2/bl)*radius,p.y+side*(bx2/bl)*radius};
     if(line_join==2)return paint_triangle(p,u,v);
