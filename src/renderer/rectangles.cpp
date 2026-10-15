@@ -365,20 +365,53 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
       return true;
      }
     }
+    // Detect a painted run crossing the closed contour seam.
+    // This does not imply that the whole contour is painted.
+    const bool first_on=closed&&index%2==0;
+    bool seam_on=false;
+    if(first_on){
+     double length=0;
+     for(size_t i=1;i<points.size();++i){
+      const Matrix mat=matrices[i];
+      const double det=mat.a*mat.d-mat.b*mat.c;
+      if(!std::isfinite(det)||std::abs(det)<1e-12)return false;
+      const double dx=points[i].x-points[i-1].x,dy=points[i].y-points[i-1].y;
+      length+=std::hypot((mat.d*dx-mat.c*dy)/det,(-mat.b*dx+mat.a*dy)/det);
+     }
+     size_t probe=index;
+     double left=remaining;
+     for(size_t n=0;n<65536&&length>1e-10;++n){
+      if(left<=1e-12){
+       bool found=false;
+       for(size_t j=0;j<cycle;++j){
+        probe=(probe+1)%cycle;
+        left=dash_pattern[probe%count];
+        if(left>0){found=true;break;}
+       }
+       if(!found)return false;
+      }
+      const double take=std::min(left,length);
+      length-=take;left-=take;
+      if(length<=1e-10){seam_on=probe%2==0&&left>1e-10;break;}
+     }
+    }
+    const bool joined_seam=first_on&&seam_on;
     size_t pieces=0;
     bool in_on_run=false;
     Point run_end{};
     Matrix run_matrix{};
+    bool first_run=true;
     std::vector<std::pair<Point,Matrix>> on_run_vertices;
     auto emit_run=[&]()->bool{
      if(!in_on_run)return true;
-     if(line_cap==1&&!segment(run_end,run_end,run_matrix,true))return false;
+     if(line_cap==1&&!(joined_seam&&first_run)&&!segment(run_end,run_end,run_matrix,true))return false;
      if(line_join==1){
       for(const auto& vertex:on_run_vertices)
        if(!segment(vertex.first,vertex.first,vertex.second,true))return false;
      }
      on_run_vertices.clear();
      in_on_run=false;
+     first_run=false;
      return true;
     };
     for(size_t i=1;i<points.size();++i){
