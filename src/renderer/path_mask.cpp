@@ -11,7 +11,8 @@ bool rasterize_path_mask(const std::vector<std::vector<MaskPoint>>& subpaths,
  struct Edge {double x0,y0,x1,y1;int direction;};
  std::vector<Edge> edges;
  for(const auto& path:subpaths){
-  if(path.size()<2||path.size()>4096)return false;
+  if(path.size()>4096)return false;
+  if(path.size()<2)continue;
   for(size_t i=0;i<path.size();++i){
    const auto& p=path[i];const auto& q=path[(i+1)%path.size()];
    if(!std::isfinite(p.x)||!std::isfinite(p.y)||!std::isfinite(q.x)||!std::isfinite(q.y))return false;
