@@ -14,5 +14,12 @@ int main(){
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const uint8_t*>(red),
  sizeof(red)-1,2,2,pixels,8))return 5;
  if(at(1,0,0)!=255||at(1,0,1)!=127||at(1,0,2)!=127)return 6;
+ uint8_t stroke_pixels[4*4*4]{};
+ const char stroke[]="0 G 0.5 w 0 J 0 2 m 4 2 l S";
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const uint8_t*>(stroke),
+ sizeof(stroke)-1,4,4,stroke_pixels,16))return 7;
+ unsigned shade=stroke_pixels[(1*4+2)*4];
+ if(shade==0||shade==255)return 8;
+ if(stroke_pixels[(0*4+2)*4]!=255)return 9;
  return 0;
 }
