@@ -82,6 +82,12 @@ int main(){
  const char evenodd[]="0 g 1 1 m 7 1 l 4 7 l h f*";
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(evenodd),sizeof(evenodd)-1,8,8,pixels.data(),32))return 42;
  const char compound[]="0 g 1 1 m 3 1 l 2 3 l h 4 4 m 6 4 l 5 6 l h f";
- if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(compound),sizeof(compound)-1,8,8,pixels.data(),32))return 43;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(compound),sizeof(compound)-1,8,8,pixels.data(),32))return 43;
+ const char hole[]="0 g 0 0 m 8 0 l 8 8 l 0 8 l h 2 2 m 6 2 l 6 6 l 2 6 l h f*";
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(hole),sizeof(hole)-1,8,8,pixels.data(),32))return 44;
+ if(channel(0,0,0)!=0||channel(3,3,0)!=255)return 45;
+ const char nonzero[]="0 g 0 0 m 8 0 l 8 8 l 0 8 l h 2 2 m 6 2 l 6 6 l 2 6 l h f";
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(nonzero),sizeof(nonzero)-1,8,8,pixels.data(),32))return 46;
+ if(channel(3,3,0)!=0)return 47;
  return 0;
 }
