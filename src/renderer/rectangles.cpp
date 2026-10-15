@@ -224,6 +224,8 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     unsigned bits=stroke_samples[i],hits=(unsigned)((bits&1)!=0)+((bits&2)!=0)+((bits&4)!=0)+((bits&8)!=0);
     if(!hits)continue;
     unsigned alpha=(hits*255+2)/4;
+    if(!clip_mask.empty())alpha=(alpha*clip_mask[i]+127)/255;
+    if(!alpha)continue;
     uint8_t* pixel=rgba+(size_t)y*stride+(size_t)x*4;
     pixel[0]=(uint8_t)((alpha*cr+(255-alpha)*pixel[0]+127)/255);
     pixel[1]=(uint8_t)((alpha*cg+(255-alpha)*pixel[1]+127)/255);
@@ -232,7 +234,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    }
    path.clear();polygons.clear();
   }else if(word=="f"||word=="F"||word=="f*"){
-   if(pending_rect_clip||!stack.empty())return false;
+   if((pending_rect_clip||pending_path_clip)||!stack.empty())return false;
    unsigned char cr=(unsigned char)std::lround(red*255);
    unsigned char cg=(unsigned char)std::lround(green*255);
    unsigned char cb=(unsigned char)std::lround(blue*255);
@@ -252,6 +254,8 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     if(!coverage[i]||(!clip_mask.empty()&&!clip_mask[i])||x<clip.x0||x>=clip.x1||y<clip.y0||y>=clip.y1)continue;
     uint8_t* pixel=rgba+(size_t)y*stride+(size_t)x*4;
     unsigned alpha=antialias?coverage[i]:255;
+    if(!clip_mask.empty())alpha=(alpha*clip_mask[i]+127)/255;
+    if(!alpha)continue;
     pixel[0]=(uint8_t)((alpha*cr+(255-alpha)*pixel[0]+127)/255);
     pixel[1]=(uint8_t)((alpha*cg+(255-alpha)*pixel[1]+127)/255);
     pixel[2]=(uint8_t)((alpha*cb+(255-alpha)*pixel[2]+127)/255);
@@ -263,7 +267,12 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    if(pending_path_clip){
     auto shapes=shapes_from_path();
     std::vector<uint8_t> mask;
-    if(!rasterize_path_mask(shapes,width,height,pending_rule,mask))return false;
+    if((size_t)width*height<=262144){
+     if(!rasterize_path_coverage_2x(shapes,width,height,pending_rule,mask))return false;
+    }else{
+     if(!rasterize_path_mask(shapes,width,height,pending_rule,mask))return false;
+     for(auto& v:mask)v=v?255:0;
+    }
     if(clip_mask.empty())clip_mask=std::move(mask);
     else if(!intersect_path_masks(clip_mask,mask))return false;
     pending_path_clip=false;
