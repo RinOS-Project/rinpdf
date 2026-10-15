@@ -321,5 +321,11 @@ int main(){
  if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(extra_dash_phase),sizeof(extra_dash_phase)-1,8,8,pixels.data(),32))return 179;
  const char missing_dash_phase[]="[2 2] d";
  if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(missing_dash_phase),sizeof(missing_dash_phase)-1,8,8,pixels.data(),32))return 180;
+ const char scaled_dash[]="2 0 0 2 0 0 cm [2 2] 0 d 0 G 1 w 0 J 1 3 m 5 3 l S";
+ const char device_dash[]="[4 4] 0 d 0 G 2 w 0 J 2 6 m 10 6 l S";
+ std::vector<unsigned char> scaled_pixels(16*16*4),device_pixels(16*16*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(scaled_dash),sizeof(scaled_dash)-1,16,16,scaled_pixels.data(),64))return 181;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(device_dash),sizeof(device_dash)-1,16,16,device_pixels.data(),64))return 182;
+ if(scaled_pixels!=device_pixels)return 183;
  return 0;
 }
