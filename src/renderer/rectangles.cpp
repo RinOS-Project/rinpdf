@@ -58,8 +58,8 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    if(stack.size()!=1||stack[0]<=0||stack[0]>1024)return false;
    line_width=stack[0];stack.clear();
   }else if(word=="J"){
-   if(stack.size()!=1||stack[0]!=1)return false;
-   line_cap=1;stack.clear();
+   if(stack.size()!=1||stack[0]<0||stack[0]>2||std::floor(stack[0])!=stack[0])return false;
+   line_cap=(int)stack[0];stack.clear();
   }else if(word=="j"){
    if(stack.size()!=1||stack[0]!=1)return false;
    line_join=1;stack.clear();
@@ -145,7 +145,11 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     if(!std::isfinite(denom)||!std::isfinite(radius)||radius>2048)return false;
     for(unsigned yy=0;yy<height;++yy)for(unsigned xx=0;xx<width;++xx){
      double px=xx+0.5,py=yy+0.5;
-     double t=denom>0?std::clamp(((px-x0)*dx+(py-y0)*dy)/denom,0.0,1.0):0;
+     double projection=denom>0?((px-x0)*dx+(py-y0)*dy)/denom:0;
+     if(line_cap==0&&(projection<0||projection>1))continue;
+     double extension=denom>0?radius/std::sqrt(denom):0;
+     if(line_cap==2&&(projection< -extension||projection>1+extension))continue;
+     double t=line_cap==1?std::clamp(projection,0.0,1.0):projection;
      double distance=std::hypot(px-(x0+t*dx),py-(y0+t*dy));
      if(distance<=radius){uint8_t* pixel=rgba+(size_t)yy*stride+(size_t)xx*4;pixel[0]=cr;pixel[1]=cg;pixel[2]=cb;pixel[3]=255;}
     }
