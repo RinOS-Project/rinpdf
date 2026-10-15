@@ -175,7 +175,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    if(pending_rect_clip)return false;
    if(stack.size()!=4||path.size()>=4096||polygons.size()>=4096)return false;
    {const Point p=transform(stack[0],stack[1]);const Point q=transform(stack[0]+stack[2],stack[1]+stack[3]);
-   if(bx!=0||cx!=0){polygons.push_back({p,transform(stack[0]+stack[2],stack[1]),q,transform(stack[0],stack[1]+stack[3])});polygon_matrices.push_back(std::vector<Matrix>(4,matrix()));}
+   if(bx!=0||cx!=0){polygons.push_back({p,transform(stack[0]+stack[2],stack[1]),q,transform(stack[0],stack[1]+stack[3]),p});polygon_matrices.push_back(std::vector<Matrix>(5,matrix()));}
    else {path.push_back({p.x,p.y,q.x-p.x,q.y-p.y});rect_matrices.push_back(matrix());}stack.clear();}
   }else if(word=="W"||word=="W*"){
    if(!stack.empty()||pending_rect_clip||pending_path_clip)return false;
