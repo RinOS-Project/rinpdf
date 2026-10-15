@@ -342,6 +342,25 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     if(phase>0)return false;
     // Resolve exact phase boundaries before consuming the first segment.
     if(remaining<=0&&!advance())return false;
+    // When a single painted dash covers the entire closed path, the
+    // seam is a join, not two independent capped dash endpoints.
+    const bool closed=points.size()>2&&points.front().x==points.back().x&&points.front().y==points.back().y;
+    if(closed&&index%2==0){
+     double total_length=0;
+     for(size_t i=1;i<points.size();++i){
+      const Matrix mat=matrices[i];
+      const double det=mat.a*mat.d-mat.b*mat.c;
+      if(!std::isfinite(det)||std::abs(det)<1e-12)return false;
+      const double dx=points[i].x-points[i-1].x,dy=points[i].y-points[i-1].y;
+      total_length+=std::hypot((mat.d*dx-mat.c*dy)/det,(-mat.b*dx+mat.a*dy)/det);
+      if(!std::isfinite(total_length))return false;
+     }
+     if(total_length<remaining){
+      for(size_t i=1;i<points.size();++i)
+       if(!segment(points[i-1],points[i],matrices[i],false,false,false))return false;
+      return true;
+     }
+    }
     size_t pieces=0;
     bool in_on_run=false;
     Point run_end{};
