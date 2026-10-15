@@ -9,3 +9,5 @@ test('rinpdf-page-box',executable('rinpdf-page-box','page_box.cpp',dependencies:
 test('rinpdf-rotation',executable('rinpdf-rotation','rotation.cpp',dependencies:rinpdf_dep))
 
 test('rinpdf-path-mask',executable('rinpdf-path-mask','path_mask.cpp',dependencies:rinpdf_dep))
+
+test('rinpdf-antialias',executable('rinpdf-antialias','antialias.cpp',dependencies:rinpdf_dep))
