@@ -435,6 +435,8 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
        std::abs(col0-col1)>1e-8*col0||std::abs(dot)>1e-8*col0*col1||
        std::abs(sx-sy)>1e-8*std::max(sx,sy))return false;
     const double cross=ax*by2-ay*bx2;
+    // Collinear forward segments need no join. A 180-degree reversal
+    // is not a valid miter intersection; avoid a degenerate wedge.
     if(std::abs(cross)<1e-10)return true;
     const double side=cross>0?-1.0:1.0;
     const double radius=line_width==0?0.5/std::max(sx,sy):line_width*col0*.5;
