@@ -174,7 +174,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    pending_rect_clip=path.size()==1&&polygons.empty();
    pending_path_clip=!pending_rect_clip;
   }else if(word=="S"||word=="s"){
-   if(pending_rect_clip||pending_path_clip||!stack.empty()||(!polygons.size()&&!path.size())||width>1024||height>1024||bx!=0||cx!=0)return false;
+   if(pending_rect_clip||pending_path_clip||!stack.empty()||(!polygons.size()&&!path.size())||width>1024||height>1024)return false;
    if(word=="s"&&!polygons.empty()){
     auto& poly=polygons.back();
     if(poly.size()<2||poly.size()>=4096)return false;
@@ -188,7 +188,9 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     double x0=(p.x-box.x0)*sx,y0=(box.y1-p.y)*sy;
     double x1=(q.x-box.x0)*sx,y1=(box.y1-q.y)*sy;
     double dx=x1-x0,dy=y1-y0,denom=dx*dx+dy*dy;
-    double radius=0.5*line_width*std::max(std::abs(a*sx),std::abs(d*sy));
+    const double radius=0.5*line_width*std::max(std::hypot(a*sx,bx*sy),std::hypot(cx*sx,d*sy));
+    const double determinant=a*d-bx*cx;
+    if(!std::isfinite(determinant)||std::abs(determinant)<1e-12)return false;
     if(!std::isfinite(denom)||!std::isfinite(radius)||radius>2048)return false;
     double extra=radius+1;
     double low_x=std::min(x0,x1)-extra,high_x=std::max(x0,x1)+extra;
@@ -203,12 +205,17 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     stroke_work+=work;
     for(unsigned yy=y_begin;yy<y_end;++yy)for(unsigned xx=x_begin;xx<x_end;++xx){
      auto covered=[&](double px,double py){
-      double projection=denom>0?((px-x0)*dx+(py-y0)*dy)/denom:0;
+      const double ux=(px-x0)/sx,uy=-(py-y0)/sy;
+      const double vx=dx/sx,vy=-dy/sy;
+      const double qx=(d*ux-cx*uy)/determinant,qy=(-bx*ux+a*uy)/determinant;
+      const double ex=(d*vx-cx*vy)/determinant,ey=(-bx*vx+a*vy)/determinant;
+      const double length2=ex*ex+ey*ey;
+      double projection=length2>0?(qx*ex+qy*ey)/length2:0;
       if(line_cap==0&&(projection<0||projection>1))return false;
-      double extension=denom>0?radius/std::sqrt(denom):0;
+      const double extension=length2>0?(line_width*0.5)/std::sqrt(length2):0;
       if(line_cap==2&&(projection< -extension||projection>1+extension))return false;
-      double t=line_cap==1?std::clamp(projection,0.0,1.0):projection;
-      return std::hypot(px-(x0+t*dx),py-(y0+t*dy))<=radius;
+      const double t=line_cap==1?std::clamp(projection,0.0,1.0):projection;
+      return std::hypot(qx-t*ex,qy-t*ey)<=line_width*0.5;
      };
      uint8_t bits=0;
      if(stroke_aa){
