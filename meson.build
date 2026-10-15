@@ -1,6 +1,6 @@
-project('rinpdf','cpp',version:'0.7.0',default_options:['cpp_std=c++20','warning_level=3'])
+project('rinpdf','cpp',version:'0.8.0',default_options:['cpp_std=c++20','warning_level=3'])
 inc=include_directories('include')
-sources=files('src/parser/parser.cpp','src/parser/lexer.cpp','src/parser/value.cpp','src/parser/pages.cpp','src/parser/xref.cpp','src/parser/object.cpp','src/document/document.cpp','src/renderer/render.cpp','src/security/error.cpp','src/writer/writer.cpp')
+sources=files('src/parser/parser.cpp','src/parser/lexer.cpp','src/parser/value.cpp','src/parser/pages.cpp','src/parser/stream.cpp','src/parser/xref.cpp','src/parser/object.cpp','src/document/document.cpp','src/renderer/render.cpp','src/security/error.cpp','src/writer/writer.cpp')
 lib=library('rinpdf',sources,include_directories:inc,install:true,version:meson.project_version())
 install_headers('include/rinpdf/rinpdf.h','include/rinpdf/document.h','include/rinpdf/page.h','include/rinpdf/render.h','include/rinpdf/error.h',subdir:'rinpdf')
 rinpdf_dep=declare_dependency(link_with:lib,include_directories:inc)
