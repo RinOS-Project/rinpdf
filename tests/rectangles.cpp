@@ -100,7 +100,7 @@ int main(){
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(clip_restore),sizeof(clip_restore)-1,8,8,pixels.data(),32))return 52;
  if(channel(0,0,0)!=0)return 53;
  const char bad_clip[]="0 0 m 4 0 l 4 4 l h W n";
- if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(bad_clip),sizeof(bad_clip)-1,8,8,pixels.data(),32))return 54;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(bad_clip),sizeof(bad_clip)-1,8,8,pixels.data(),32))return 54;
  const char evenodd_clip_fill[]="q 2 2 3 3 re W* n 0 g 0 0 8 8 re f Q";
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(evenodd_clip_fill),sizeof(evenodd_clip_fill)-1,8,8,pixels.data(),32))return 55;
  if(channel(0,0,0)!=255||channel(3,3,0)!=0)return 56;
@@ -114,5 +114,16 @@ int main(){
  const char empty_clip[]="q 20 20 4 4 re W n 0 g 0 0 8 8 re f Q";
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(empty_clip),sizeof(empty_clip)-1,8,8,pixels.data(),32))return 61;
  if(channel(3,3,0)!=255)return 62;
+ const char triangle_clip[]="q 1 1 m 7 1 l 4 7 l h W n 0 g 0 0 8 8 re f Q";
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(triangle_clip),sizeof(triangle_clip)-1,8,8,pixels.data(),32))return 63;
+ if(channel(4,3,0)!=0||channel(0,0,0)!=255)return 64;
+ const char hole_clip[]="q 0 0 m 8 0 l 8 8 l 0 8 l h 2 2 m 6 2 l 6 6 l 2 6 l h W* n 0 g 0 0 8 8 re f Q";
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(hole_clip),sizeof(hole_clip)-1,8,8,pixels.data(),32))return 65;
+ if(channel(0,0,0)!=0||channel(3,3,0)!=255)return 66;
+ const char restore_path_clip[]="q 1 1 m 7 1 l 4 7 l h W n Q 0 g 0 0 8 8 re f";
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(restore_path_clip),sizeof(restore_path_clip)-1,8,8,pixels.data(),32))return 67;
+ if(channel(0,0,0)!=0)return 68;
+ const char pending_path_mutation[]="1 1 m 7 1 l 4 7 l h W 0 0 m n";
+ if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(pending_path_mutation),sizeof(pending_path_mutation)-1,8,8,pixels.data(),32))return 69;
  return 0;
 }
