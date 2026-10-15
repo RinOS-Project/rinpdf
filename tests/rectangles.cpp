@@ -365,8 +365,9 @@ int main(){
   long_dash+=(i%2?"1 1 l ":"2 1 l ");
   // Probe representative sizes to identify the first failing path length.
   if(i==63||i==255||i==1023||i==2047||i==3071||i==4094){
-   if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(long_dash.data()),long_dash.size(),8,8,long_dash_pixels.data(),32)){
-    std::fprintf(stderr,"long dashed round join failed at %d segments\\n",i+1);
+   const std::string complete_path=long_dash+"S";
+   if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(complete_path.data()),complete_path.size(),8,8,long_dash_pixels.data(),32)){
+    std::fprintf(stderr,"long dashed round join failed at %d segments\n",i+1);
     return 199;
    }
   }
