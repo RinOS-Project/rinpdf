@@ -203,9 +203,12 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     auto& poly=polygons.back();
     // A final move-only subpath has no closing segment.
     if(poly.size()>1){
-     if(poly.size()>=4096)return false;
      const Point first=poly.front(),last=poly.back();
-     if(first.x!=last.x||first.y!=last.y){poly.push_back(first);polygon_matrices.back().push_back(matrix());}
+     if(first.x!=last.x||first.y!=last.y){
+      if(poly.size()>=4096)return false;
+      poly.push_back(first);
+      polygon_matrices.back().push_back(matrix());
+     }
     }
    }
    const unsigned char cr=(unsigned char)std::lround(stroke_red*255),cg=(unsigned char)std::lround(stroke_green*255),cb=(unsigned char)std::lround(stroke_blue*255);
