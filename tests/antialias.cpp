@@ -26,5 +26,11 @@ int main(){
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const uint8_t*>(overlapped),
  sizeof(overlapped)-1,4,4,joined,16))return 10;
  for(unsigned i=0;i<sizeof(joined);++i)if(joined[i]!=stroke_pixels[i])return 11;
+ uint8_t clipped[4*4*4]{};
+ const char clip[]="q 0 0 m 2.5 0 l 2.5 4 l 0 4 l h W n 0 g 0 0 4 4 re f Q";
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const uint8_t*>(clip),
+ sizeof(clip)-1,4,4,clipped,16))return 12;
+ auto cp=[&](unsigned x,unsigned y){return clipped[(y*4+x)*4];};
+ if(cp(1,1)!=0||cp(2,1)!=127||cp(3,1)!=255)return 13;
  return 0;
 }
