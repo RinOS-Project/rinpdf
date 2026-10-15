@@ -304,7 +304,8 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    };
    struct DashedJoin {Point prev,vertex,next;Matrix incoming,outgoing;};
    std::vector<DashedJoin> dashed_joins;
-   auto stroke_path=[&](const std::vector<Point>& points,const std::vector<Matrix>& matrices)->bool{
+   std::vector<size_t> fully_painted_closed_paths;
+   auto stroke_path=[&](size_t path_index,const std::vector<Point>& points,const std::vector<Matrix>& matrices)->bool{
     if(points.size()!=matrices.size())return false;
     if(dash_pattern.empty()){
      const bool closed=points.size()>2&&points.front().x==points.back().x&&points.front().y==points.back().y;
@@ -356,6 +357,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
       if(!std::isfinite(total_length))return false;
      }
      if(total_length<remaining){
+      fully_painted_closed_paths.push_back(path_index);
       for(size_t i=1;i<points.size();++i)
        if(!segment(points[i-1],points[i],matrices[i],false,false,false))return false;
       return true;
@@ -435,11 +437,12 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     }
     return emit_run();
    };
-   for(size_t k=0;k<polygons.size();++k)if(!stroke_path(polygons[k],polygon_matrices[k]))return false;
+   for(size_t k=0;k<polygons.size();++k)if(!stroke_path(k,polygons[k],polygon_matrices[k]))return false;
    // Round joins are disks at connected vertices. Keep the union in
    // stroke_samples so each subsample is blended only once.
-   if(line_join==1&&dash_pattern.empty()){
+   if(line_join==1){
     for(size_t k=0;k<polygons.size();++k){
+     if(!dash_pattern.empty()&&std::find(fully_painted_closed_paths.begin(),fully_painted_closed_paths.end(),k)==fully_painted_closed_paths.end())continue;
      const auto& poly=polygons[k];
      for(size_t i=1;i+1<poly.size();++i){
       if(!segment(poly[i],poly[i],polygon_matrices[k][i],true))return false;
@@ -514,8 +517,9 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     return paint_triangle(p,u,v)&&paint_triangle(u,tip,v);
    };
    if(line_join==0||line_join==2){
-    if(dash_pattern.empty()){
+    {
      for(size_t k=0;k<polygons.size();++k){
+      if(!dash_pattern.empty()&&std::find(fully_painted_closed_paths.begin(),fully_painted_closed_paths.end(),k)==fully_painted_closed_paths.end())continue;
       const auto& poly=polygons[k];
       const bool closed=poly.size()>3&&poly.front().x==poly.back().x&&poly.front().y==poly.back().y;
       for(size_t i=closed?0:1;i+1<poly.size();++i){
@@ -531,7 +535,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    }
    for(size_t k=0;k<path.size();++k){const Rect& rect=path[k];
     Point p0{rect.x,rect.y},p1{rect.x+rect.w,rect.y},p2{rect.x+rect.w,rect.y+rect.h},p3{rect.x,rect.y+rect.h};
-    if(!stroke_path({p0,p1,p2,p3,p0},std::vector<Matrix>(5,rect_matrices[k])))return false;
+    if(!stroke_path(polygons.size()+k,{p0,p1,p2,p3,p0},std::vector<Matrix>(5,rect_matrices[k])))return false;
    }
    if(line_join==1&&dash_pattern.empty()){
     for(size_t k=0;k<path.size();++k){
