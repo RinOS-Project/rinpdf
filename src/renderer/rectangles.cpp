@@ -280,6 +280,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
       if(length2==0&&!join_disk&&line_cap==2)
        return std::abs(qx)<=effective_width*0.5&&std::abs(qy)<=effective_width*0.5;
       double projection=length2>0?(qx*ex+qy*ey)/length2:0;
+      if(!std::isfinite(projection))return false;
       if(!join_disk&&((!start_cap&&projection<0)||(!end_cap&&projection>1)||
         (line_cap==0&&(projection<0||projection>1))))return false;
       const double extension=length2>0?(effective_width*0.5)/std::sqrt(length2):0;
