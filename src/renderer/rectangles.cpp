@@ -421,33 +421,42 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     }
     return true;
    };
-   if((line_join==0||line_join==2)&&dash_pattern.empty()){
-    for(size_t k=0;k<polygons.size();++k){
-     const auto& poly=polygons[k];
-     const bool closed=poly.size()>3&&poly.front().x==poly.back().x&&poly.front().y==poly.back().y;
-     for(size_t i=closed?0:1;i+1<poly.size();++i){
-      const Point p=poly[i],prev=i==0?poly[poly.size()-2]:poly[i-1],next=poly[i+1];
-      double ax=p.x-prev.x,ay=p.y-prev.y,bx2=next.x-p.x,by2=next.y-p.y;
-      double al=std::hypot(ax,ay),bl=std::hypot(bx2,by2);
-      if(al<1e-10||bl<1e-10)continue;
-      const Matrix ma=polygon_matrices[k][i==0?poly.size()-1:i],mb=polygon_matrices[k][i+1];
-      if(ma.b!=0||ma.c!=0||mb.b!=0||mb.c!=0||ma.a!=ma.d||mb.a!=mb.d||ma.a!=mb.a)return false;
-      double cross=ax*by2-ay*bx2;
-      if(std::abs(cross)<1e-10)continue;
-      double side=cross>0?-1.0:1.0;
-      double radius=line_width==0?0.5/std::max(sx,sy):line_width*std::abs(ma.a)*.5;
-      Point u{p.x+side*(-ay/al)*radius,p.y+side*(ax/al)*radius};
-      Point v{p.x+side*(-by2/bl)*radius,p.y+side*(bx2/bl)*radius};
-      if(line_join==2){if(!paint_triangle(p,u,v))return false;continue;}
-      double ux=ax/al,uy=ay/al,vx=bx2/bl,vy=by2/bl;
-      double det=ux*vy-uy*vx;
-      if(std::abs(det)<1e-8){if(!paint_triangle(p,u,v))return false;continue;}
-      double t=((v.x-u.x)*vy-(v.y-u.y)*vx)/det;
-      Point tip{u.x+t*ux,u.y+t*uy};
-      if(!std::isfinite(tip.x)||!std::isfinite(tip.y))return false;
-      if(std::hypot(tip.x-p.x,tip.y-p.y)>miter_limit*radius){if(!paint_triangle(p,u,v))return false;}
-      else {if(!paint_triangle(p,u,v)||!paint_triangle(u,tip,v))return false;}
+   auto paint_corner=[&](Point prev,Point p,Point next,Matrix ma,Matrix mb)->bool{
+    const double ax=p.x-prev.x,ay=p.y-prev.y,bx2=next.x-p.x,by2=next.y-p.y;
+    const double al=std::hypot(ax,ay),bl=std::hypot(bx2,by2);
+    if(!std::isfinite(al)||!std::isfinite(bl))return false;
+    if(al<1e-10||bl<1e-10)return true;
+    if(ma.b!=0||ma.c!=0||mb.b!=0||mb.c!=0||ma.a!=ma.d||mb.a!=mb.d||ma.a!=mb.a)return false;
+    const double cross=ax*by2-ay*bx2;
+    if(std::abs(cross)<1e-10)return true;
+    const double side=cross>0?-1.0:1.0;
+    const double radius=line_width==0?0.5/std::max(sx,sy):line_width*std::abs(ma.a)*.5;
+    const Point u{p.x+side*(-ay/al)*radius,p.y+side*(ax/al)*radius};
+    const Point v{p.x+side*(-by2/bl)*radius,p.y+side*(bx2/bl)*radius};
+    if(line_join==2)return paint_triangle(p,u,v);
+    const double ux=ax/al,uy=ay/al,vx=bx2/bl,vy=by2/bl;
+    const double det=ux*vy-uy*vx;
+    if(std::abs(det)<1e-8)return paint_triangle(p,u,v);
+    const double t=((v.x-u.x)*vy-(v.y-u.y)*vx)/det;
+    const Point tip{u.x+t*ux,u.y+t*uy};
+    if(!std::isfinite(tip.x)||!std::isfinite(tip.y))return false;
+    if(std::hypot(tip.x-p.x,tip.y-p.y)>miter_limit*radius)return paint_triangle(p,u,v);
+    return paint_triangle(p,u,v)&&paint_triangle(u,tip,v);
+   };
+   if(line_join==0||line_join==2){
+    if(dash_pattern.empty()){
+     for(size_t k=0;k<polygons.size();++k){
+      const auto& poly=polygons[k];
+      const bool closed=poly.size()>3&&poly.front().x==poly.back().x&&poly.front().y==poly.back().y;
+      for(size_t i=closed?0:1;i+1<poly.size();++i){
+       const Point prev=i==0?poly[poly.size()-2]:poly[i-1];
+       const Matrix ma=polygon_matrices[k][i==0?poly.size()-1:i],mb=polygon_matrices[k][i+1];
+       if(!paint_corner(prev,poly[i],poly[i+1],ma,mb))return false;
+      }
      }
+    }else{
+     for(const auto& join:dashed_joins)
+      if(!paint_corner(join.prev,join.vertex,join.next,join.incoming,join.outgoing))return false;
     }
    }
    for(size_t k=0;k<path.size();++k){const Rect& rect=path[k];
