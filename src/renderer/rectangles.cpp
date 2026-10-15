@@ -34,6 +34,10 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
  std::vector<double> stack;
  std::vector<Rect> path;
  std::vector<std::vector<Point>> polygons;
+ struct Matrix {double a,b,c,d;};
+ std::vector<std::vector<Matrix>> polygon_matrices;
+ std::vector<Matrix> rect_matrices;
+ auto matrix=[&](){return Matrix{a,bx,cx,d};};
  struct Clip {unsigned x0,y0,x1,y1;};
  Clip clip{0,0,width,height};
  std::vector<Clip> clip_stack;
@@ -130,12 +134,12 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    if(pending_path_clip)return false;
    if(pending_rect_clip||pending_path_clip)return false;
    if(stack.size()!=2||polygons.size()>=4096)return false;
-   polygons.push_back({{a*stack[0]+cx*stack[1]+e,bx*stack[0]+d*stack[1]+f}});stack.clear();
+   polygons.push_back({transform(stack[0],stack[1])});polygon_matrices.push_back({matrix()});stack.clear();
   }else if(word=="l"){
    if(pending_path_clip)return false;
    if(pending_rect_clip)return false;
    if(stack.size()!=2||polygons.empty()||polygons.back().size()>=4096)return false;
-   polygons.back().push_back(transform(stack[0],stack[1]));stack.clear();
+   polygons.back().push_back(transform(stack[0],stack[1]));polygon_matrices.back().push_back(matrix());stack.clear();
   }else if(word=="c"||word=="v"||word=="y"){
    if(pending_path_clip||pending_rect_clip)return false;
    const size_t required=word=="c"?6:4;
@@ -157,7 +161,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     Point point{u*u*u*start.x+3*u*u*t*p1.x+3*u*t*t*p2.x+t*t*t*p3.x,
                 u*u*u*start.y+3*u*u*t*p1.y+3*u*t*t*p2.y+t*t*t*p3.y};
     if(!std::isfinite(point.x)||!std::isfinite(point.y))return false;
-    poly.push_back(point);
+    poly.push_back(point);polygon_matrices.back().push_back(matrix());
    }
    stack.clear();
   }else if(word=="h"){
@@ -165,36 +169,36 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    if(pending_rect_clip)return false;
    if(!stack.empty()||polygons.empty()||polygons.back().size()<2)return false;
    if(polygons.back().size()>=4096)return false;
-   polygons.back().push_back(polygons.back().front());
+   polygons.back().push_back(polygons.back().front());polygon_matrices.back().push_back(matrix());
   }else if(word=="re"){
    if(pending_path_clip)return false;
    if(pending_rect_clip)return false;
    if(stack.size()!=4||path.size()>=4096||polygons.size()>=4096)return false;
    {const Point p=transform(stack[0],stack[1]);const Point q=transform(stack[0]+stack[2],stack[1]+stack[3]);
-   if(bx!=0||cx!=0){polygons.push_back({p,transform(stack[0]+stack[2],stack[1]),q,transform(stack[0],stack[1]+stack[3])});}
-   else path.push_back({p.x,p.y,q.x-p.x,q.y-p.y});stack.clear();}
+   if(bx!=0||cx!=0){polygons.push_back({p,transform(stack[0]+stack[2],stack[1]),q,transform(stack[0],stack[1]+stack[3])});polygon_matrices.push_back(std::vector<Matrix>(4,matrix()));}
+   else {path.push_back({p.x,p.y,q.x-p.x,q.y-p.y});rect_matrices.push_back(matrix());}stack.clear();}
   }else if(word=="W"||word=="W*"){
    if(!stack.empty()||pending_rect_clip||pending_path_clip)return false;
    pending_rule=word=="W*"?FillRule::EvenOdd:FillRule::NonZero;
    pending_rect_clip=path.size()==1&&polygons.empty();
    pending_path_clip=!pending_rect_clip;
   }else if(word=="S"||word=="s"){
-   if(pending_rect_clip||pending_path_clip||!stack.empty()||(!polygons.size()&&!path.size())||width>1024||height>1024||mixed_path_ctm)return false;
+   if(pending_rect_clip||pending_path_clip||!stack.empty()||(!polygons.size()&&!path.size())||width>1024||height>1024)return false;
    if(word=="s"&&!polygons.empty()){
     auto& poly=polygons.back();
     if(poly.size()<2||poly.size()>=4096)return false;
-    poly.push_back(poly.front());
+    poly.push_back(poly.front());polygon_matrices.back().push_back(polygon_matrices.back().front());
    }
    const unsigned char cr=(unsigned char)std::lround(stroke_red*255),cg=(unsigned char)std::lround(stroke_green*255),cb=(unsigned char)std::lround(stroke_blue*255);
    size_t stroke_work=0;
    const bool stroke_aa=(size_t)width*height<=262144;
    std::vector<uint8_t> stroke_samples((size_t)width*height,0);
-   auto segment=[&](Point p,Point q){
+   auto segment=[&](Point p,Point q,Matrix mat){
     double x0=(p.x-box.x0)*sx,y0=(box.y1-p.y)*sy;
     double x1=(q.x-box.x0)*sx,y1=(box.y1-q.y)*sy;
     double dx=x1-x0,dy=y1-y0,denom=dx*dx+dy*dy;
-    const double radius=0.5*line_width*std::hypot(std::hypot(a*sx,bx*sy),std::hypot(cx*sx,d*sy));
-    const double determinant=a*d-bx*cx;
+    const double radius=0.5*line_width*std::hypot(std::hypot(mat.a*sx,mat.b*sy),std::hypot(mat.c*sx,mat.d*sy));
+    const double determinant=mat.a*mat.d-mat.b*mat.c;
     if(!std::isfinite(determinant)||std::abs(determinant)<1e-12)return false;
     if(!std::isfinite(denom)||!std::isfinite(radius)||radius>2048)return false;
     double extra=radius+1;
@@ -212,8 +216,8 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
      auto covered=[&](double px,double py){
       const double ux=(px-x0)/sx,uy=-(py-y0)/sy;
       const double vx=dx/sx,vy=-dy/sy;
-      const double qx=(d*ux-cx*uy)/determinant,qy=(-bx*ux+a*uy)/determinant;
-      const double ex=(d*vx-cx*vy)/determinant,ey=(-bx*vx+a*vy)/determinant;
+      const double qx=(mat.d*ux-mat.c*uy)/determinant,qy=(-mat.b*ux+mat.a*uy)/determinant;
+      const double ex=(mat.d*vx-mat.c*vy)/determinant,ey=(-mat.b*vx+mat.a*vy)/determinant;
       const double length2=ex*ex+ey*ey;
       double projection=length2>0?(qx*ex+qy*ey)/length2:0;
       if(line_cap==0&&(projection<0||projection>1))return false;
@@ -233,10 +237,10 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     }
     return true;
    };
-   for(const auto& poly:polygons)for(size_t i=1;i<poly.size();++i)if(!segment(poly[i-1],poly[i]))return false;
-   for(const Rect& rect:path){
+   for(size_t k=0;k<polygons.size();++k){const auto& poly=polygons[k];for(size_t i=1;i<poly.size();++i)if(!segment(poly[i-1],poly[i],polygon_matrices[k][i]))return false;}
+   for(size_t k=0;k<path.size();++k){const Rect& rect=path[k];
     Point p0{rect.x,rect.y},p1{rect.x+rect.w,rect.y},p2{rect.x+rect.w,rect.y+rect.h},p3{rect.x,rect.y+rect.h};
-    if(!segment(p0,p1)||!segment(p1,p2)||!segment(p2,p3)||!segment(p3,p0))return false;
+    if(!segment(p0,p1,rect_matrices[k])||!segment(p1,p2,rect_matrices[k])||!segment(p2,p3,rect_matrices[k])||!segment(p3,p0,rect_matrices[k]))return false;
    }
    for(size_t i=0;i<stroke_samples.size();++i){
     unsigned x=(unsigned)(i%width),y=(unsigned)(i/width);
@@ -252,7 +256,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     pixel[2]=(uint8_t)((alpha*cb+(255-alpha)*pixel[2]+127)/255);
     pixel[3]=255;
    }
-   path.clear();polygons.clear();mixed_path_ctm=false;
+   path.clear();polygons.clear();polygon_matrices.clear();rect_matrices.clear();mixed_path_ctm=false;
   }else if(word=="f"||word=="F"||word=="f*"){
    if((pending_rect_clip||pending_path_clip)||!stack.empty())return false;
    unsigned char cr=(unsigned char)std::lround(red*255);
