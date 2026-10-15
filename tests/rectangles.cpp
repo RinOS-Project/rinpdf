@@ -303,5 +303,11 @@ int main(){
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(dash_round_corner),sizeof(dash_round_corner)-1,16,16,dashed_corner.data(),64))return 169;
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(solid_round_corner),sizeof(solid_round_corner)-1,16,16,solid_corner.data(),64))return 170;
  if(dashed_corner!=solid_corner)return 171;
+ const char boundary_phase[]="[2 2] 2 d 0 G 1 w 0 J 0 4 m 8 4 l S";
+ const char equivalent_phase[]="[2 2] 6 d 0 G 1 w 0 J 0 4 m 8 4 l S";
+ std::vector<unsigned char> phase_a(8*8*4),phase_b(8*8*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(boundary_phase),sizeof(boundary_phase)-1,8,8,phase_a.data(),32))return 172;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(equivalent_phase),sizeof(equivalent_phase)-1,8,8,phase_b.data(),32))return 173;
+ if(phase_a!=phase_b)return 174;
  return 0;
 }
