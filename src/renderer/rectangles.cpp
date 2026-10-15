@@ -190,7 +190,8 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    pending_rect_clip=path.size()==1&&polygons.empty();
    pending_path_clip=!pending_rect_clip;
   }else if(word=="S"||word=="s"){
-   if(pending_rect_clip||pending_path_clip||!stack.empty()||(!polygons.size()&&!path.size())||width>1024||height>1024)return false;
+   if(pending_rect_clip||pending_path_clip||!stack.empty()||width>1024||height>1024)return false;
+   if(polygons.empty()&&path.empty())continue;
    if(word=="s"&&!polygons.empty()){
     auto& poly=polygons.back();
     if(poly.size()<2||poly.size()>=4096)return false;
