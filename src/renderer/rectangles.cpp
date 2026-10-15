@@ -41,6 +41,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
  std::vector<std::vector<uint8_t>> clip_mask_stack;
  bool pending_rect_clip=false;
  bool pending_path_clip=false;
+ bool mixed_path_ctm=false;
  FillRule pending_rule=FillRule::NonZero;
  auto transform=[&](double x,double y){return Point{a*x+cx*y+e,bx*x+d*y+f};};
  auto shapes_from_path=[&](){
@@ -76,8 +77,9 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    clip_mask=std::move(clip_mask_stack.back());clip_mask_stack.pop_back();
 
   }else if(word=="cm"){
-   if(!path.empty()||!polygons.empty()||pending_rect_clip||pending_path_clip)return false;
+   if(pending_rect_clip||pending_path_clip)return false;
    if(stack.size()!=6)return false;
+   if(!path.empty()||!polygons.empty())mixed_path_ctm=true;
    const double A=stack[0],B=stack[1],C=stack[2],D=stack[3],E=stack[4],F=stack[5];
    const double na=a*A+cx*B,nb=bx*A+d*B,nc=a*C+cx*D,nd=bx*C+d*D;
    const double ne=a*E+cx*F+e,nf=bx*E+d*F+f;
@@ -175,7 +177,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    pending_rect_clip=path.size()==1&&polygons.empty();
    pending_path_clip=!pending_rect_clip;
   }else if(word=="S"||word=="s"){
-   if(pending_rect_clip||pending_path_clip||!stack.empty()||(!polygons.size()&&!path.size())||width>1024||height>1024)return false;
+   if(pending_rect_clip||pending_path_clip||!stack.empty()||(!polygons.size()&&!path.size())||width>1024||height>1024||mixed_path_ctm)return false;
    if(word=="s"&&!polygons.empty()){
     auto& poly=polygons.back();
     if(poly.size()<2||poly.size()>=4096)return false;
@@ -248,7 +250,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     pixel[2]=(uint8_t)((alpha*cb+(255-alpha)*pixel[2]+127)/255);
     pixel[3]=255;
    }
-   path.clear();polygons.clear();
+   path.clear();polygons.clear();mixed_path_ctm=false;
   }else if(word=="f"||word=="F"||word=="f*"){
    if((pending_rect_clip||pending_path_clip)||!stack.empty())return false;
    unsigned char cr=(unsigned char)std::lround(red*255);
