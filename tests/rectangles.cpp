@@ -309,5 +309,13 @@ int main(){
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(boundary_phase),sizeof(boundary_phase)-1,8,8,phase_a.data(),32))return 172;
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(equivalent_phase),sizeof(equivalent_phase)-1,8,8,phase_b.data(),32))return 173;
  if(phase_a!=phase_b)return 174;
+ const char missing_dash_array[]="2 d";
+ if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(missing_dash_array),sizeof(missing_dash_array)-1,8,8,pixels.data(),32))return 175;
+ const char malformed_dash_array[]="[2 q 2] 0 d";
+ if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(malformed_dash_array),sizeof(malformed_dash_array)-1,8,8,pixels.data(),32))return 176;
+ const char unterminated_dash_array[]="[2 2";
+ if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(unterminated_dash_array),sizeof(unterminated_dash_array)-1,8,8,pixels.data(),32))return 177;
+ const char no_dash_operator[]="[2 2] 0 w";
+ if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(no_dash_operator),sizeof(no_dash_operator)-1,8,8,pixels.data(),32))return 178;
  return 0;
 }
