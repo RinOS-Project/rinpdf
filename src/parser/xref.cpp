@@ -19,8 +19,8 @@ static bool keyword(const uint8_t *d,size_t n,size_t &p,const char *s){
  if(p+len<n&&!white(d[p+len])&&d[p+len]!='<')return false;
  p+=len;return true;
 }
-bool read_classic_xref(const uint8_t *d,size_t n,std::vector<XrefEntry>& entries){
- entries.clear();if(!d||n<20)return false;
+bool read_classic_xref(const uint8_t *d,size_t n,std::vector<XrefEntry>& entries,size_t *trailer_offset){
+ entries.clear();if(trailer_offset)*trailer_offset=0;if(!d||n<20)return false;
  const char marker[]="startxref";
  size_t start=n;
  for(size_t p=n-sizeof(marker)+1;p>0;){--p;
@@ -35,7 +35,9 @@ bool read_classic_xref(const uint8_t *d,size_t n,std::vector<XrefEntry>& entries
   ws(d,n,p);
   if(p+7<=n&&std::memcmp(d+p,"trailer",7)==0){
    p+=7;ws(d,n,p);
-   return p+2<=n&&d[p]=='<'&&d[p+1]=='<'&&total>0;
+   if(p+2>n||d[p]!='<'||d[p+1]!='<'||total==0)return false;
+   if(trailer_offset)*trailer_offset=p;
+   return true;
   }
   size_t first=0,count=0;
   if(!decimal(d,n,p,first)||!decimal(d,n,p,count)||count==0||count>1000000||first>1000000-count||total>1000000-count)return false;
