@@ -317,5 +317,9 @@ int main(){
  if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(unterminated_dash_array),sizeof(unterminated_dash_array)-1,8,8,pixels.data(),32))return 177;
  const char no_dash_operator[]="[2 2] 0 w";
  if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(no_dash_operator),sizeof(no_dash_operator)-1,8,8,pixels.data(),32))return 178;
+ const char extra_dash_phase[]="[2 2] 0 1 d";
+ if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(extra_dash_phase),sizeof(extra_dash_phase)-1,8,8,pixels.data(),32))return 179;
+ const char missing_dash_phase[]="[2 2] d";
+ if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(missing_dash_phase),sizeof(missing_dash_phase)-1,8,8,pixels.data(),32))return 180;
  return 0;
 }
