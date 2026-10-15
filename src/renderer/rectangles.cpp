@@ -371,12 +371,13 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    if((line_join==0||line_join==2)&&dash_pattern.empty()){
     for(size_t k=0;k<polygons.size();++k){
      const auto& poly=polygons[k];
-     for(size_t i=1;i+1<poly.size();++i){
-      const Point p=poly[i],prev=poly[i-1],next=poly[i+1];
+     const bool closed=poly.size()>3&&poly.front().x==poly.back().x&&poly.front().y==poly.back().y;
+     for(size_t i=closed?0:1;i+1<poly.size();++i){
+      const Point p=poly[i],prev=i==0?poly[poly.size()-2]:poly[i-1],next=poly[i+1];
       double ax=p.x-prev.x,ay=p.y-prev.y,bx2=next.x-p.x,by2=next.y-p.y;
       double al=std::hypot(ax,ay),bl=std::hypot(bx2,by2);
       if(al<1e-10||bl<1e-10)continue;
-      const Matrix ma=polygon_matrices[k][i],mb=polygon_matrices[k][i+1];
+      const Matrix ma=polygon_matrices[k][i==0?poly.size()-1:i],mb=polygon_matrices[k][i+1];
       if(ma.b!=0||ma.c!=0||mb.b!=0||mb.c!=0||ma.a!=ma.d||mb.a!=mb.d||ma.a!=mb.a)return false;
       double cross=ax*by2-ay*bx2;
       if(std::abs(cross)<1e-10)continue;
