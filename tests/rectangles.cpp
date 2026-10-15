@@ -1,5 +1,6 @@
 #include "../src/renderer/rectangles.h"
 #include <cstring>
+#include <cstdio>
 #include <vector>
 #include <string>
 int main(){
@@ -359,9 +360,17 @@ int main(){
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(round_end),sizeof(round_end)-1,16,16,round_pixels.data(),64))return 197;
  if(square_pixels==round_pixels)return 198;
  std::string long_dash="[100000 1] 0 d 1 j 0 J 1 w 0 G 1 1 m ";
- for(int i=0;i<4095;++i)long_dash+=(i%2?"1 1 l ":"2 1 l ");
  std::vector<unsigned char> long_dash_pixels(8*8*4);
- if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(long_dash.data()),long_dash.size(),8,8,long_dash_pixels.data(),32))return 199;
+ for(int i=0;i<4095;++i){
+  long_dash+=(i%2?"1 1 l ":"2 1 l ");
+  // Probe representative sizes to identify the first failing path length.
+  if(i==63||i==255||i==1023||i==2047||i==3071||i==4094){
+   if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(long_dash.data()),long_dash.size(),8,8,long_dash_pixels.data(),32)){
+    std::fprintf(stderr,"long dashed round join failed at %d segments\\n",i+1);
+    return 199;
+   }
+  }
+ }
  const char phase_odd_zero[]="[2 1 1] 0 d 0 G 1 w 0 J 0 4 m 8 4 l S";
  const char phase_odd_cycle[]="[2 1 1] 800000 d 0 G 1 w 0 J 0 4 m 8 4 l S";
  std::vector<unsigned char> phase_odd_a(8*8*4),phase_odd_b(8*8*4);
