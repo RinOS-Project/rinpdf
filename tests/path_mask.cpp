@@ -30,5 +30,12 @@ int main(){
  if(!rasterize_path_coverage_2x(paths,2,2,FillRule::NonZero,coverage))return 12;
  if(coverage.size()!=4||coverage[0]!=255||coverage[1]!=128||coverage[2]!=255||coverage[3]!=128)return 13;
  if(rasterize_path_coverage_2x(paths,1024,1024,FillRule::NonZero,coverage))return 14;
+ std::vector<std::vector<MaskPoint>> too_many_paths(4097,{{0,0}});
+ if(rasterize_path_mask(too_many_paths,8,8,FillRule::NonZero,mask))return 15;
+ std::vector<std::vector<MaskPoint>> too_many_vertices(17,std::vector<MaskPoint>(4096,{0,0}));
+ if(rasterize_path_mask(too_many_vertices,8,8,FillRule::EvenOdd,mask))return 16;
+ std::vector<std::vector<MaskPoint>> max_vertices(16,std::vector<MaskPoint>(4096,{0,0}));
+ if(!rasterize_path_mask(max_vertices,8,8,FillRule::NonZero,mask))return 17;
+ for(auto value:mask)if(value!=0)return 18;
  return 0;
 }
