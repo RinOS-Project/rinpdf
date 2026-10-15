@@ -398,6 +398,8 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
       length-=take;left-=take;
       if(length==before)return false;
       if(length<=1e-10){
+       // If the perimeter ends exactly at a dash boundary, the
+       // preceding on-run ends there; it does not continue across seam.
        seam_on=probe%2==0&&left>1e-10;
        resolved=true;
        break;
@@ -484,7 +486,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
      }
     }
     if(!emit_run())return false;
-    if(joined_seam){
+    if(joined_seam&&points.size()>3){
      const Point& p=points.front();
      if(line_join==1){
       if(!segment(p,p,matrices.back(),true))return false;
