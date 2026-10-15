@@ -281,14 +281,23 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    auto stroke_path=[&](const std::vector<Point>& points,const std::vector<Matrix>& matrices)->bool{
     if(points.size()!=matrices.size())return false;
     if(dash_pattern.empty()){for(size_t i=1;i<points.size();++i)if(!segment(points[i-1],points[i],matrices[i]))return false;return true;}
-    const size_t count=dash_pattern.size();
-    size_t index=0;double remaining=dash_pattern[0];
-    double phase=dash_phase;
-    unsigned guard=0;
+    const size_t count=dash_pattern.size(),cycle=count*(count%2?2:1);
+    size_t index=0;
+    double remaining=dash_pattern[0],phase=dash_phase;
+    // Skip zero-width dash elements without consuming path length.
+    auto advance=[&]()->bool{
+     for(size_t n=0;n<cycle;++n){
+      index=(index+1)%cycle;
+      remaining=dash_pattern[index%count];
+      if(remaining>0)return true;
+     }
+     return false;
+    };
     while(phase>0){
-     if(++guard>128)return false;
-     if(remaining<=0){index=(index+1)%(count*2);remaining=dash_pattern[index%count];continue;}
-     double take=std::min(phase,remaining);phase-=take;remaining-=take;
+     if(remaining<=0){if(!advance())return false;continue;}
+     const double take=std::min(phase,remaining);
+     if(take<=0)return false;
+     phase-=take;remaining-=take;
     }
     size_t pieces=0;
     for(size_t i=1;i<points.size();++i){
@@ -299,7 +308,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
      double pos=0;
      while(pos<len){
       if(++pieces>65536)return false;
-      if(remaining<=1e-12){index=(index+1)%(count*2);remaining=dash_pattern[index%count];continue;}
+      if(remaining<=1e-12){if(!advance())return false;continue;}
       double take=std::min(remaining,len-pos);
       if(take<=0)return false;
       if(index%2==0){
