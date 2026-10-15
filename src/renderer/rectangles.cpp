@@ -173,8 +173,11 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     if(!segment(p0,p1)||!segment(p1,p2)||!segment(p2,p3)||!segment(p3,p0))return false;
    }
    path.clear();polygons.clear();
-  }else if(word=="f"||word=="F"){
+  }else if(word=="f"||word=="F"||word=="f*"){
    if(!stack.empty())return false;
+   // The current scanline rasterizer implements even-odd per subpath.
+   // Reject multi-subpath nonzero winding fills rather than rendering them incorrectly.
+   if(word!="f*"&&polygons.size()>1)return false;
    unsigned char cr=(unsigned char)std::lround(red*255);
    unsigned char cg=(unsigned char)std::lround(green*255);
    unsigned char cb=(unsigned char)std::lround(blue*255);
