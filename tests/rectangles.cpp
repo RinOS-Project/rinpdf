@@ -232,5 +232,15 @@ int main(){
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(miter_corner),sizeof(miter_corner)-1,8,8,miter_pixels.data(),32))return 130;
  const char invalid_join_ctm[]="1 1 0 1 0 0 cm 0 j 2 w 1 1 m 5 1 l 5 5 l S";
  if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(invalid_join_ctm),sizeof(invalid_join_ctm)-1,8,8,pixels.data(),32))return 131;
+ const char dash_basic[]="[2 2] 0 d 0 G 1 w 0 J 0 4 m 8 4 l S";
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(dash_basic),sizeof(dash_basic)-1,8,8,pixels.data(),32))return 132;
+ if(channel(1,3,0)==255||channel(3,3,0)!=255||channel(5,3,0)==255||channel(7,3,0)!=255)return 133;
+ const char dash_offset[]="[2 2] 2 d 0 G 1 w 0 J 0 4 m 8 4 l S";
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(dash_offset),sizeof(dash_offset)-1,8,8,pixels.data(),32))return 134;
+ if(channel(1,3,0)!=255||channel(3,3,0)==255)return 135;
+ const char bad_dash[]="[0 0] 0 d";
+ if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(bad_dash),sizeof(bad_dash)-1,8,8,pixels.data(),32))return 136;
+ const char solid_dash[]="[] 0 d 0 G 1 w 0 J 0 4 m 8 4 l S";
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(solid_dash),sizeof(solid_dash)-1,8,8,pixels.data(),32))return 137;
  return 0;
 }
