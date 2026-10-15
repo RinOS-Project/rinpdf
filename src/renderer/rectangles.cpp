@@ -76,6 +76,8 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
   if(number(word,v)){if(reading_dash){if(dash_values.size()>=32)return false;dash_values.push_back(v);}else{if(stack.size()>=16)return false;stack.push_back(v);}continue;}
   if(word=="["){if(reading_dash||!stack.empty())return false;reading_dash=true;dash_values.clear();continue;}
   if(word=="]"){if(!reading_dash)return false;reading_dash=false;continue;}
+  // Only numeric elements are legal inside a dash array.
+  if(reading_dash)return false;
   if(word=="q"){
    if((pending_rect_clip||pending_path_clip)||!stack.empty()||saved.size()>=64)return false;
    saved.push_back({red,green,blue,a,bx,cx,d,e,f,line_width,stroke_red,stroke_green,stroke_blue,line_cap,line_join,miter_limit,dash_pattern,dash_phase});
