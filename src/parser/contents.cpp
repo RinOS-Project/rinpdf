@@ -47,7 +47,7 @@ struct Reader {
   return decode_stream(data,size,range,bytes,limit);
  }
  bool walk_box(const Value& ref,size_t depth,size_t& current,size_t target,
-               std::set<size_t>& active,const MediaBox* inherited,MediaBox& output) const {
+               std::set<size_t>& active,const MediaBox* inherited,const MediaBox* inherited_crop,MediaBox& output) const {
   if(depth>64||ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
   size_t id=(size_t)ref.integer;
   if(!active.insert(id).second)return false;
@@ -56,17 +56,28 @@ struct Reader {
   MediaBox own{};
   const Value *media=get(node,"MediaBox");
   if(media){if(!box_value(*media,own)){active.erase(id);return false;}inherited=&own;}
+  MediaBox own_crop{};
+  const Value *crop=get(node,"CropBox");
+  if(crop){if(!box_value(*crop,own_crop)){active.erase(id);return false;}inherited_crop=&own_crop;}
   const Value *type=get(node,"Type");
   if(!type||type->kind!=Value::Kind::Name){active.erase(id);return false;}
   if(type->text=="Page"){
-   if(current==target){if(!inherited){active.erase(id);return false;}output=*inherited;}
+   if(current==target){if(!inherited){active.erase(id);return false;}
+    output=*inherited;
+    if(inherited_crop){
+     output.x0=std::max(output.x0,inherited_crop->x0);
+     output.y0=std::max(output.y0,inherited_crop->y0);
+     output.x1=std::min(output.x1,inherited_crop->x1);
+     output.y1=std::min(output.y1,inherited_crop->y1);
+     if(output.x0>=output.x1||output.y0>=output.y1){active.erase(id);return false;}
+    }}
    ++current;active.erase(id);return true;
   }
   if(type->text!="Pages"){active.erase(id);return false;}
   const Value *kids=get(node,"Kids");
   if(!kids||kids->kind!=Value::Kind::Array){active.erase(id);return false;}
   for(const Value& child:kids->array){
-   if(!walk_box(child,depth+1,current,target,active,inherited,output)){active.erase(id);return false;}
+   if(!walk_box(child,depth+1,current,target,active,inherited,inherited_crop,output)){active.erase(id);return false;}
   }
   active.erase(id);return true;
  }
@@ -134,7 +145,7 @@ bool read_page_box(const uint8_t *data,size_t size,size_t index,MediaBox& box){
  const Value *type=get(catalog,"Type"),*pages=get(catalog,"Pages");
  if(!type||type->kind!=Value::Kind::Name||type->text!="Catalog"||!pages)return false;
  std::set<size_t> active;size_t current=0;
- return reader.walk_box(*pages,0,current,index,active,nullptr,box)&&index<current;
+ return reader.walk_box(*pages,0,current,index,active,nullptr,nullptr,box)&&index<current;
 }
 
 }
