@@ -175,47 +175,55 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    path.clear();polygons.clear();
   }else if(word=="f"||word=="F"||word=="f*"){
    if(!stack.empty())return false;
-   // Compound subpaths need global winding evaluation; not yet supported.
-   if(polygons.size()>1)return false;
    unsigned char cr=(unsigned char)std::lround(red*255);
    unsigned char cg=(unsigned char)std::lround(green*255);
    unsigned char cb=(unsigned char)std::lround(blue*255);
-   for(const Rect& r:path){
-    double left=std::clamp((std::min(r.x,r.x+r.w)-box.x0)*sx,0.0,(double)width);
-    double right=std::clamp((std::max(r.x,r.x+r.w)-box.x0)*sx,0.0,(double)width);
-    double top=std::clamp((box.y1-std::max(r.y,r.y+r.h))*sy,0.0,(double)height);
-    double bottom=std::clamp((box.y1-std::min(r.y,r.y+r.h))*sy,0.0,(double)height);
-    for(unsigned y=(unsigned)top;y<(unsigned)bottom;++y){
-     for(unsigned x=(unsigned)left;x<(unsigned)right;++x){
-      uint8_t *pixel=rgba+(size_t)y*stride+(size_t)x*4;
-      pixel[0]=cr;pixel[1]=cg;pixel[2]=cb;pixel[3]=255;
-     }
-    }
+   if((size_t)width*height>1048576)return false;
+   // Build one edge set across rectangles and all subpaths.
+   // The signed crossing count implements nonzero winding; parity implements f*.
+   struct Edge {double x0,y0,x1,y1;int winding;};
+   std::vector<Edge> edges;
+   auto edge=[&](Point p,Point q)->bool{
+    double x0=(p.x-box.x0)*sx,x1=(q.x-box.x0)*sx;
+    double y0=(box.y1-p.y)*sy,y1=(box.y1-q.y)*sy;
+    if(!std::isfinite(x0)||!std::isfinite(x1)||!std::isfinite(y0)||!std::isfinite(y1))return false;
+    if(y0==y1)return true;
+    if(edges.size()>=65536)return false;
+    edges.push_back({x0,y0,x1,y1,y1>y0?1:-1});return true;
+   };
+   for(const Rect& rect:path){
+    Point p0{rect.x,rect.y},p1{rect.x+rect.w,rect.y},p2{rect.x+rect.w,rect.y+rect.h},p3{rect.x,rect.y+rect.h};
+    if(!edge(p0,p1)||!edge(p1,p2)||!edge(p2,p3)||!edge(p3,p0))return false;
    }
    for(const auto& poly:polygons){
-    if(poly.size()<3)return false;
-    if((size_t)width*height>1048576)return false;
-    for(unsigned y=0;y<height;++y){
-     double scan=(double)y+0.5;
-     std::vector<double> intersections;
-     for(size_t i=0;i<poly.size();++i){
-      const Point& p0=poly[i];const Point& p1=poly[(i+1)%poly.size()];
-      double x0=(p0.x-box.x0)*sx,x1=(p1.x-box.x0)*sx;
-      double y0=(box.y1-p0.y)*sy,y1=(box.y1-p1.y)*sy;
-      if((y0<=scan&&y1>scan)||(y1<=scan&&y0>scan))
-       intersections.push_back(x0+(scan-y0)*(x1-x0)/(y1-y0));
+    if(poly.size()<2)return false;
+    for(size_t i=1;i<poly.size();++i)if(!edge(poly[i-1],poly[i]))return false;
+    if(!edge(poly.back(),poly.front()))return false;
+   }
+   struct Crossing {double x;int winding;};
+   for(unsigned y=0;y<height;++y){
+    double scan=(double)y+0.5;
+    std::vector<Crossing> crossings;
+    for(const Edge& e:edges){
+     if((e.y0<=scan&&scan<e.y1)||(e.y1<=scan&&scan<e.y0)){
+      double x=e.x0+(scan-e.y0)*(e.x1-e.x0)/(e.y1-e.y0);
+      if(!std::isfinite(x))return false;
+      crossings.push_back({x,e.winding});
      }
-     std::sort(intersections.begin(),intersections.end());
-     if(intersections.size()%2)return false;
-     for(size_t i=0;i+1<intersections.size();i+=2){
-      double lo=std::clamp(intersections[i],0.0,(double)width);
-      double hi=std::clamp(intersections[i+1],0.0,(double)width);
-      unsigned x_begin=(unsigned)std::clamp(std::ceil(lo-0.5),0.0,(double)width);
-      unsigned x_end=(unsigned)std::clamp(std::ceil(hi-0.5),0.0,(double)width);
-      for(unsigned x=x_begin;x<x_end;++x){
-       uint8_t* pixel=rgba+(size_t)y*stride+(size_t)x*4;
-       pixel[0]=cr;pixel[1]=cg;pixel[2]=cb;pixel[3]=255;
-      }
+    }
+    std::sort(crossings.begin(),crossings.end(),[](const Crossing& lhs,const Crossing& rhs){return lhs.x<rhs.x;});
+    int winding=0;
+    for(size_t i=0;i+1<crossings.size();++i){
+     winding+=crossings[i].winding;
+     bool inside=word=="f*" ? (winding%2!=0) : (winding!=0);
+     if(!inside)continue;
+     double left=std::clamp(crossings[i].x,0.0,(double)width);
+     double right=std::clamp(crossings[i+1].x,0.0,(double)width);
+     unsigned x_begin=(unsigned)std::clamp(std::ceil(left-0.5),0.0,(double)width);
+     unsigned x_end=(unsigned)std::clamp(std::ceil(right-0.5),0.0,(double)width);
+     for(unsigned x=x_begin;x<x_end;++x){
+      uint8_t* pixel=rgba+(size_t)y*stride+(size_t)x*4;
+      pixel[0]=cr;pixel[1]=cg;pixel[2]=cb;pixel[3]=255;
      }
     }
    }
