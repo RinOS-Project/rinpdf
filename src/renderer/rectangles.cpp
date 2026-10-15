@@ -407,7 +407,10 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     std::vector<std::pair<Point,Matrix>> on_run_vertices;
     auto emit_run=[&]()->bool{
      if(!in_on_run)return true;
-     if(line_cap==1&&!segment(run_end,run_end,run_matrix,true))return false;
+     // At a painted closed seam, the final dash endpoint is a join,
+     // not a round cap. Interior dash runs retain their normal caps.
+     const bool at_seam=joined_seam&&run_end.x==points.front().x&&run_end.y==points.front().y;
+     if(line_cap==1&&!at_seam&&!segment(run_end,run_end,run_matrix,true))return false;
      if(line_join==1){
       for(const auto& vertex:on_run_vertices)
        if(!segment(vertex.first,vertex.first,vertex.second,true))return false;
@@ -472,7 +475,17 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
       pos+=take;remaining-=take;
      }
     }
-    return emit_run();
+    if(!emit_run())return false;
+    if(joined_seam){
+     const Point& p=points.front();
+     if(line_join==1){
+      if(!segment(p,p,matrices.back(),true))return false;
+     }else if(line_join==0||line_join==2){
+      if(dashed_joins.size()>=4096)return false;
+      dashed_joins.push_back({points[points.size()-2],p,points[1],matrices.back(),matrices[1]});
+     }
+    }
+    return true;
    };
    for(size_t k=0;k<polygons.size();++k)if(!stroke_path(k,polygons[k],polygon_matrices[k]))return false;
    // Round joins are disks at connected vertices. Keep the union in
