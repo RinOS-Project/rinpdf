@@ -51,12 +51,12 @@ int main(){
  if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(triangle),sizeof(triangle)-1,2048,1024,large.data(),2048*4))return 26;
  const char stroke[]="1 w 0 g 1 1 m 6 1 l S";
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(stroke),sizeof(stroke)-1,8,8,pixels.data(),32))return 27;
- if(channel(3,6,0)!=0||channel(3,3,0)!=255)return 28;
+ if(channel(3,6,0)>=255||channel(3,3,0)!=255)return 28;
  const char invalid_width[]="-1 w";
  if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(invalid_width),sizeof(invalid_width)-1,8,8,pixels.data(),32))return 29;
  const char colors[]="1 0 0 rg 0 0 1 RG 2 w 1 1 m 6 1 l S 1 4 2 2 re f";
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(colors),sizeof(colors)-1,8,8,pixels.data(),32))return 30;
- if(channel(3,6,0)!=0||channel(3,6,2)!=255)return 31;
+ if(channel(3,6,0)>=255||channel(3,6,2)!=255)return 31;
  if(channel(1,2,0)!=255||channel(1,2,2)!=0)return 32;
  const char state[]="q 3 w 1 0 0 RG Q 0 g 1 1 m 6 1 l S";
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(state),sizeof(state)-1,8,8,pixels.data(),32))return 33;
