@@ -134,12 +134,16 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    if(pending_path_clip)return false;
    if(pending_rect_clip||pending_path_clip)return false;
    if(stack.size()!=2||polygons.size()>=4096)return false;
-   polygons.push_back({transform(stack[0],stack[1])});polygon_matrices.push_back({matrix()});stack.clear();
+   const Point point=transform(stack[0],stack[1]);
+   if(!std::isfinite(point.x)||!std::isfinite(point.y))return false;
+   polygons.push_back({point});polygon_matrices.push_back({matrix()});stack.clear();
   }else if(word=="l"){
    if(pending_path_clip)return false;
    if(pending_rect_clip)return false;
    if(stack.size()!=2||polygons.empty()||polygons.back().size()>=4096)return false;
-   polygons.back().push_back(transform(stack[0],stack[1]));polygon_matrices.back().push_back(matrix());stack.clear();
+   const Point point=transform(stack[0],stack[1]);
+   if(!std::isfinite(point.x)||!std::isfinite(point.y))return false;
+   polygons.back().push_back(point);polygon_matrices.back().push_back(matrix());stack.clear();
   }else if(word=="c"||word=="v"||word=="y"){
    if(pending_path_clip||pending_rect_clip)return false;
    const size_t required=word=="c"?6:4;
@@ -175,7 +179,9 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    if(pending_rect_clip)return false;
    if(stack.size()!=4||path.size()>=4096||polygons.size()>=4096)return false;
    {const Point p=transform(stack[0],stack[1]);const Point q=transform(stack[0]+stack[2],stack[1]+stack[3]);
-   if(bx!=0||cx!=0){polygons.push_back({p,transform(stack[0]+stack[2],stack[1]),q,transform(stack[0],stack[1]+stack[3]),p});polygon_matrices.push_back(std::vector<Matrix>(5,matrix()));}
+   const Point p1=transform(stack[0]+stack[2],stack[1]),p3=transform(stack[0],stack[1]+stack[3]);
+   for(const Point point:{p,p1,q,p3})if(!std::isfinite(point.x)||!std::isfinite(point.y))return false;
+   if(bx!=0||cx!=0){polygons.push_back({p,p1,q,p3,p});polygon_matrices.push_back(std::vector<Matrix>(5,matrix()));}
    else {path.push_back({p.x,p.y,q.x-p.x,q.y-p.y});rect_matrices.push_back(matrix());}stack.clear();}
   }else if(word=="W"||word=="W*"){
    if(!stack.empty()||pending_rect_clip||pending_path_clip)return false;
