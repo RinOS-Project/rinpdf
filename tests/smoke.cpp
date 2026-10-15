@@ -1,7 +1,6 @@
 #include "rinpdf/rinpdf.h"
 #include <cstdio>
 #include <cstring>
-static int check(bool condition,int code){return condition?0:code;}
 int main() {
  const char *path="rinpdf-smoke.pdf";
  if(rinpdf_write_text_file(path,"Hello (RinOS) \\ PDF")!=RINPDF_OK)return 1;
@@ -23,5 +22,9 @@ int main() {
  if(rinpdf_document_open_memory(nullptr,0,&doc)!=RINPDF_INVALID_PDF)return 9;
  if(rinpdf_document_page_count(nullptr,&pages)!=RINPDF_INVALID_ARGUMENT)return 10;
  if(rinpdf_write_text_file(nullptr,"test")!=RINPDF_INVALID_ARGUMENT)return 11;
+ const char nested[]="%PDF-1.4\n1 0 obj\n<< /Type /Pages /Kids [] /Count 0 >>\nendobj\n2 0 obj\n<< /Type /Catalog /Resources << /Type /Page >> >>\nendobj\n";
+ if(rinpdf_document_open_memory(reinterpret_cast<const unsigned char*>(nested),sizeof(nested)-1,&doc)!=RINPDF_OK)return 12;
+ if(rinpdf_document_page_count(doc,&pages)!=RINPDF_OK||pages!=0)return 13;
+ rinpdf_document_close(doc);
  return 0;
 }
