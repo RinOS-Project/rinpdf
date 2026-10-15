@@ -48,5 +48,10 @@ int main(){
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(clipped),sizeof(clipped)-1,8,8,pixels.data(),32))return 25;
  std::vector<unsigned char> large(2048*1024*4);
  if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(triangle),sizeof(triangle)-1,2048,1024,large.data(),2048*4))return 26;
+ const char stroke[]="1 w 0 g 1 1 m 6 1 l S";
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(stroke),sizeof(stroke)-1,8,8,pixels.data(),32))return 27;
+ if(channel(3,6,0)!=0||channel(3,3,0)!=255)return 28;
+ const char invalid_width[]="-1 w";
+ if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(invalid_width),sizeof(invalid_width)-1,8,8,pixels.data(),32))return 29;
  return 0;
 }
