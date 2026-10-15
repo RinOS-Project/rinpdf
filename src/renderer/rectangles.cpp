@@ -71,8 +71,10 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    clip_mask_stack.push_back(clip_mask);
 
   }else if(word=="Q"){
-   if((pending_rect_clip||pending_path_clip)||!stack.empty()||saved.empty()||(!path.empty()||!polygons.empty()))return false;
-   auto color=saved.back();saved.pop_back();red=color.r;green=color.g;blue=color.b;a=color.a;bx=color.bx;cx=color.cx;d=color.d;e=color.e;f=color.f;line_width=color.width;stroke_red=color.sr;stroke_green=color.sg;stroke_blue=color.sb;line_cap=color.cap;line_join=color.join;miter_limit=color.miter;
+   if((pending_rect_clip||pending_path_clip)||!stack.empty()||saved.empty())return false;
+   auto color=saved.back();saved.pop_back();
+   if((!path.empty()||!polygons.empty())&&(a!=color.a||bx!=color.bx||cx!=color.cx||d!=color.d||e!=color.e||f!=color.f))mixed_path_ctm=true;
+   red=color.r;green=color.g;blue=color.b;a=color.a;bx=color.bx;cx=color.cx;d=color.d;e=color.e;f=color.f;line_width=color.width;stroke_red=color.sr;stroke_green=color.sg;stroke_blue=color.sb;line_cap=color.cap;line_join=color.join;miter_limit=color.miter;
    clip=clip_stack.back();clip_stack.pop_back();
    clip_mask=std::move(clip_mask_stack.back());clip_mask_stack.pop_back();
 
