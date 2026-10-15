@@ -280,3 +280,13 @@ RINPDF_VERIFY_MODE=asan sh scripts/verify-local.sh
 ```
 
 ASanモードは標準で `build-verify-asan` を使用し、通常の `build-verify` とオブジェクトを混在させません。Mesonの `-Db_sanitize=address,undefined` を設定し、ビルドと全テストの両方が成功した場合のみPASSを表示します。コンパイラ・ランタイムがサニタイザーに対応している必要があります。この環境ではリポジトリ全体を取得できず、実行結果は未確認です。
+
+## Focused stroke regression verification
+全テストを実行する前にストロークの回帰テストだけを実行する場合は、第二引数にMesonのテスト名を指定できます。
+
+```sh
+sh scripts/verify-local.sh build-verify rinpdf-rectangles
+RINPDF_VERIFY_MODE=asan sh scripts/verify-local.sh build-verify-asan rinpdf-rectangles
+```
+
+このコマンドは対象テストのコンパイルと実行を行いますが、他のテストの成功は保証しません。2026-10-15時点でGitHubのDNS解決が失敗したため、この環境ではコンパイルと実行は確認できていません。
