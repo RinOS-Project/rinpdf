@@ -293,6 +293,8 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     }
     return true;
    };
+   struct DashedJoin {Point prev,vertex,next;Matrix incoming,outgoing;};
+   std::vector<DashedJoin> dashed_joins;
    auto stroke_path=[&](const std::vector<Point>& points,const std::vector<Matrix>& matrices)->bool{
     if(points.size()!=matrices.size())return false;
     if(dash_pattern.empty()){for(size_t i=1;i<points.size();++i)if(!segment(points[i-1],points[i],matrices[i]))return false;return true;}
@@ -359,6 +361,10 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
         if(line_cap==1&&!segment(a,a,matrices[i],true))return false;
        }else if(pos==0){
         on_run_vertices.push_back({a,matrices[i]});
+        if(i>=2&&line_join!=1){
+         if(dashed_joins.size()>=4096)return false;
+         dashed_joins.push_back({points[i-2],a,q,matrices[i-1],matrices[i]});
+        }
        }
        if(!segment(a,b,matrices[i]))return false;
        in_on_run=true;run_end=b;run_matrix=matrices[i];
