@@ -365,5 +365,11 @@ int main(){
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(phase_odd_zero),sizeof(phase_odd_zero)-1,8,8,phase_odd_a.data(),32))return 200;
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(phase_odd_cycle),sizeof(phase_odd_cycle)-1,8,8,phase_odd_b.data(),32))return 201;
  if(phase_odd_a!=phase_odd_b)return 202;
+ const char zero_first_dash[]="[0 2] 0 d 0 G 1 w 0 J 0 4 m 8 4 l S";
+ const char zero_first_shifted[]="[0 2] 2 d 0 G 1 w 0 J 0 4 m 8 4 l S";
+ std::vector<unsigned char> zero_first_a(8*8*4),zero_first_b(8*8*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(zero_first_dash),sizeof(zero_first_dash)-1,8,8,zero_first_a.data(),32))return 203;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(zero_first_shifted),sizeof(zero_first_shifted)-1,8,8,zero_first_b.data(),32))return 204;
+ if(zero_first_a!=zero_first_b)return 205;
  return 0;
 }
