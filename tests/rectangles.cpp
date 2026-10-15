@@ -379,5 +379,11 @@ int main(){
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(closed_square_caps),sizeof(closed_square_caps)-1,16,16,closed_square_pixels.data(),64))return 207;
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(closed_round_caps),sizeof(closed_round_caps)-1,16,16,closed_round_pixels.data(),64))return 208;
  if(closed_butt_pixels!=closed_square_pixels||closed_butt_pixels!=closed_round_pixels)return 209;
+ const char round_open_corner[]="1 j 1 J 2 w 0 G 2 2 m 8 2 l 8 8 l S";
+ const char butt_open_corner[]="1 j 0 J 2 w 0 G 2 2 m 8 2 l 8 8 l S";
+ std::vector<unsigned char> round_open_pixels(16*16*4),butt_open_pixels(16*16*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(round_open_corner),sizeof(round_open_corner)-1,16,16,round_open_pixels.data(),64))return 210;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(butt_open_corner),sizeof(butt_open_corner)-1,16,16,butt_open_pixels.data(),64))return 211;
+ if(round_open_pixels==butt_open_pixels)return 212;
  return 0;
 }
