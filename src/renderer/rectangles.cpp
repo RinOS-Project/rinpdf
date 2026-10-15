@@ -51,7 +51,6 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
  std::vector<std::shared_ptr<const std::vector<uint8_t>>> clip_mask_stack;
  bool pending_rect_clip=false;
  bool pending_path_clip=false;
- bool mixed_path_ctm=false;
  FillRule pending_rule=FillRule::NonZero;
  auto transform=[&](double x,double y){return Point{a*x+cx*y+e,bx*x+d*y+f};};
  auto shapes_from_path=[&](){
@@ -89,7 +88,6 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
   }else if(word=="Q"){
    if((pending_rect_clip||pending_path_clip)||!stack.empty()||saved.empty())return false;
    auto color=saved.back();saved.pop_back();
-   if((!path.empty()||!polygons.empty())&&(a!=color.a||bx!=color.bx||cx!=color.cx||d!=color.d||e!=color.e||f!=color.f))mixed_path_ctm=true;
    red=color.r;green=color.g;blue=color.b;a=color.a;bx=color.bx;cx=color.cx;d=color.d;e=color.e;f=color.f;line_width=color.width;stroke_red=color.sr;stroke_green=color.sg;stroke_blue=color.sb;line_cap=color.cap;line_join=color.join;miter_limit=color.miter;dash_pattern=color.dash;dash_phase=color.dash_phase;
    clip=clip_stack.back();clip_stack.pop_back();
    clip_mask=std::move(clip_mask_stack.back());clip_mask_stack.pop_back();
@@ -97,7 +95,6 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
   }else if(word=="cm"){
    if(pending_rect_clip||pending_path_clip)return false;
    if(stack.size()!=6)return false;
-   if(!path.empty()||!polygons.empty())mixed_path_ctm=true;
    const double A=stack[0],B=stack[1],C=stack[2],D=stack[3],E=stack[4],F=stack[5];
    const double na=a*A+cx*B,nb=bx*A+d*B,nc=a*C+cx*D,nd=bx*C+d*D;
    const double ne=a*E+cx*F+e,nf=bx*E+d*F+f;
@@ -216,7 +213,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    // Move-only subpaths contain no drawable segments.
    bool drawable=!path.empty();
    for(const auto& poly:polygons)if(poly.size()>1)drawable=true;
-   if(!drawable){path.clear();polygons.clear();polygon_matrices.clear();rect_matrices.clear();mixed_path_ctm=false;continue;}
+   if(!drawable){path.clear();polygons.clear();polygon_matrices.clear();rect_matrices.clear();continue;}
    if(word=="s"&&!polygons.empty()){
     auto& poly=polygons.back();
     // A final move-only subpath has no closing segment.
@@ -678,7 +675,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     pixel[2]=(uint8_t)((alpha*cb+(255-alpha)*pixel[2]+127)/255);
     pixel[3]=255;
    }
-   path.clear();polygons.clear();polygon_matrices.clear();rect_matrices.clear();mixed_path_ctm=false;
+   path.clear();polygons.clear();polygon_matrices.clear();rect_matrices.clear();
   }else if(word=="f"||word=="F"||word=="f*"){
    if((pending_rect_clip||pending_path_clip)||!stack.empty())return false;
    unsigned char cr=(unsigned char)std::lround(red*255);
@@ -707,7 +704,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     pixel[2]=(uint8_t)((alpha*cb+(255-alpha)*pixel[2]+127)/255);
     pixel[3]=255;
    }
-   path.clear();polygons.clear();polygon_matrices.clear();rect_matrices.clear();mixed_path_ctm=false;
+   path.clear();polygons.clear();polygon_matrices.clear();rect_matrices.clear();
   }else if(word=="n"){
    if(!stack.empty())return false;
    if(pending_path_clip){
@@ -740,7 +737,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     clip_mask=std::make_shared<const std::vector<uint8_t>>(std::move(mask));
     pending_rect_clip=false;
    }
-   path.clear();polygons.clear();polygon_matrices.clear();rect_matrices.clear();mixed_path_ctm=false;
+   path.clear();polygons.clear();polygon_matrices.clear();rect_matrices.clear();
   }else return false; // Do not silently ignore unknown operators.
  }
  return !reading_dash&&!dash_array_ready&&dash_values.empty()&&stack.empty()&&path.empty()&&polygons.empty()&&saved.empty()&&!pending_rect_clip&&!pending_path_clip;
