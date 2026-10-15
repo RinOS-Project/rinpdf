@@ -4,6 +4,7 @@
 #include <charconv>
 #include <cmath>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <vector>
 namespace rinpdf::renderer {
@@ -41,10 +42,8 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
  struct Clip {unsigned x0,y0,x1,y1;};
  Clip clip{0,0,width,height};
  std::vector<Clip> clip_stack;
- std::vector<uint8_t> clip_mask;
- std::vector<std::vector<uint8_t>> clip_mask_stack;
- size_t saved_clip_bytes=0;
- constexpr size_t max_saved_clip_bytes=32u*1024u*1024u;
+ std::shared_ptr<const std::vector<uint8_t>> clip_mask;
+ std::vector<std::shared_ptr<const std::vector<uint8_t>>> clip_mask_stack;
  bool pending_rect_clip=false;
  bool pending_path_clip=false;
  bool mixed_path_ctm=false;
@@ -73,10 +72,8 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
   if(word=="q"){
    if((pending_rect_clip||pending_path_clip)||!stack.empty()||saved.size()>=64)return false;
    saved.push_back({red,green,blue,a,bx,cx,d,e,f,line_width,stroke_red,stroke_green,stroke_blue,line_cap,line_join,miter_limit});
-   if(clip_mask.size()>max_saved_clip_bytes-saved_clip_bytes)return false;
    clip_stack.push_back(clip);
    clip_mask_stack.push_back(clip_mask);
-   saved_clip_bytes+=clip_mask.size();
 
   }else if(word=="Q"){
    if((pending_rect_clip||pending_path_clip)||!stack.empty()||saved.empty())return false;
@@ -84,7 +81,6 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    if((!path.empty()||!polygons.empty())&&(a!=color.a||bx!=color.bx||cx!=color.cx||d!=color.d||e!=color.e||f!=color.f))mixed_path_ctm=true;
    red=color.r;green=color.g;blue=color.b;a=color.a;bx=color.bx;cx=color.cx;d=color.d;e=color.e;f=color.f;line_width=color.width;stroke_red=color.sr;stroke_green=color.sg;stroke_blue=color.sb;line_cap=color.cap;line_join=color.join;miter_limit=color.miter;
    clip=clip_stack.back();clip_stack.pop_back();
-   saved_clip_bytes-=clip_mask_stack.back().size();
    clip_mask=std::move(clip_mask_stack.back());clip_mask_stack.pop_back();
 
   }else if(word=="cm"){
@@ -291,11 +287,11 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    }
    for(size_t i=0;i<stroke_samples.size();++i){
     unsigned x=(unsigned)(i%width),y=(unsigned)(i/width);
-    if(x<clip.x0||x>=clip.x1||y<clip.y0||y>=clip.y1||(!clip_mask.empty()&&!clip_mask[i]))continue;
+    if(x<clip.x0||x>=clip.x1||y<clip.y0||y>=clip.y1||(clip_mask!=nullptr&&!(*clip_mask)[i]))continue;
     unsigned bits=stroke_samples[i],hits=(unsigned)((bits&1)!=0)+((bits&2)!=0)+((bits&4)!=0)+((bits&8)!=0);
     if(!hits)continue;
     unsigned alpha=(hits*255+2)/4;
-    if(!clip_mask.empty())alpha=(alpha*clip_mask[i]+127)/255;
+    if(clip_mask!=nullptr)alpha=(alpha*(*clip_mask)[i]+127)/255;
     if(!alpha)continue;
     uint8_t* pixel=rgba+(size_t)y*stride+(size_t)x*4;
     pixel[0]=(uint8_t)((alpha*cr+(255-alpha)*pixel[0]+127)/255);
@@ -322,10 +318,10 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    }
    for(size_t i=0;i<coverage.size();++i){
     unsigned x=(unsigned)(i%width),y=(unsigned)(i/width);
-    if(!coverage[i]||(!clip_mask.empty()&&!clip_mask[i])||x<clip.x0||x>=clip.x1||y<clip.y0||y>=clip.y1)continue;
+    if(!coverage[i]||(clip_mask!=nullptr&&!(*clip_mask)[i])||x<clip.x0||x>=clip.x1||y<clip.y0||y>=clip.y1)continue;
     uint8_t* pixel=rgba+(size_t)y*stride+(size_t)x*4;
     unsigned alpha=antialias?coverage[i]:255;
-    if(!clip_mask.empty())alpha=(alpha*clip_mask[i]+127)/255;
+    if(clip_mask!=nullptr)alpha=(alpha*(*clip_mask)[i]+127)/255;
     if(!alpha)continue;
     pixel[0]=(uint8_t)((alpha*cr+(255-alpha)*pixel[0]+127)/255);
     pixel[1]=(uint8_t)((alpha*cg+(255-alpha)*pixel[1]+127)/255);
@@ -344,8 +340,10 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
      if(!rasterize_path_mask(shapes,width,height,pending_rule,mask))return false;
      for(auto& v:mask)v=v?255:0;
     }
-    if(clip_mask.empty())clip_mask=std::move(mask);
-    else if(!intersect_path_masks(clip_mask,mask))return false;
+    if(clip_mask){
+     if(!intersect_path_masks(mask,*clip_mask))return false;
+    }
+    clip_mask=std::make_shared<const std::vector<uint8_t>>(std::move(mask));
     pending_path_clip=false;
    }
    if(pending_rect_clip){
@@ -357,8 +355,10 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
      if(!rasterize_path_mask(shapes,width,height,pending_rule,mask))return false;
      for(auto& value:mask)value=value?255:0;
     }
-    if(clip_mask.empty())clip_mask=std::move(mask);
-    else if(!intersect_path_masks(clip_mask,mask))return false;
+    if(clip_mask){
+     if(!intersect_path_masks(mask,*clip_mask))return false;
+    }
+    clip_mask=std::make_shared<const std::vector<uint8_t>>(std::move(mask));
     pending_rect_clip=false;
    }
    path.clear();polygons.clear();polygon_matrices.clear();rect_matrices.clear();mixed_path_ctm=false;
