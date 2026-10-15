@@ -188,7 +188,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     double x0=(p.x-box.x0)*sx,y0=(box.y1-p.y)*sy;
     double x1=(q.x-box.x0)*sx,y1=(box.y1-q.y)*sy;
     double dx=x1-x0,dy=y1-y0,denom=dx*dx+dy*dy;
-    const double radius=0.5*line_width*std::max(std::hypot(a*sx,bx*sy),std::hypot(cx*sx,d*sy));
+    const double radius=0.5*line_width*std::hypot(std::hypot(a*sx,bx*sy),std::hypot(cx*sx,d*sy));
     const double determinant=a*d-bx*cx;
     if(!std::isfinite(determinant)||std::abs(determinant)<1e-12)return false;
     if(!std::isfinite(denom)||!std::isfinite(radius)||radius>2048)return false;
