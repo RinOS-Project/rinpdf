@@ -240,6 +240,19 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     return true;
    };
    for(size_t k=0;k<polygons.size();++k){const auto& poly=polygons[k];for(size_t i=1;i<poly.size();++i)if(!segment(poly[i-1],poly[i],polygon_matrices[k][i]))return false;}
+   // Round joins are disks at connected vertices. Keep the union in
+   // stroke_samples so each subsample is blended only once.
+   if(line_join==1){
+    for(size_t k=0;k<polygons.size();++k){
+     const auto& poly=polygons[k];
+     for(size_t i=1;i+1<poly.size();++i){
+      if(!segment(poly[i],poly[i],polygon_matrices[k][i]))return false;
+     }
+     if(poly.size()>2&&poly.front().x==poly.back().x&&poly.front().y==poly.back().y){
+      if(!segment(poly.front(),poly.front(),polygon_matrices[k].front()))return false;
+     }
+    }
+   }
    for(size_t k=0;k<path.size();++k){const Rect& rect=path[k];
     Point p0{rect.x,rect.y},p1{rect.x+rect.w,rect.y},p2{rect.x+rect.w,rect.y+rect.h},p3{rect.x,rect.y+rect.h};
     if(!segment(p0,p1,rect_matrices[k])||!segment(p1,p2,rect_matrices[k])||!segment(p2,p3,rect_matrices[k])||!segment(p3,p0,rect_matrices[k]))return false;
