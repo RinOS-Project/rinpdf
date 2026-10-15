@@ -217,13 +217,23 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    if((size_t)width*height>1048576)return false;
 
    auto shapes=shapes_from_path();
-   std::vector<uint8_t> mask;
-   if(!rasterize_path_mask(shapes,width,height,word=="f*"?FillRule::EvenOdd:FillRule::NonZero,mask))return false;
-   for(size_t i=0;i<mask.size();++i){
+   std::vector<uint8_t> coverage;
+   const FillRule rule=word=="f*"?FillRule::EvenOdd:FillRule::NonZero;
+   const bool antialias=(size_t)width*height<=262144;
+   if(antialias){
+    if(!rasterize_path_coverage_2x(shapes,width,height,rule,coverage))return false;
+   }else{
+    if(!rasterize_path_mask(shapes,width,height,rule,coverage))return false;
+   }
+   for(size_t i=0;i<coverage.size();++i){
     unsigned x=(unsigned)(i%width),y=(unsigned)(i/width);
-    if(!mask[i]||(!clip_mask.empty()&&!clip_mask[i])||x<clip.x0||x>=clip.x1||y<clip.y0||y>=clip.y1)continue;
+    if(!coverage[i]||(!clip_mask.empty()&&!clip_mask[i])||x<clip.x0||x>=clip.x1||y<clip.y0||y>=clip.y1)continue;
     uint8_t* pixel=rgba+(size_t)y*stride+(size_t)x*4;
-    pixel[0]=cr;pixel[1]=cg;pixel[2]=cb;pixel[3]=255;
+    unsigned alpha=antialias?coverage[i]:255;
+    pixel[0]=(uint8_t)((alpha*cr+(255-alpha)*pixel[0]+127)/255);
+    pixel[1]=(uint8_t)((alpha*cg+(255-alpha)*pixel[1]+127)/255);
+    pixel[2]=(uint8_t)((alpha*cb+(255-alpha)*pixel[2]+127)/255);
+    pixel[3]=255;
    }
    path.clear();polygons.clear();
   }else if(word=="n"){
