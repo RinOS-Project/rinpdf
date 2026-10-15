@@ -24,8 +24,8 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
  if((size_t)width*height>16777216)return false;
  for(unsigned y=0;y<height;++y)std::memset(rgba+(size_t)y*stride,255,(size_t)width*4);
  double red=0,green=0,blue=0;
- struct Color { double r,g,b,a,d,e,f,width,sr,sg,sb; int cap,join; double miter; };
- double a=1,d=1,e=0,f=0;
+ struct Color { double r,g,b,a,bx,cx,d,e,f,width,sr,sg,sb; int cap,join; double miter; };
+ double a=1,bx=0,cx=0,d=1,e=0,f=0;
  double line_width=1;
  int line_cap=1,line_join=1;
  double miter_limit=10;
@@ -42,9 +42,13 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
  bool pending_rect_clip=false;
  bool pending_path_clip=false;
  FillRule pending_rule=FillRule::NonZero;
+ auto transform=[&](double x,double y){return Point{a*x+cx*y+e,bx*x+d*y+f};};
  auto shapes_from_path=[&](){
   std::vector<std::vector<MaskPoint>> shapes;
-  for(const Rect& rect:path)shapes.push_back({{(rect.x-box.x0)*sx,(box.y1-rect.y)*sy},{(rect.x+rect.w-box.x0)*sx,(box.y1-rect.y)*sy},{(rect.x+rect.w-box.x0)*sx,(box.y1-rect.y-rect.h)*sy},{(rect.x-box.x0)*sx,(box.y1-rect.y-rect.h)*sy}});
+  for(const Rect& rect:path){
+   auto pixel=[&](double x,double y){return MaskPoint{(x-box.x0)*sx,(box.y1-y)*sy};};
+   shapes.push_back({pixel(rect.x,rect.y),pixel(rect.x+rect.w,rect.y),pixel(rect.x+rect.w,rect.y+rect.h),pixel(rect.x,rect.y+rect.h)});
+  }
   for(const auto& poly:polygons){std::vector<MaskPoint> shape;for(const Point& p:poly)shape.push_back({(p.x-box.x0)*sx,(box.y1-p.y)*sy});shapes.push_back(std::move(shape));}
   return shapes;
  };
@@ -61,21 +65,23 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
   if(number(word,v)){if(stack.size()>=16)return false;stack.push_back(v);continue;}
   if(word=="q"){
    if((pending_rect_clip||pending_path_clip)||!stack.empty()||saved.size()>=64)return false;
-   saved.push_back({red,green,blue,a,d,e,f,line_width,stroke_red,stroke_green,stroke_blue,line_cap,line_join,miter_limit});
+   saved.push_back({red,green,blue,a,bx,cx,d,e,f,line_width,stroke_red,stroke_green,stroke_blue,line_cap,line_join,miter_limit});
    clip_stack.push_back(clip);
    clip_mask_stack.push_back(clip_mask);
 
   }else if(word=="Q"){
    if((pending_rect_clip||pending_path_clip)||!stack.empty()||saved.empty()||(!path.empty()||!polygons.empty()))return false;
-   auto color=saved.back();saved.pop_back();red=color.r;green=color.g;blue=color.b;a=color.a;d=color.d;e=color.e;f=color.f;line_width=color.width;stroke_red=color.sr;stroke_green=color.sg;stroke_blue=color.sb;line_cap=color.cap;line_join=color.join;miter_limit=color.miter;
+   auto color=saved.back();saved.pop_back();red=color.r;green=color.g;blue=color.b;a=color.a;bx=color.bx;cx=color.cx;d=color.d;e=color.e;f=color.f;line_width=color.width;stroke_red=color.sr;stroke_green=color.sg;stroke_blue=color.sb;line_cap=color.cap;line_join=color.join;miter_limit=color.miter;
    clip=clip_stack.back();clip_stack.pop_back();
    clip_mask=std::move(clip_mask_stack.back());clip_mask_stack.pop_back();
 
   }else if(word=="cm"){
-   if(stack.size()!=6||stack[1]!=0||stack[2]!=0)return false;
-   double na=a*stack[0],nd=d*stack[3],ne=a*stack[4]+e,nf=d*stack[5]+f;
-   if(!std::isfinite(na)||!std::isfinite(nd)||!std::isfinite(ne)||!std::isfinite(nf)||std::abs(na)>1000000||std::abs(nd)>1000000||std::abs(ne)>10000000||std::abs(nf)>10000000)return false;
-   a=na;d=nd;e=ne;f=nf;stack.clear();
+   if(stack.size()!=6)return false;
+   const double A=stack[0],B=stack[1],C=stack[2],D=stack[3],E=stack[4],F=stack[5];
+   const double na=a*A+cx*B,nb=bx*A+d*B,nc=a*C+cx*D,nd=bx*C+d*D;
+   const double ne=a*E+cx*F+e,nf=bx*E+d*F+f;
+   for(double value:{na,nb,nc,nd,ne,nf})if(!std::isfinite(value)||std::abs(value)>10000000)return false;
+   a=na;bx=nb;cx=nc;d=nd;e=ne;f=nf;stack.clear();
   }else if(word=="w"){
    if(stack.size()!=1||stack[0]<=0||stack[0]>1024)return false;
    line_width=stack[0];stack.clear();
@@ -119,7 +125,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    if(pending_path_clip)return false;
    if(pending_rect_clip||pending_path_clip)return false;
    if(stack.size()!=2||polygons.size()>=4096)return false;
-   polygons.push_back({{a*stack[0]+e,d*stack[1]+f}});stack.clear();
+   polygons.push_back({{a*stack[0]+cx*stack[1]+e,bx*stack[0]+d*stack[1]+f}});stack.clear();
   }else if(word=="l"){
    if(pending_path_clip)return false;
    if(pending_rect_clip)return false;
@@ -131,14 +137,14 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    if(stack.size()!=required||polygons.empty()||polygons.back().empty()||polygons.back().size()>4096-16)return false;
    auto& poly=polygons.back();
    Point start=poly.back();
-   auto transform=[&](double x,double y){return Point{a*x+e,d*y+f};};
+   auto transform_curve=[&](double x,double y){return transform(x,y);};
    Point p1{},p2{},p3{};
    if(word=="c"){
-    p1=transform(stack[0],stack[1]);p2=transform(stack[2],stack[3]);p3=transform(stack[4],stack[5]);
+    p1=transform_curve(stack[0],stack[1]);p2=transform_curve(stack[2],stack[3]);p3=transform_curve(stack[4],stack[5]);
    }else if(word=="v"){
-    p1=start;p2=transform(stack[0],stack[1]);p3=transform(stack[2],stack[3]);
+    p1=start;p2=transform_curve(stack[0],stack[1]);p3=transform_curve(stack[2],stack[3]);
    }else{
-    p1=transform(stack[0],stack[1]);p2=transform(stack[2],stack[3]);p3=p2;
+    p1=transform_curve(stack[0],stack[1]);p2=transform_curve(stack[2],stack[3]);p3=p2;
    }
    if(!std::isfinite(p1.x)||!std::isfinite(p1.y)||!std::isfinite(p2.x)||!std::isfinite(p2.y)||!std::isfinite(p3.x)||!std::isfinite(p3.y))return false;
    for(unsigned step=1;step<=16;++step){
@@ -159,14 +165,16 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    if(pending_path_clip)return false;
    if(pending_rect_clip)return false;
    if(stack.size()!=4||path.size()>=4096)return false;
-   path.push_back({a*stack[0]+e,d*stack[1]+f,a*stack[2],d*stack[3]});stack.clear();
+   {const Point p=transform(stack[0],stack[1]);const Point q=transform(stack[0]+stack[2],stack[1]+stack[3]);
+   if(bx!=0||cx!=0){polygons.push_back({p,transform(stack[0]+stack[2],stack[1]),q,transform(stack[0],stack[1]+stack[3])});}
+   else path.push_back({p.x,p.y,q.x-p.x,q.y-p.y});stack.clear();}
   }else if(word=="W"||word=="W*"){
    if(!stack.empty()||pending_rect_clip||pending_path_clip)return false;
    pending_rule=word=="W*"?FillRule::EvenOdd:FillRule::NonZero;
    pending_rect_clip=path.size()==1&&polygons.empty();
    pending_path_clip=!pending_rect_clip;
   }else if(word=="S"||word=="s"){
-   if(pending_rect_clip||!stack.empty()||(!polygons.size()&&!path.size())||width>1024||height>1024)return false;
+   if(pending_rect_clip||pending_path_clip||!stack.empty()||(!polygons.size()&&!path.size())||width>1024||height>1024||bx!=0||cx!=0)return false;
    if(word=="s"&&!polygons.empty()){
     auto& poly=polygons.back();
     if(poly.size()<2||poly.size()>=4096)return false;
