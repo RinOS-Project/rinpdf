@@ -192,14 +192,26 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     if(work>16777216-stroke_work)return false;
     stroke_work+=work;
     for(unsigned yy=y_begin;yy<y_end;++yy)for(unsigned xx=x_begin;xx<x_end;++xx){
-     double px=xx+0.5,py=yy+0.5;
-     double projection=denom>0?((px-x0)*dx+(py-y0)*dy)/denom:0;
-     if(line_cap==0&&(projection<0||projection>1))continue;
-     double extension=denom>0?radius/std::sqrt(denom):0;
-     if(line_cap==2&&(projection< -extension||projection>1+extension))continue;
-     double t=line_cap==1?std::clamp(projection,0.0,1.0):projection;
-     double distance=std::hypot(px-(x0+t*dx),py-(y0+t*dy));
-     if(distance<=radius&&xx>=clip.x0&&xx<clip.x1&&yy>=clip.y0&&yy<clip.y1&&(clip_mask.empty()||clip_mask[(size_t)yy*width+xx])){uint8_t* pixel=rgba+(size_t)yy*stride+(size_t)xx*4;pixel[0]=cr;pixel[1]=cg;pixel[2]=cb;pixel[3]=255;}
+     if(xx<clip.x0||xx>=clip.x1||yy<clip.y0||yy>=clip.y1||(clip_mask.size()&&!clip_mask[(size_t)yy*width+xx]))continue;
+     auto covered=[&](double px,double py){
+      double projection=denom>0?((px-x0)*dx+(py-y0)*dy)/denom:0;
+      if(line_cap==0&&(projection<0||projection>1))return false;
+      double extension=denom>0?radius/std::sqrt(denom):0;
+      if(line_cap==2&&(projection< -extension||projection>1+extension))return false;
+      double t=line_cap==1?std::clamp(projection,0.0,1.0):projection;
+      return std::hypot(px-(x0+t*dx),py-(y0+t*dy))<=radius;
+     };
+     const bool aa=(size_t)width*height<=262144;
+     unsigned hits=0;
+     if(aa){for(double oy:{0.25,0.75})for(double ox:{0.25,0.75})hits+=covered(xx+ox,yy+oy)?1:0;}
+     else hits=covered(xx+0.5,yy+0.5)?4:0;
+     if(!hits)continue;
+     const unsigned alpha=(hits*255+2)/4;
+     uint8_t* pixel=rgba+(size_t)yy*stride+(size_t)xx*4;
+     pixel[0]=(uint8_t)((alpha*cr+(255-alpha)*pixel[0]+127)/255);
+     pixel[1]=(uint8_t)((alpha*cg+(255-alpha)*pixel[1]+127)/255);
+     pixel[2]=(uint8_t)((alpha*cb+(255-alpha)*pixel[2]+127)/255);
+     pixel[3]=255;
     }
     return true;
    };
