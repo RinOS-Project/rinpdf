@@ -159,5 +159,14 @@ int main(){
  const char rotated_rect_stroke[]="0 1 -1 0 8 0 cm 0 G 1 w 1 1 4 4 re S";
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(rotated_rect_stroke),sizeof(rotated_rect_stroke)-1,8,8,pixels.data(),32))return 91;
  if(channel(3,4,0)==255||channel(5,4,0)!=255)return 92;
+ const char round_corner[]="1 j 0 J 2 w 0 G 2 2 m 4 2 l 4 4 l S";
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(round_corner),sizeof(round_corner)-1,8,8,pixels.data(),32))return 94;
+ if(channel(4,5,0)==255)return 95;
+ const char default_join[]="0 G 1 w 1 1 m 5 1 l S";
+ const char explicit_miter[]="0 j 0 G 1 w 1 1 m 5 1 l S";
+ std::vector<unsigned char> first(8*8*4),second(8*8*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(default_join),sizeof(default_join)-1,8,8,first.data(),32))return 96;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(explicit_miter),sizeof(explicit_miter)-1,8,8,second.data(),32))return 97;
+ if(first!=second)return 98;
  return 0;
 }
