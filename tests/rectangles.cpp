@@ -257,5 +257,13 @@ int main(){
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(dash_odd),sizeof(dash_odd)-1,8,8,odd0.data(),32))return 144;
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(dash_odd_shift),sizeof(dash_odd_shift)-1,8,8,odd8.data(),32))return 145;
  if(odd0!=odd8)return 146;
+ const char dash_restored[]="q [2 2] 0 d q [1 3] 0 d Q 0 G 1 w 0 J 0 4 m 8 4 l S Q";
+ std::vector<unsigned char> restored_dash_pixels(8*8*4),baseline_dash_pixels(8*8*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(dash_restored),sizeof(dash_restored)-1,8,8,restored_dash_pixels.data(),32))return 147;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(dash_basic),sizeof(dash_basic)-1,8,8,baseline_dash_pixels.data(),32))return 148;
+ if(restored_dash_pixels!=baseline_dash_pixels)return 149;
+ const char dash_compact[]="[2 2]0 d 0 G 1 w 0 J 0 4 m 8 4 l S";
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(dash_compact),sizeof(dash_compact)-1,8,8,pixels.data(),32))return 150;
+ if(channel(1,3,0)==255||channel(3,3,0)!=255)return 151;
  return 0;
 }
