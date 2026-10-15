@@ -21,5 +21,10 @@ int main(){
  unsigned shade=stroke_pixels[(1*4+2)*4];
  if(shade==0||shade==255)return 8;
  if(stroke_pixels[(0*4+2)*4]!=255)return 9;
+ uint8_t joined[4*4*4]{};
+ const char overlapped[]="0 G 0.5 w 0 J 0 2 m 4 2 l 0 2 m 4 2 l S";
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const uint8_t*>(overlapped),
+ sizeof(overlapped)-1,4,4,joined,16))return 10;
+ for(unsigned i=0;i<sizeof(joined);++i)if(joined[i]!=stroke_pixels[i])return 11;
  return 0;
 }
