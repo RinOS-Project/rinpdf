@@ -603,8 +603,22 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     if(!std::isfinite(t))return paint_triangle(p,u,v);
     const Point tip{u.x+t*ux,u.y+t*uy};
     if(!std::isfinite(tip.x)||!std::isfinite(tip.y))return paint_triangle(p,u,v);
-    const double miter_length=std::hypot(tip.x-p.x,tip.y-p.y);
-    if(!std::isfinite(miter_length)||miter_length/radius>miter_limit)return paint_triangle(p,u,v);
+    // The PDF miter limit is a ratio in stroke (user) space.
+    // Device-space Euclidean distances are distorted by anisotropic CTMs.
+    double miter_ratio=0;
+    if(ma.a==mb.a&&ma.b==mb.b&&ma.c==mb.c&&ma.d==mb.d&&line_width>0){
+     const double matrix_det=ma.a*ma.d-ma.b*ma.c;
+     if(!std::isfinite(matrix_det)||std::abs(matrix_det)<1e-12)return false;
+     const double dx=tip.x-p.x,dy=tip.y-p.y;
+     const double tx=(ma.d*dx-ma.c*dy)/matrix_det;
+     const double ty=(-ma.b*dx+ma.a*dy)/matrix_det;
+     miter_ratio=std::hypot(tx,ty)/(line_width*.5);
+    }else{
+     // Mixed CTMs have no single inverse at the join; retain the
+     // conservative device-space bound until a common stroke model exists.
+     miter_ratio=std::hypot(tip.x-p.x,tip.y-p.y)/radius;
+    }
+    if(!std::isfinite(miter_ratio)||miter_ratio>miter_limit)return paint_triangle(p,u,v);
     return paint_triangle(p,u,v)&&paint_triangle(u,tip,v);
    };
    if(line_join==0||line_join==2){
