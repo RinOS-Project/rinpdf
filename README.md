@@ -271,3 +271,12 @@ sh scripts/verify-local.sh
 
 ## Diagonal square cap raster bounds (0.51.2)
 Square capは線端を線方向と垂直方向にそれぞれ半線幅延長するため、斜め線分の端点から最大で半線幅×√2まで被覆が広がります。従来の線分バウンディングボックスは半線幅+1画素のみを使っており、斜めSquare capの角が切れる可能性がありました。`J=2` の走査領域を√2倍の保守的な半径で拡張し、斜め線分のSquare/Butt比較テストを追加しました。GitHubのDNS解決ができないため、ローカルビルドとテストは未実行です。
+
+## AddressSanitizer / UBSan local verification (0.51.3)
+通常のDebugビルドと全回帰テストは `sh scripts/verify-local.sh` で実行します。Linux上でASan/UBSanを有効にして全テストを実行する場合は次を使用します。
+
+```sh
+RINPDF_VERIFY_MODE=asan sh scripts/verify-local.sh
+```
+
+ASanモードは標準で `build-verify-asan` を使用し、通常の `build-verify` とオブジェクトを混在させません。Mesonの `-Db_sanitize=address,undefined` を設定し、ビルドと全テストの両方が成功した場合のみPASSを表示します。コンパイラ・ランタイムがサニタイザーに対応している必要があります。この環境ではリポジトリ全体を取得できず、実行結果は未確認です。
