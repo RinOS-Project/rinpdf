@@ -27,5 +27,9 @@ else
   meson setup "$build_dir" -Dbuildtype=debug -Db_sanitize="$sanitizer"
 fi
 meson compile -C "$build_dir"
-meson test -C "$build_dir" --print-errorlogs --no-rebuild
+if [ "$#" -ge 2 ]; then
+  meson test -C "$build_dir" --print-errorlogs --no-rebuild "$2"
+else
+  meson test -C "$build_dir" --print-errorlogs --no-rebuild
+fi
 echo "rinpdf verification passed: mode=$mode build_dir=$build_dir"
