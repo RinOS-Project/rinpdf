@@ -16,5 +16,10 @@ int main(){
  if(channel(4,2,0)!=0||channel(4,2,1)!=0||channel(4,2,2)!=0)return 6;
  const char invalid[]="Q";
  if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(invalid),sizeof(invalid)-1,8,8,pixels.data(),32))return 7;
+ const char cmyk[]="0 1 1 0 k 1 1 2 2 re f";
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(cmyk),sizeof(cmyk)-1,8,8,pixels.data(),32))return 8;
+ if(channel(1,5,0)!=255||channel(1,5,1)!=0||channel(1,5,2)!=0)return 9;
+ const char invalid_cmyk[]="0 0 0 2 k";
+ if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(invalid_cmyk),sizeof(invalid_cmyk)-1,8,8,pixels.data(),32))return 10;
  return 0;
 }
