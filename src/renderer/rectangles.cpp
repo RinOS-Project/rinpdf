@@ -27,7 +27,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
  struct Color { double r,g,b,a,bx,cx,d,e,f,width,sr,sg,sb; int cap,join; double miter; };
  double a=1,bx=0,cx=0,d=1,e=0,f=0;
  double line_width=1;
- int line_cap=0,line_join=1;
+ int line_cap=0,line_join=0;
  double miter_limit=10;
  double stroke_red=0,stroke_green=0,stroke_blue=0;
  std::vector<Color> saved;
@@ -98,8 +98,8 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    if(stack.size()!=1||stack[0]<0||stack[0]>2||std::floor(stack[0])!=stack[0])return false;
    line_cap=(int)stack[0];stack.clear();
   }else if(word=="j"){
-   if(stack.size()!=1||stack[0]!=1)return false;
-   line_join=1;stack.clear();
+   if(stack.size()!=1||stack[0]<0||stack[0]>2||std::floor(stack[0])!=stack[0])return false;
+   line_join=(int)stack[0];stack.clear();
   }else if(word=="M"){
    if(stack.size()!=1||stack[0]<1||stack[0]>1000)return false;
    miter_limit=stack[0];stack.clear();
