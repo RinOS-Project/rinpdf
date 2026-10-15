@@ -317,12 +317,20 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
      }
      return false;
     };
-    while(phase>0){
+    // Resolve the phase by bounded traversal of one normalized cycle.
+    // Subtracting a very small dash repeatedly can otherwise lose
+    // precision and fail to advance a large phase.
+    for(size_t step=0;phase>0&&step<=cycle;++step){
      if(remaining<=0){if(!advance())return false;continue;}
-     const double take=std::min(phase,remaining);
-     if(take<=0)return false;
-     phase-=take;remaining-=take;
+     if(phase>=remaining){
+      phase-=remaining;
+      remaining=0;
+     }else{
+      remaining-=phase;
+      phase=0;
+     }
     }
+    if(phase>0)return false;
     // Resolve exact phase boundaries before consuming the first segment.
     if(remaining==0&&!advance())return false;
     size_t pieces=0;
