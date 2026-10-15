@@ -363,7 +363,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
         on_run_vertices.push_back({a,matrices[i]});
         if(i>=2&&line_join!=1){
          if(dashed_joins.size()>=4096)return false;
-         dashed_joins.push_back({points[i-2],a,q,matrices[i-1],matrices[i]});
+         dashed_joins.push_back({points[i-2],a,b,matrices[i-1],matrices[i]});
         }
        }
        if(!segment(a,b,matrices[i]))return false;
