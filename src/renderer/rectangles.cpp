@@ -13,7 +13,10 @@ static bool number(const std::string& s,double& v){
 }
 static bool space(unsigned char c){return c==0||c==9||c==10||c==12||c==13||c==32;}
 struct Rect {double x,y,w,h;};
-bool render_rectangles(const uint8_t *contents,size_t size,unsigned width,unsigned height,uint8_t *rgba,size_t stride){
+bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,unsigned height,uint8_t *rgba,size_t stride,PageBox box){
+ if(!std::isfinite(box.x0)||!std::isfinite(box.y0)||!std::isfinite(box.x1)||!std::isfinite(box.y1)||box.x1<=box.x0||box.y1<=box.y0)return false;
+ const double sx=(double)width/(box.x1-box.x0),sy=(double)height/(box.y1-box.y0);
+ if(!std::isfinite(sx)||!std::isfinite(sy))return false;
  if(!rgba||(!contents&&size)||!width||!height||width>16384||height>16384||stride<(size_t)width*4)return false;
  if(size>16*1024*1024)return false;
  for(unsigned y=0;y<height;++y)std::memset(rgba+(size_t)y*stride,255,(size_t)width*4);
@@ -61,10 +64,10 @@ bool render_rectangles(const uint8_t *contents,size_t size,unsigned width,unsign
    unsigned char cg=(unsigned char)std::lround(green*255);
    unsigned char cb=(unsigned char)std::lround(blue*255);
    for(const Rect& r:path){
-    double left=std::clamp(std::min(r.x,r.x+r.w),0.0,(double)width);
-    double right=std::clamp(std::max(r.x,r.x+r.w),0.0,(double)width);
-    double top=std::clamp((double)height-std::max(r.y,r.y+r.h),0.0,(double)height);
-    double bottom=std::clamp((double)height-std::min(r.y,r.y+r.h),0.0,(double)height);
+    double left=std::clamp((std::min(r.x,r.x+r.w)-box.x0)*sx,0.0,(double)width);
+    double right=std::clamp((std::max(r.x,r.x+r.w)-box.x0)*sx,0.0,(double)width);
+    double top=std::clamp((box.y1-std::max(r.y,r.y+r.h))*sy,0.0,(double)height);
+    double bottom=std::clamp((box.y1-std::min(r.y,r.y+r.h))*sy,0.0,(double)height);
     for(unsigned y=(unsigned)top;y<(unsigned)bottom;++y){
      for(unsigned x=(unsigned)left;x<(unsigned)right;++x){
       uint8_t *pixel=rgba+(size_t)y*stride+(size_t)x*4;
@@ -79,5 +82,8 @@ bool render_rectangles(const uint8_t *contents,size_t size,unsigned width,unsign
   }else return false; // Do not silently ignore unknown operators.
  }
  return stack.empty()&&path.empty()&&saved.empty();
+}
+bool render_rectangles(const uint8_t *contents,size_t size,unsigned width,unsigned height,uint8_t *rgba,size_t stride){
+ return render_rectangles_box(contents,size,width,height,rgba,stride,{0,0,(double)width,(double)height});
 }
 }
