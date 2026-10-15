@@ -47,7 +47,7 @@ struct Reader {
   return decode_stream(data,size,range,bytes,limit);
  }
  bool walk_box(const Value& ref,size_t depth,size_t& current,size_t target,
-               std::set<size_t>& active,const MediaBox* inherited,const MediaBox* inherited_crop,MediaBox& output) const {
+               std::set<size_t>& active,const MediaBox* inherited,const MediaBox* inherited_crop,unsigned inherited_rotation,MediaBox& output) const {
   if(depth>64||ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
   size_t id=(size_t)ref.integer;
   if(!active.insert(id).second)return false;
@@ -56,6 +56,13 @@ struct Reader {
   MediaBox own{};
   const Value *media=get(node,"MediaBox");
   if(media){if(!box_value(*media,own)){active.erase(id);return false;}inherited=&own;}
+  const Value *rotate=get(node,"Rotate");
+  if(rotate){
+   if(rotate->kind!=Value::Kind::Integer||rotate->integer%90!=0){active.erase(id);return false;}
+   long long angle=rotate->integer%360;
+   if(angle<0)angle+=360;
+   inherited_rotation=(unsigned)angle;
+  }
   MediaBox own_crop{};
   const Value *crop=get(node,"CropBox");
   if(crop){if(!box_value(*crop,own_crop)){active.erase(id);return false;}inherited_crop=&own_crop;}
@@ -64,6 +71,7 @@ struct Reader {
   if(type->text=="Page"){
    if(current==target){if(!inherited){active.erase(id);return false;}
     output=*inherited;
+    output.rotation=inherited_rotation;
     if(inherited_crop){
      output.x0=std::max(output.x0,inherited_crop->x0);
      output.y0=std::max(output.y0,inherited_crop->y0);
@@ -77,7 +85,7 @@ struct Reader {
   const Value *kids=get(node,"Kids");
   if(!kids||kids->kind!=Value::Kind::Array){active.erase(id);return false;}
   for(const Value& child:kids->array){
-   if(!walk_box(child,depth+1,current,target,active,inherited,inherited_crop,output)){active.erase(id);return false;}
+   if(!walk_box(child,depth+1,current,target,active,inherited,inherited_crop,inherited_rotation,output)){active.erase(id);return false;}
   }
   active.erase(id);return true;
  }
@@ -145,7 +153,7 @@ bool read_page_box(const uint8_t *data,size_t size,size_t index,MediaBox& box){
  const Value *type=get(catalog,"Type"),*pages=get(catalog,"Pages");
  if(!type||type->kind!=Value::Kind::Name||type->text!="Catalog"||!pages)return false;
  std::set<size_t> active;size_t current=0;
- return reader.walk_box(*pages,0,current,index,active,nullptr,nullptr,box)&&index<current;
+ return reader.walk_box(*pages,0,current,index,active,nullptr,nullptr,0,box)&&index<current;
 }
 
 }
