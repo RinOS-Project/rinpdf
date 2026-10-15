@@ -359,5 +359,11 @@ int main(){
  for(int i=0;i<4095;++i)long_dash+=(i%2?"1 1 l ":"2 1 l ");
  std::vector<unsigned char> long_dash_pixels(8*8*4);
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(long_dash.data()),long_dash.size(),8,8,long_dash_pixels.data(),32))return 199;
+ const char phase_odd_zero[]="[2 1 1] 0 d 0 G 1 w 0 J 0 4 m 8 4 l S";
+ const char phase_odd_cycle[]="[2 1 1] 800000 d 0 G 1 w 0 J 0 4 m 8 4 l S";
+ std::vector<unsigned char> phase_odd_a(8*8*4),phase_odd_b(8*8*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(phase_odd_zero),sizeof(phase_odd_zero)-1,8,8,phase_odd_a.data(),32))return 200;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(phase_odd_cycle),sizeof(phase_odd_cycle)-1,8,8,phase_odd_b.data(),32))return 201;
+ if(phase_odd_a!=phase_odd_b)return 202;
  return 0;
 }
