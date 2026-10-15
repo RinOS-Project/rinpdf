@@ -139,14 +139,23 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    const unsigned char cr=(unsigned char)std::lround(stroke_red*255),cg=(unsigned char)std::lround(stroke_green*255),cb=(unsigned char)std::lround(stroke_blue*255);
    size_t stroke_work=0;
    auto segment=[&](Point p,Point q){
-    if(stroke_work>16777216-(size_t)width*height)return false;
-    stroke_work+=(size_t)width*height;
     double x0=(p.x-box.x0)*sx,y0=(box.y1-p.y)*sy;
     double x1=(q.x-box.x0)*sx,y1=(box.y1-q.y)*sy;
     double dx=x1-x0,dy=y1-y0,denom=dx*dx+dy*dy;
     double radius=0.5*line_width*std::max(std::abs(a*sx),std::abs(d*sy));
     if(!std::isfinite(denom)||!std::isfinite(radius)||radius>2048)return false;
-    for(unsigned yy=0;yy<height;++yy)for(unsigned xx=0;xx<width;++xx){
+    double extra=radius+1;
+    double low_x=std::min(x0,x1)-extra,high_x=std::max(x0,x1)+extra;
+    double low_y=std::min(y0,y1)-extra,high_y=std::max(y0,y1)+extra;
+    if(!std::isfinite(low_x)||!std::isfinite(high_x)||!std::isfinite(low_y)||!std::isfinite(high_y))return false;
+    unsigned x_begin=(unsigned)std::clamp(std::floor(low_x),0.0,(double)width);
+    unsigned x_end=(unsigned)std::clamp(std::ceil(high_x),0.0,(double)width);
+    unsigned y_begin=(unsigned)std::clamp(std::floor(low_y),0.0,(double)height);
+    unsigned y_end=(unsigned)std::clamp(std::ceil(high_y),0.0,(double)height);
+    size_t work=(size_t)(x_end-x_begin)*(y_end-y_begin);
+    if(work>16777216-stroke_work)return false;
+    stroke_work+=work;
+    for(unsigned yy=y_begin;yy<y_end;++yy)for(unsigned xx=x_begin;xx<x_end;++xx){
      double px=xx+0.5,py=yy+0.5;
      double projection=denom>0?((px-x0)*dx+(py-y0)*dy)/denom:0;
      if(line_cap==0&&(projection<0||projection>1))continue;
