@@ -23,5 +23,8 @@ int main(){
   side,side,pixels.data(),side*4))return 3;
  const size_t pixel=((size_t)300*side+725)*4;
  if(pixels[pixel]!=0)return 4;
+ const std::string isolated="q 0 0 1024 1024 re W n q 0 0 512 512 re W n 0 g 700 700 50 50 re f Q Q";
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const uint8_t*>(isolated.data()),isolated.size(),side,side,pixels.data(),side*4))return 5;
+ if(pixels[pixel]!=255)return 6;
  return 0;
 }
