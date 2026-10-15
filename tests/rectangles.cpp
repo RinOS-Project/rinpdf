@@ -180,5 +180,11 @@ int main(){
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(close_with_s),sizeof(close_with_s)-1,8,8,s_pixels.data(),32))return 102;
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(close_with_h),sizeof(close_with_h)-1,8,8,h_pixels.data(),32))return 103;
  if(s_pixels!=h_pixels)return 104;
+ const char once_closed[]="1 j 0 G 1 w 1 1 m 5 1 l 5 5 l h S";
+ const char twice_closed[]="1 j 0 G 1 w 1 1 m 5 1 l 5 5 l h h S";
+ std::vector<unsigned char> once_pixels(8*8*4),twice_pixels(8*8*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(once_closed),sizeof(once_closed)-1,8,8,once_pixels.data(),32))return 105;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(twice_closed),sizeof(twice_closed)-1,8,8,twice_pixels.data(),32))return 106;
+ if(once_pixels!=twice_pixels)return 107;
  return 0;
 }
