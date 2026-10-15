@@ -174,6 +174,8 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    }
    const unsigned char cr=(unsigned char)std::lround(stroke_red*255),cg=(unsigned char)std::lround(stroke_green*255),cb=(unsigned char)std::lround(stroke_blue*255);
    size_t stroke_work=0;
+   const bool stroke_aa=(size_t)width*height<=262144;
+   std::vector<uint8_t> stroke_samples((size_t)width*height,0);
    auto segment=[&](Point p,Point q){
     double x0=(p.x-box.x0)*sx,y0=(box.y1-p.y)*sy;
     double x1=(q.x-box.x0)*sx,y1=(box.y1-q.y)*sy;
@@ -192,7 +194,6 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     if(work>16777216-stroke_work)return false;
     stroke_work+=work;
     for(unsigned yy=y_begin;yy<y_end;++yy)for(unsigned xx=x_begin;xx<x_end;++xx){
-     if(xx<clip.x0||xx>=clip.x1||yy<clip.y0||yy>=clip.y1||(clip_mask.size()&&!clip_mask[(size_t)yy*width+xx]))continue;
      auto covered=[&](double px,double py){
       double projection=denom>0?((px-x0)*dx+(py-y0)*dy)/denom:0;
       if(line_cap==0&&(projection<0||projection>1))return false;
@@ -201,17 +202,14 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
       double t=line_cap==1?std::clamp(projection,0.0,1.0):projection;
       return std::hypot(px-(x0+t*dx),py-(y0+t*dy))<=radius;
      };
-     const bool aa=(size_t)width*height<=262144;
-     unsigned hits=0;
-     if(aa){for(double oy:{0.25,0.75})for(double ox:{0.25,0.75})hits+=covered(xx+ox,yy+oy)?1:0;}
-     else hits=covered(xx+0.5,yy+0.5)?4:0;
-     if(!hits)continue;
-     const unsigned alpha=(hits*255+2)/4;
-     uint8_t* pixel=rgba+(size_t)yy*stride+(size_t)xx*4;
-     pixel[0]=(uint8_t)((alpha*cr+(255-alpha)*pixel[0]+127)/255);
-     pixel[1]=(uint8_t)((alpha*cg+(255-alpha)*pixel[1]+127)/255);
-     pixel[2]=(uint8_t)((alpha*cb+(255-alpha)*pixel[2]+127)/255);
-     pixel[3]=255;
+     uint8_t bits=0;
+     if(stroke_aa){
+      if(covered(xx+0.25,yy+0.25))bits|=1;
+      if(covered(xx+0.75,yy+0.25))bits|=2;
+      if(covered(xx+0.25,yy+0.75))bits|=4;
+      if(covered(xx+0.75,yy+0.75))bits|=8;
+     }else if(covered(xx+0.5,yy+0.5))bits=15;
+     stroke_samples[(size_t)yy*width+xx]|=bits;
     }
     return true;
    };
@@ -219,6 +217,18 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    for(const Rect& rect:path){
     Point p0{rect.x,rect.y},p1{rect.x+rect.w,rect.y},p2{rect.x+rect.w,rect.y+rect.h},p3{rect.x,rect.y+rect.h};
     if(!segment(p0,p1)||!segment(p1,p2)||!segment(p2,p3)||!segment(p3,p0))return false;
+   }
+   for(size_t i=0;i<stroke_samples.size();++i){
+    unsigned x=(unsigned)(i%width),y=(unsigned)(i/width);
+    if(x<clip.x0||x>=clip.x1||y<clip.y0||y>=clip.y1||(!clip_mask.empty()&&!clip_mask[i]))continue;
+    unsigned bits=stroke_samples[i],hits=(unsigned)((bits&1)!=0)+((bits&2)!=0)+((bits&4)!=0)+((bits&8)!=0);
+    if(!hits)continue;
+    unsigned alpha=(hits*255+2)/4;
+    uint8_t* pixel=rgba+(size_t)y*stride+(size_t)x*4;
+    pixel[0]=(uint8_t)((alpha*cr+(255-alpha)*pixel[0]+127)/255);
+    pixel[1]=(uint8_t)((alpha*cg+(255-alpha)*pixel[1]+127)/255);
+    pixel[2]=(uint8_t)((alpha*cb+(255-alpha)*pixel[2]+127)/255);
+    pixel[3]=255;
    }
    path.clear();polygons.clear();
   }else if(word=="f"||word=="F"||word=="f*"){
