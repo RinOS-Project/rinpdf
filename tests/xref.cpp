@@ -1,4 +1,5 @@
 #include "../src/parser/xref.h"
+#include "../src/parser/object.h"
 #include "rinpdf/rinpdf.h"
 #include <cstdio>
 #include <vector>
@@ -13,7 +14,13 @@ int main(){
  std::vector<rinpdf::parser::XrefEntry> entries;
  if(!rinpdf::parser::read_classic_xref(data.data(),data.size(),entries))return 4;
  if(entries.size()!=6||entries[0].in_use||!entries[1].in_use||entries[1].object!=1)return 5;
+ size_t begin=0,end=0;
+ if(!rinpdf::parser::resolve_object(data.data(),data.size(),entries[1],begin,end))return 6;
+ if(begin>=end||end>data.size())return 7;
+ if(rinpdf::parser::resolve_object(data.data(),data.size(),entries[0],begin,end))return 8;
+ auto corrupt=entries[1];corrupt.object=999;
+ if(rinpdf::parser::resolve_object(data.data(),data.size(),corrupt,begin,end))return 9;
  const unsigned char bad[]="%PDF-1.4\nstartxref\n999999\n%%EOF\n";
- if(rinpdf::parser::read_classic_xref(bad,sizeof(bad)-1,entries))return 6;
+ if(rinpdf::parser::read_classic_xref(bad,sizeof(bad)-1,entries))return 10;
  return 0;
 }
