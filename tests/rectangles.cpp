@@ -442,5 +442,10 @@ int main(){
  bool closed_multi_ink=false;
  for(size_t i=0;i<closed_multi_pixels.size();i+=4)if(closed_multi_pixels[i]<255){closed_multi_ink=true;break;}
  if(!closed_multi_ink)return 229;
+ const char closed_round_seam[]="[7 3] 2 d 1 J 1 j 2 w 0 G 3 3 m 11 3 l 11 11 l 3 11 l h S";
+ const char closed_miter_seam[]="[7 3] 2 d 2 J 0 j 2 w 0 G 3 3 m 11 3 l 11 11 l 3 11 l h S";
+ std::vector<unsigned char> seam_round_pixels(16*16*4),seam_miter_pixels(16*16*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(closed_round_seam),sizeof(closed_round_seam)-1,16,16,seam_round_pixels.data(),64))return 230;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(closed_miter_seam),sizeof(closed_miter_seam)-1,16,16,seam_miter_pixels.data(),64))return 231;
  return 0;
 }
