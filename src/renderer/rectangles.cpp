@@ -23,9 +23,11 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
  if((size_t)width*height>16777216)return false;
  for(unsigned y=0;y<height;++y)std::memset(rgba+(size_t)y*stride,255,(size_t)width*4);
  double red=0,green=0,blue=0;
- struct Color { double r,g,b,a,d,e,f,width,sr,sg,sb; };
+ struct Color { double r,g,b,a,d,e,f,width,sr,sg,sb; int cap,join; double miter; };
  double a=1,d=1,e=0,f=0;
  double line_width=1;
+ int line_cap=1,line_join=1;
+ double miter_limit=10;
  double stroke_red=0,stroke_green=0,stroke_blue=0;
  std::vector<Color> saved;
  std::vector<double> stack;
@@ -43,10 +45,10 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
   if(number(word,v)){if(stack.size()>=16)return false;stack.push_back(v);continue;}
   if(word=="q"){
    if(!stack.empty()||saved.size()>=64)return false;
-   saved.push_back({red,green,blue,a,d,e,f,line_width,stroke_red,stroke_green,stroke_blue});
+   saved.push_back({red,green,blue,a,d,e,f,line_width,stroke_red,stroke_green,stroke_blue,line_cap,line_join,miter_limit});
   }else if(word=="Q"){
    if(!stack.empty()||saved.empty()||(!path.empty()||!polygons.empty()))return false;
-   auto color=saved.back();saved.pop_back();red=color.r;green=color.g;blue=color.b;a=color.a;d=color.d;e=color.e;f=color.f;line_width=color.width;stroke_red=color.sr;stroke_green=color.sg;stroke_blue=color.sb;
+   auto color=saved.back();saved.pop_back();red=color.r;green=color.g;blue=color.b;a=color.a;d=color.d;e=color.e;f=color.f;line_width=color.width;stroke_red=color.sr;stroke_green=color.sg;stroke_blue=color.sb;line_cap=color.cap;line_join=color.join;miter_limit=color.miter;
   }else if(word=="cm"){
    if(stack.size()!=6||stack[1]!=0||stack[2]!=0)return false;
    double na=a*stack[0],nd=d*stack[3],ne=a*stack[4]+e,nf=d*stack[5]+f;
@@ -55,6 +57,15 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
   }else if(word=="w"){
    if(stack.size()!=1||stack[0]<=0||stack[0]>1024)return false;
    line_width=stack[0];stack.clear();
+  }else if(word=="J"){
+   if(stack.size()!=1||stack[0]!=1)return false;
+   line_cap=1;stack.clear();
+  }else if(word=="j"){
+   if(stack.size()!=1||stack[0]!=1)return false;
+   line_join=1;stack.clear();
+  }else if(word=="M"){
+   if(stack.size()!=1||stack[0]<1||stack[0]>1000)return false;
+   miter_limit=stack[0];stack.clear();
   }else if(word=="RG"){
    if(stack.size()!=3)return false;
    for(double channel:stack)if(channel<0||channel>1)return false;
