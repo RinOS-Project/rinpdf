@@ -274,5 +274,11 @@ int main(){
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(limited_miter),sizeof(limited_miter)-1,16,16,lw.data(),64))return 154;
  if(mw==bw)return 155;
  if(lw!=bw)return 156;
+ const char closed_miter[]="0 j 0 J 3 w 0 G 3 3 m 11 3 l 11 11 l 3 11 l h S";
+ const char closed_bevel[]="2 j 0 J 3 w 0 G 3 3 m 11 3 l 11 11 l 3 11 l h S";
+ std::vector<unsigned char> cm_pixels(16*16*4),cb_pixels(16*16*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(closed_miter),sizeof(closed_miter)-1,16,16,cm_pixels.data(),64))return 157;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(closed_bevel),sizeof(closed_bevel)-1,16,16,cb_pixels.data(),64))return 158;
+ if(cm_pixels==cb_pixels)return 159;
  return 0;
 }
