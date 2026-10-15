@@ -49,21 +49,19 @@ struct Context {
  }
 };
 bool count_page_tree(const uint8_t *data,size_t size,size_t& count){
- count=0;std::vector<XrefEntry> entries;
- if(!read_classic_xref(data,size,entries))return false;
+ count=0;std::vector<XrefEntry> entries;size_t trailer_offset=0;
+ if(!read_classic_xref(data,size,entries,&trailer_offset))return false;
+ Lexer trailer_lexer(data+trailer_offset,size-trailer_offset);
+ Value trailer;
+ if(!parse_value(trailer_lexer,trailer)||trailer.kind!=Value::Kind::Dictionary)return false;
+ if(field(trailer,"Prev")||field(trailer,"XRefStm")||field(trailer,"Encrypt"))return false;
+ const Value* root_ref=field(trailer,"Root");
+ if(!root_ref||root_ref->kind!=Value::Kind::Reference)return false;
  Context ctx{data,size,entries};
- // Initial milestone: find one Catalog among the referenced uncompressed objects.
- // Trailer /Root validation will replace this discovery in the next iteration.
- size_t catalogs=0;Value root;
- for(const auto& entry:entries){
-  if(!entry.in_use)continue;
-  Value ref;ref.kind=Value::Kind::Reference;ref.integer=(long long)entry.object;ref.generation=entry.generation;
-  Value candidate;
-  if(!ctx.load(ref,candidate))continue; // Streams are not page-tree dictionaries.
-  const Value* type=field(candidate,"Type");
-  if(type&&named(*type,"Catalog")){root=std::move(candidate);++catalogs;}
- }
- if(catalogs!=1)return false;
+ Value root;
+ if(!ctx.load(*root_ref,root))return false;
+ const Value* type=field(root,"Type");
+ if(!type||!named(*type,"Catalog"))return false;
  const Value* pages=field(root,"Pages");
  return pages&&ctx.walk(*pages,0,count);
 }
