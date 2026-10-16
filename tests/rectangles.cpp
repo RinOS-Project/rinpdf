@@ -502,5 +502,10 @@ int main(){
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(anisotropic_square),sizeof(anisotropic_square)-1,32,16,anisotropic_square_pixels.data(),128))return 254;
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(anisotropic_butt),sizeof(anisotropic_butt)-1,32,16,anisotropic_butt_pixels.data(),128))return 255;
  if(anisotropic_square_pixels==anisotropic_butt_pixels)return 256;
+ const char sheared_square_cap[]="1 0.5 0 1 0 0 cm 2 J 0 G 2 w 4 4 m 10 4 l S";
+ const char explicit_sheared_square_cap[]="2 J 0 G 2 w 4 6 m 10 9 l S";
+ std::vector<unsigned char> sheared_square_pixels(16*16*4),explicit_sheared_pixels(16*16*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(sheared_square_cap),sizeof(sheared_square_cap)-1,16,16,sheared_square_pixels.data(),64))return 254;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(explicit_sheared_square_cap),sizeof(explicit_sheared_square_cap)-1,16,16,explicit_sheared_pixels.data(),64))return 255;
  return 0;
 }
