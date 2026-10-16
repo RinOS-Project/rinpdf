@@ -1,5 +1,6 @@
 #include "rectangles.h"
 #include "path_mask.h"
+#include "cubic_arc.h"
 #include <algorithm>
 #include <charconv>
 #include <cmath>
