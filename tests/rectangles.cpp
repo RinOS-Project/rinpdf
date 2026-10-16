@@ -554,5 +554,11 @@ int main(){
  std::vector<unsigned char> reversed_cubic_pixels(16*16*4),reversed_line_pixels(16*16*4);
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(reversed_collinear_cubic),sizeof(reversed_collinear_cubic)-1,16,16,reversed_cubic_pixels.data(),64))return 276;
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(reversed_collinear_line),sizeof(reversed_collinear_line)-1,16,16,reversed_line_pixels.data(),64))return 277;
+ const char dashed_cubic[]="[2 1] 0 d 0 G 1 w 0 J 2 2 m 2 14 14 2 14 14 c S";
+ const char solid_cubic[]="0 G 1 w 0 J 2 2 m 2 14 14 2 14 14 c S";
+ std::vector<unsigned char> dashed_cubic_pixels(16*16*4),solid_cubic_pixels(16*16*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(dashed_cubic),sizeof(dashed_cubic)-1,16,16,dashed_cubic_pixels.data(),64))return 278;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(solid_cubic),sizeof(solid_cubic)-1,16,16,solid_cubic_pixels.data(),64))return 279;
+ if(dashed_cubic_pixels==solid_cubic_pixels)return 280;
  return 0;
 }
