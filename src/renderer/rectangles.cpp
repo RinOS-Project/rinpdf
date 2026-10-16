@@ -234,12 +234,10 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     // bounds under a per-curve budget instead of allowing 0.01 error
     // independently for thousands of flattened pieces.
     const double length_budget=0.01;
-    // A per-leaf allocation avoids repeatedly scanning the pending
-    // stack and prevents early leaves from consuming the full budget.
-    // With at most 4096 emitted vertices, each accepted leaf gets a
-    // conservative share of the per-curve length-error allowance.
+    // Account for accepted chord error without rescanning the pending
+    // stack. The curve-wide upper bound is checked at each emission.
     const bool length_accurate=dash_pattern.empty()||
-      (length_error<=length_budget/4096.0&&
+      (std::isfinite(accepted_length_excess+length_error)&&
        accepted_length_excess+length_error<=length_budget);
     // Reaching the subdivision limit is not evidence of sufficient
     // geometric accuracy. Reject unresolved curves rather than
