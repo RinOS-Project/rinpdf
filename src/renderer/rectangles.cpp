@@ -247,7 +247,10 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     double dx=x1-x0,dy=y1-y0,denom=dx*dx+dy*dy;
     // A zero-length butt/square segment has no stroke area. Round caps
     // deliberately retain the circular point footprint.
-    if(denom==0&&line_cap==0&&!join_disk)return true;
+    // A degenerate segment has no exposed square footprint when both
+    // endpoint caps are suppressed (e.g. an interior zero-length edge).
+    if(denom==0&&!join_disk&&(line_cap==0||
+       (line_cap==2&&!start_cap&&!end_cap)))return true;
     const double metric=std::hypot(std::hypot(mat.a*sx,mat.b*sy),std::hypot(mat.c*sx,mat.d*sy));
     const double effective_width=line_width==0?(metric>0?1.0/metric:0):line_width;
     // Frobenius norm bounds the transformed unit normals. This is a
