@@ -20,5 +20,20 @@ int main(){
  if(!cubic_dash_spans(a,b,c,d,{0,2,1},cur,spans))return 10;
  const Point p{1,1};
  if(!cubic_dash_spans(p,p,p,p,pattern,cur,spans)||!spans.empty())return 11;
+
+ // The closing seam is a join only when paint reaches it from both sides.
+ CubicDashSeam seam;
+ CubicDashCursor initial;
+ if(!cubic_dash_start({2,2},0,initial))return 12;
+ if(!cubic_dash_closed_seam({2,2},initial,{true,true},{true,true},seam))return 13;
+ if(!seam.joined||!seam.first_painted||!seam.last_painted)return 14;
+ if(!cubic_dash_closed_seam({2,2},initial,{true,false},{true,true},seam))return 15;
+ if(seam.joined||seam.last_painted)return 16;
+ if(!cubic_dash_closed_seam({2,2},initial,{}, {},seam))return 17;
+ if(seam.joined)return 18;
+ if(!cubic_dash_start({2,2},2,initial))return 19;
+ if(!cubic_dash_closed_seam({2,2},initial,{true},{true},seam))return 20;
+ if(seam.joined||seam.first_painted)return 21;
+ if(cubic_dash_closed_seam({2,2},initial,{true},{},seam))return 22;
  return 0;
 }
