@@ -442,6 +442,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
      CubicDashCursor cursor;
      if(!cubic_dash_start(dash_pattern,dash_phase,cursor))return false;
      size_t curve_index=0,emitted=0;
+     bool continuing_on=false;
      for(size_t i=1;i<points.size();){
       const Matrix mat=matrices[i];
       const double det=mat.a*mat.d-mat.b*mat.c;
@@ -488,13 +489,22 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
                 points[i-1].y+(points[i].y-points[i-1].y)*t1};
         if(!std::isfinite(a.x)||!std::isfinite(a.y)||
            !std::isfinite(b.x)||!std::isfinite(b.y))return false;
-        const bool run_start=k==0? (i==1||!spans[k].painted):!spans[k-1].painted;
-        const bool at_end=j+1==steps;
-        const bool ends_run=at_end&&(k+1<spans.size()? !spans[k+1].painted:
-          (cursor.remaining<=1e-12&&
-            dash_pattern[(cursor.index+1)%dash_pattern.size()]>0&&
-            (cursor.index+1)%2==1));
-        if(!segment(a,b,mat,false,j==0&&run_start,ends_run||at_end&&last+1==points.size()))return false;
+        // Only exposed on-run endpoints receive caps. The end of one
+        // line/curve segment is not necessarily the end of a dash.
+        bool next_on=false;
+        if(k+1<spans.size())next_on=spans[k+1].painted;
+        else if(last+1<points.size()){
+         if(cursor.remaining>0)next_on=cursor.index%2==0;
+         else {
+          CubicDashCursor probe=cursor;
+          if(!cubic_dash_advance(dash_pattern,probe))return false;
+          next_on=probe.index%2==0;
+         }
+        }
+        const bool at_start=j==0,at_end=j+1==steps;
+        if(!segment(a,b,mat,false,
+           at_start&&!continuing_on,at_end&&!next_on))return false;
+        if(at_end)continuing_on=next_on;
        }
       }
       if(is_curve)++curve_index;
