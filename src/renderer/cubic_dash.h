@@ -100,12 +100,15 @@ struct CubicDashSeam {
 // paint reaches the closing vertex. Exact dash boundaries leave a cap.
 inline bool cubic_dash_closed_seam(
  const std::vector<double>& pattern, const CubicDashCursor& initial,
+ const CubicDashCursor& terminal,
  const std::vector<bool>& segment_last_painted,
  const std::vector<bool>& segment_has_spans,
  CubicDashSeam& result){
  if(pattern.empty()||segment_last_painted.size()!=segment_has_spans.size())return false;
  if(initial.index>=pattern.size()*(pattern.size()%2?2:1)||
-    !std::isfinite(initial.remaining)||initial.remaining<0)return false;
+    terminal.index>=pattern.size()*(pattern.size()%2?2:1)||
+    !std::isfinite(initial.remaining)||initial.remaining<0||
+    !std::isfinite(terminal.remaining)||terminal.remaining<0)return false;
  CubicDashCursor probe=initial;
  if(probe.remaining==0&&!cubic_dash_advance(pattern,probe))return false;
  CubicDashSeam next;
@@ -118,7 +121,7 @@ inline bool cubic_dash_closed_seam(
   }
  }
  // A zero-perimeter contour has no incoming tangent and no seam join.
- next.joined=saw&&next.first_painted&&next.last_painted;
+ next.joined=saw&&next.first_painted&&next.last_painted&&terminal.remaining>0;
  result=next;
  return true;
 }
