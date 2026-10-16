@@ -40,5 +40,16 @@ int main(){
  terminal={0,0};
  if(!cubic_dash_closed_seam({2,2},initial,terminal,{true},{true},seam))return 24;
  if(seam.joined)return 25;
+ // Adaptive subdivision retains the exact dash boundaries and adds
+ // vertices only when the device-space curve is non-flat.
+ std::vector<Point> flat,curved;
+ if(!cubic_dash_flatten_span(a,b,c,d,0.2,0.7,1,1,flat))return 26;
+ if(flat.size()!=2)return 27;
+ if(!cubic_dash_flatten_span({0,0},{0,10},{10,10},{10,0},
+                             0,1,4,4,curved))return 28;
+ if(curved.size()<=2)return 29;
+ if(std::hypot(curved.front().x,curved.front().y)>1e-9||
+    std::hypot(curved.back().x-10,curved.back().y)>1e-9)return 30;
+ if(cubic_dash_flatten_span(a,b,c,d,0.7,0.2,1,1,flat))return 31;
  return 0;
 }
