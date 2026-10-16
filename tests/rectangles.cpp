@@ -507,5 +507,11 @@ int main(){
  std::vector<unsigned char> sheared_square_pixels(16*16*4),explicit_sheared_pixels(16*16*4);
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(sheared_square_cap),sizeof(sheared_square_cap)-1,16,16,sheared_square_pixels.data(),64))return 254;
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(explicit_sheared_square_cap),sizeof(explicit_sheared_square_cap)-1,16,16,explicit_sheared_pixels.data(),64))return 255;
+ const char square_closed_loop[]="2 J 1 j 2 w 0 G 3 3 m 11 3 l 11 11 l 3 11 l h S";
+ const char butt_closed_loop[]="0 J 1 j 2 w 0 G 3 3 m 11 3 l 11 11 l 3 11 l h S";
+ std::vector<unsigned char> square_closed_pixels(16*16*4),butt_closed_pixels(16*16*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(square_closed_loop),sizeof(square_closed_loop)-1,16,16,square_closed_pixels.data(),64))return 256;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(butt_closed_loop),sizeof(butt_closed_loop)-1,16,16,butt_closed_pixels.data(),64))return 257;
+ if(square_closed_pixels!=butt_closed_pixels)return 258;
  return 0;
 }
