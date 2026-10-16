@@ -164,7 +164,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
   }else if(word=="c"||word=="v"||word=="y"){
    if(pending_path_clip||pending_rect_clip)return false;
    const size_t required=word=="c"?6:4;
-   if(stack.size()!=required||polygons.empty()||polygons.back().empty()||polygons.back().size()>4096-16)return false;
+   if(stack.size()!=required||polygons.empty()||polygons.back().empty()||polygons.back().size()>=4096)return false;
    auto& poly=polygons.back();
    Point start=poly.back();
    auto transform_curve=[&](double x,double y){return transform(x,y);};
