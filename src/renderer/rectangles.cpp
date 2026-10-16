@@ -761,14 +761,20 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
         if(!cubic_strokes.empty()&&cubic_strokes.front().start==0){
          const auto& curve=cubic_strokes.front();
          Point tangent{};
-         if(cubic_endpoint_tangent(curve.p0,curve.p1,curve.p2,curve.p3,false,tangent))
-          following={p.x+tangent.x,p.y+tangent.y};
+         if(cubic_endpoint_tangent(curve.p0,curve.p1,curve.p2,curve.p3,false,tangent)){
+          const Point candidate{p.x+tangent.x,p.y+tangent.y};
+          if(!std::isfinite(candidate.x)||!std::isfinite(candidate.y))return false;
+          following=candidate;
+         }
         }
         if(!cubic_strokes.empty()&&cubic_strokes.back().endpoint==points.size()-1){
          const auto& curve=cubic_strokes.back();
          Point tangent{};
-         if(cubic_endpoint_tangent(curve.p0,curve.p1,curve.p2,curve.p3,true,tangent))
-          previous={p.x-tangent.x,p.y-tangent.y};
+         if(cubic_endpoint_tangent(curve.p0,curve.p1,curve.p2,curve.p3,true,tangent)){
+          const Point candidate{p.x-tangent.x,p.y-tangent.y};
+          if(!std::isfinite(candidate.x)||!std::isfinite(candidate.y))return false;
+          previous=candidate;
+         }
         }
        }
        dashed_joins.push_back({previous,p,following,matrices[incoming+1],matrices[outgoing]});
