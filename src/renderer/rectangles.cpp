@@ -754,7 +754,24 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
        if(!segment(p,p,matrices.back(),true))return false;
       }else if(line_join==0||line_join==2){
        if(dashed_joins.size()>=4096)return false;
-       dashed_joins.push_back({points[incoming],p,points[outgoing],matrices[incoming+1],matrices[outgoing]});
+       Point previous=points[incoming],following=points[outgoing];
+       // Use analytic cubic endpoint tangents at a painted closing seam.
+       // These vectors only affect join geometry, not the stroked path.
+       if(path_index==0&&polygons.size()==1){
+        if(!cubic_strokes.empty()&&cubic_strokes.front().start==0){
+         const auto& curve=cubic_strokes.front();
+         Point tangent{};
+         if(cubic_endpoint_tangent(curve.p0,curve.p1,curve.p2,curve.p3,false,tangent))
+          following={p.x+tangent.x,p.y+tangent.y};
+        }
+        if(!cubic_strokes.empty()&&cubic_strokes.back().endpoint==points.size()-1){
+         const auto& curve=cubic_strokes.back();
+         Point tangent{};
+         if(cubic_endpoint_tangent(curve.p0,curve.p1,curve.p2,curve.p3,true,tangent))
+          previous={p.x-tangent.x,p.y-tangent.y};
+        }
+       }
+       dashed_joins.push_back({previous,p,following,matrices[incoming+1],matrices[outgoing]});
       }
      }
     }
