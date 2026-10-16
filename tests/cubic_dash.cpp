@@ -1,5 +1,6 @@
 #include "../src/renderer/cubic_dash.h"
 #include <cmath>
+#include <limits>
 #include <vector>
 using namespace rinpdf::renderer;
 int main(){
@@ -51,5 +52,12 @@ int main(){
  if(std::hypot(curved.front().x,curved.front().y)>1e-9||
     std::hypot(curved.back().x-10,curved.back().y)>1e-9)return 30;
  if(cubic_dash_flatten_span(a,b,c,d,0.7,0.2,1,1,flat))return 31;
+ // Reject invalid geometry before any adaptive tessellation.
+ const double nan=std::numeric_limits<double>::quiet_NaN();
+ const double inf=std::numeric_limits<double>::infinity();
+ std::vector<Point> invalid_output{{123,456}};
+ if(cubic_dash_flatten_span({nan,0},b,c,d,0,1,1,1,invalid_output))return 32;
+ if(cubic_dash_flatten_span(a,{0,inf},c,d,0,1,1,1,invalid_output))return 33;
+ if(invalid_output.size()!=1||invalid_output.front().x!=123)return 34;
  return 0;
 }
