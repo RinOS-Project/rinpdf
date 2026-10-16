@@ -676,5 +676,20 @@ int main(){
  reinterpret_cast<const unsigned char*>(mixed_collinear_after),sizeof(mixed_collinear_after)-1,
  32,32,mixed_collinear_after_img.data(),128))return 317;
  if(mixed_collinear_img!=mixed_collinear_after_img)return 318;
+ // Closed cubic contours exercise the shared seam classifier in
+ // the existing bounded, polyline-based CPU stroke fallback.
+ const char closed_cubic_join[]="[200 2] 0 d 0 G 2 w 1 J 4 4 m 4 14 14 14 14 4 c h S";
+ const char closed_cubic_boundary[]="[20 2] 0 d 0 G 2 w 1 J 4 4 m 4 14 14 14 14 4 c h S";
+ std::vector<unsigned char> closed_join_pixels(32*32*4),closed_boundary_pixels(32*32*4);
+ if(!rinpdf::renderer::render_rectangles(
+   reinterpret_cast<const unsigned char*>(closed_cubic_join),
+   sizeof(closed_cubic_join)-1,32,32,closed_join_pixels.data(),128))return 319;
+ if(!rinpdf::renderer::render_rectangles(
+   reinterpret_cast<const unsigned char*>(closed_cubic_boundary),
+   sizeof(closed_cubic_boundary)-1,32,32,closed_boundary_pixels.data(),128))return 320;
+ bool closed_ink=false;
+ for(size_t i=0;i<closed_join_pixels.size();i+=4)
+  if(closed_join_pixels[i]<255){closed_ink=true;break;}
+ if(!closed_ink)return 321;
  return 0;
 }
