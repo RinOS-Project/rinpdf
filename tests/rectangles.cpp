@@ -537,5 +537,11 @@ int main(){
  bool anisotropic_curve_ink=false;
  for(size_t i=0;i<anisotropic_curve_pixels.size();i+=4)if(anisotropic_curve_pixels[i]<255){anisotropic_curve_ink=true;break;}
  if(!anisotropic_curve_ink)return 269;
+ const char straight_cubic[]="0 G 1 w 2 2 m 6 6 10 10 14 14 c S";
+ const char explicit_straight[]="0 G 1 w 2 2 m 14 14 l S";
+ std::vector<unsigned char> straight_curve_pixels(16*16*4),explicit_straight_pixels(16*16*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(straight_cubic),sizeof(straight_cubic)-1,16,16,straight_curve_pixels.data(),64))return 270;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(explicit_straight),sizeof(explicit_straight)-1,16,16,explicit_straight_pixels.data(),64))return 271;
+ if(straight_curve_pixels!=explicit_straight_pixels)return 272;
  return 0;
 }
