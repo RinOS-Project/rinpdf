@@ -80,6 +80,13 @@ static bool cubic_inverse_arc_length(Point a,Point b,Point c,Point d,
  if(!cubic_arc_length(a,b,c,d,check,t))return false;
  return std::abs(check-distance)<=1e-7*std::max(1.0,total);
 }
+// Evaluate B(t) directly rather than interpolating between flattened
+// vertices. This is used for arc-length boundary placement.
+static Point cubic_point(Point a,Point b,Point c,Point d,double t){
+ const double u=1.0-t;
+ return {u*u*u*a.x+3*u*u*t*b.x+3*u*t*t*c.x+t*t*t*d.x,
+         u*u*u*a.y+3*u*u*t*b.y+3*u*t*t*c.y+t*t*t*d.y};
+}
 bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,unsigned height,uint8_t *rgba,size_t stride,PageBox box){
  if(!std::isfinite(box.x0)||!std::isfinite(box.y0)||!std::isfinite(box.x1)||!std::isfinite(box.y1)||box.x1<=box.x0||box.y1<=box.y0)return false;
  const double sx=(double)width/(box.x1-box.x0),sy=(double)height/(box.y1-box.y0);
@@ -254,6 +261,8 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     double half_t=0;
     if(!cubic_inverse_arc_length(start,p1,p2,p3,cubic_length*.5,half_t))return false;
     if(half_t<0||half_t>1)return false;
+    const Point midpoint_on_curve=cubic_point(start,p1,p2,p3,half_t);
+    if(!std::isfinite(midpoint_on_curve.x)||!std::isfinite(midpoint_on_curve.y))return false;
    }
    struct Cubic {Point a,b,c,d;unsigned depth;double length_budget;};
    std::vector<Cubic> pending{{start,p1,p2,p3,0,0.01}};
