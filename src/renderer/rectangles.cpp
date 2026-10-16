@@ -17,6 +17,45 @@ static bool number(const std::string& s,double& v){
 static bool space(unsigned char c){return c==0||c==9||c==10||c==12||c==13||c==32;}
 struct Rect {double x,y,w,h;};
 struct Point {double x,y;};
+// Numerically integrate cubic Bezier speed in user-space coordinates.
+// Composite five-point Gauss-Legendre quadrature with bounded bisection.
+// This is an arc-length primitive; dashed curve placement still uses the
+// existing flattened path until inverse arc-length mapping is integrated.
+static bool cubic_arc_length(Point a,Point b,Point c,Point d,double& result){
+ constexpr double nodes[5]={0.0,-0.5384693101056831,0.5384693101056831,-0.9061798459386640,0.9061798459386640};
+ constexpr double weights[5]={0.5688888888888889,0.4786286704993665,0.4786286704993665,0.2369268850561891,0.2369268850561891};
+ auto integrate=[&](double lo,double hi,double& out)->bool{
+  const double mid=(lo+hi)*0.5,half=(hi-lo)*0.5;
+  double sum=0;
+  for(int i=0;i<5;++i){
+   const double t=mid+half*nodes[i],u=1.0-t;
+   const double dx=3.0*(u*u*(b.x-a.x)+2.0*u*t*(c.x-b.x)+t*t*(d.x-c.x));
+   const double dy=3.0*(u*u*(b.y-a.y)+2.0*u*t*(c.y-b.y)+t*t*(d.y-c.y));
+   const double speed=std::hypot(dx,dy);
+   if(!std::isfinite(speed))return false;
+   sum+=weights[i]*speed;
+  }
+  out=sum*half;
+  return std::isfinite(out);
+ };
+ double previous=0;
+ if(!integrate(0,1,previous))return false;
+ for(unsigned n=2;n<=256;n*=2){
+  double total=0;
+  for(unsigned j=0;j<n;++j){
+   double part=0;
+   if(!integrate((double)j/n,(double)(j+1)/n,part))return false;
+   total+=part;
+  }
+  if(!std::isfinite(total))return false;
+  if(std::abs(total-previous)<=1e-9*std::max(1.0,total)){
+   result=total;return true;
+  }
+  previous=total;
+ }
+ result=previous;
+ return true;
+}
 bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,unsigned height,uint8_t *rgba,size_t stride,PageBox box){
  if(!std::isfinite(box.x0)||!std::isfinite(box.y0)||!std::isfinite(box.x1)||!std::isfinite(box.y1)||box.x1<=box.x0||box.y1<=box.y0)return false;
  const double sx=(double)width/(box.x1-box.x0),sy=(double)height/(box.y1-box.y0);
@@ -180,6 +219,11 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    // Adapt the cubic tessellation to device-space curvature.
    // The maximum distance of both control points to the chord bounds
    // the flattening error; subdivide until the bound is small enough.
+   // Measure the actual cubic arc length independently of the chord
+   // approximation; future dash-boundary inversion will use this value.
+   double cubic_length=0;
+   if(!cubic_arc_length(start,p1,p2,p3,cubic_length))return false;
+   if(!std::isfinite(cubic_length))return false;
    struct Cubic {Point a,b,c,d;unsigned depth;double length_budget;};
    std::vector<Cubic> pending{{start,p1,p2,p3,0,0.01}};
    // PDF graphics-state operators can change dash settings after a
