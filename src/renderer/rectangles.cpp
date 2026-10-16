@@ -213,18 +213,15 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     // Collinear control points can still overshoot the endpoint chord.
     // A flatness test based only on perpendicular distance would erase
     // that reversal and change both stroke coverage and dash length.
-    const double chord2=dx*dx+dy*dy;
     double overshoot=0;
-    if(chord2>1e-24){
-     const double tb=(bx*dx+by*dy)/chord2;
-     const double tc=(cx*dx+cy*dy)/chord2;
-     if(!std::isfinite(tb)||!std::isfinite(tc))return false;
-     overshoot=std::max({0.0,-tb*chord,(tb-1.0)*chord,
-                        -tc*chord,(tc-1.0)*chord});
-     // Even when controls lie inside the endpoint interval, reversing
-     // their projected order can create an interior cusp or reversal.
-     // Force subdivision until the control polygon is monotone.
-     if(tb>tc+1e-12)overshoot=std::max(overshoot,(tb-tc)*chord);
+    if(chord>1e-12){
+     // Use normalized chord projections: forming chord squared may
+     // overflow even when the input points and their differences are
+     // finite. The projected distances are in device pixels.
+     const double ux=dx/chord,uy=dy/chord;
+     const double pb=bx*ux+by*uy,pc=cx*ux+cy*uy;
+     if(!std::isfinite(pb)||!std::isfinite(pc))return false;
+     overshoot=std::max({0.0,-pb,pb-chord,-pc,pc-chord,pc-pb});
     }
     if(!std::isfinite(overshoot))return false;
     // For dashed curves, chord length underestimates arc length.
