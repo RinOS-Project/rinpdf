@@ -184,6 +184,10 @@ inline bool cubic_dash_flatten_span(Point a,Point b,Point c,Point d,
  // Force exact endpoints despite floating-point subdivision roundoff.
  result.front()=cubic_point(a,b,c,d,t0);
  result.back()=cubic_point(a,b,c,d,t1);
+ // Even finite controls can overflow during interpolation or
+ // device-space scaling. Never publish a non-finite raster path.
+ for(const Point& point:result)
+  if(!std::isfinite(point.x)||!std::isfinite(point.y))return false;
  output=std::move(result);
  return true;
 }
