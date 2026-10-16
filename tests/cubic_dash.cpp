@@ -59,5 +59,10 @@ int main(){
  if(cubic_dash_flatten_span({nan,0},b,c,d,0,1,1,1,invalid_output))return 32;
  if(cubic_dash_flatten_span(a,{0,inf},c,d,0,1,1,1,invalid_output))return 33;
  if(invalid_output.size()!=1||invalid_output.front().x!=123)return 34;
+ // Finite controls with extreme device scaling must not leak invalid
+ // intermediate raster points into the caller's output buffer.
+ if(cubic_dash_flatten_span({0,0},{1e200,1},{2e200,1},{3e200,0},
+                            0,1,1e200,1,invalid_output))return 35;
+ if(invalid_output.size()!=1||invalid_output.front().x!=123)return 36;
  return 0;
 }
