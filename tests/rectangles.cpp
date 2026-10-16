@@ -703,5 +703,15 @@ int main(){
  reinterpret_cast<const unsigned char*>(closed_cubic_off_seam_late),
  sizeof(closed_cubic_off_seam_late)-1,32,32,off_seam_late.data(),128))return 323;
  if(off_seam!=off_seam_late)return 324;
+ // Closed dashed cubic contours with painted seam and Miter/Bevel joins.
+ const char analytic_miter_seam[]="[100 1] 0 d 0 G 2 w 0 j 4 4 m 4 14 14 14 14 4 c h S";
+ const char analytic_bevel_seam[]="[100 1] 0 d 0 G 2 w 2 j 4 4 m 4 14 14 14 14 4 c h S";
+ std::vector<unsigned char> analytic_miter_pixels(32*32*4),analytic_bevel_pixels(32*32*4);
+ if(!rinpdf::renderer::render_rectangles(
+ reinterpret_cast<const unsigned char*>(analytic_miter_seam),
+ sizeof(analytic_miter_seam)-1,32,32,analytic_miter_pixels.data(),128))return 325;
+ if(!rinpdf::renderer::render_rectangles(
+ reinterpret_cast<const unsigned char*>(analytic_bevel_seam),
+ sizeof(analytic_bevel_seam)-1,32,32,analytic_bevel_pixels.data(),128))return 326;
  return 0;
 }
