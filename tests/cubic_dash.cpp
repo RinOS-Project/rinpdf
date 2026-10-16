@@ -24,16 +24,21 @@ int main(){
  // The closing seam is a join only when paint reaches it from both sides.
  CubicDashSeam seam;
  CubicDashCursor initial;
+ CubicDashCursor terminal{0,1};
  if(!cubic_dash_start({2,2},0,initial))return 12;
- if(!cubic_dash_closed_seam({2,2},initial,{true,true},{true,true},seam))return 13;
+ if(!cubic_dash_closed_seam({2,2},initial,terminal,{true,true},{true,true},seam))return 13;
  if(!seam.joined||!seam.first_painted||!seam.last_painted)return 14;
- if(!cubic_dash_closed_seam({2,2},initial,{true,false},{true,true},seam))return 15;
+ if(!cubic_dash_closed_seam({2,2},initial,terminal,{true,false},{true,true},seam))return 15;
  if(seam.joined||seam.last_painted)return 16;
- if(!cubic_dash_closed_seam({2,2},initial,{}, {},seam))return 17;
+ if(!cubic_dash_closed_seam({2,2},initial,terminal,{}, {},seam))return 17;
  if(seam.joined)return 18;
  if(!cubic_dash_start({2,2},2,initial))return 19;
- if(!cubic_dash_closed_seam({2,2},initial,{true},{true},seam))return 20;
+ if(!cubic_dash_closed_seam({2,2},initial,terminal,{true},{true},seam))return 20;
  if(seam.joined||seam.first_painted)return 21;
- if(cubic_dash_closed_seam({2,2},initial,{true},{},seam))return 22;
+ if(cubic_dash_closed_seam({2,2},initial,terminal,{true},{},seam))return 22;
+ if(!cubic_dash_start({2,2},0,initial))return 23;
+ terminal={0,0};
+ if(!cubic_dash_closed_seam({2,2},initial,terminal,{true},{true},seam))return 24;
+ if(seam.joined)return 25;
  return 0;
 }
