@@ -15,3 +15,5 @@ test('rinpdf-antialias',executable('rinpdf-antialias','antialias.cpp',dependenci
 test('rinpdf-clip-budget',executable('rinpdf-clip-budget','clip_budget.cpp',dependencies:rinpdf_dep))
 
 test('rinpdf-cubic-arc',executable('rinpdf-cubic-arc','cubic_arc.cpp',dependencies:rinpdf_dep))
+
+test('rinpdf-cubic-dash',executable('rinpdf-cubic-dash','cubic_dash.cpp',dependencies:rinpdf_dep))
