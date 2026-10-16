@@ -16,5 +16,16 @@ int main(){
   const Point p{5,5};
   if(!cubic_arc_length(p,p,p,p,total)||total!=0)return 8;
   if(!cubic_inverse_arc_length(p,p,p,p,0,t)||t!=0)return 9;
+  // Tangents for a curved segment entering and leaving a closing seam.
+  Point tangent{};
+  if(!cubic_endpoint_tangent({0,0},{1,2},{3,2},{4,0},false,tangent))return 10;
+  if(std::abs(tangent.x-1/std::sqrt(5.0))>1e-8||
+     std::abs(tangent.y-2/std::sqrt(5.0))>1e-8)return 11;
+  if(!cubic_endpoint_tangent({0,0},{1,2},{3,2},{4,0},true,tangent))return 12;
+  if(std::abs(tangent.x-1/std::sqrt(5.0))>1e-8||
+     std::abs(tangent.y+2/std::sqrt(5.0))>1e-8)return 13;
+  if(!cubic_endpoint_tangent({0,0},{0,0},{0,2},{4,0},false,tangent))return 14;
+  if(std::abs(tangent.x)>1e-8||std::abs(tangent.y-1)>1e-8)return 15;
+  if(cubic_endpoint_tangent({1,1},{1,1},{1,1},{1,1},true,tangent))return 16;
   return 0;
 }
