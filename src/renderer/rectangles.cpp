@@ -523,18 +523,20 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
         continue;
        }
        const bool run_starts_here=!continuing_on;
-       const unsigned steps=is_curve?64:1;
-       for(unsigned j=0;j<steps;++j){
+       std::vector<Point> vertices;
+       if(is_curve){
+        const auto& curve=cubic_strokes[curve_index];
+        if(!cubic_dash_flatten_span(curve.p0,curve.p1,curve.p2,curve.p3,
+             span.t0,span.t1,sx,sy,vertices))return false;
+       }else{
+        const Point p=points[i-1],q=points[i];
+        vertices.push_back({p.x+(q.x-p.x)*span.t0,p.y+(q.y-p.y)*span.t0});
+        vertices.push_back({p.x+(q.x-p.x)*span.t1,p.y+(q.y-p.y)*span.t1});
+       }
+       const size_t steps=vertices.size()-1;
+       for(size_t j=0;j<steps;++j){
         if(++emitted>65536)return false;
-        const double t0=span.t0+(span.t1-span.t0)*(double)j/steps;
-        const double t1=span.t0+(span.t1-span.t0)*(double)(j+1)/steps;
-        const auto& curve=is_curve?cubic_strokes[curve_index]:cubic_strokes.front();
-        const Point a=is_curve?cubic_point(curve.p0,curve.p1,curve.p2,curve.p3,t0):
-          Point{points[i-1].x+(points[i].x-points[i-1].x)*t0,
-                points[i-1].y+(points[i].y-points[i-1].y)*t0};
-        const Point b=is_curve?cubic_point(curve.p0,curve.p1,curve.p2,curve.p3,t1):
-          Point{points[i-1].x+(points[i].x-points[i-1].x)*t1,
-                points[i-1].y+(points[i].y-points[i-1].y)*t1};
+        const Point a=vertices[j],b=vertices[j+1];
         if(!std::isfinite(a.x)||!std::isfinite(a.y)||
            !std::isfinite(b.x)||!std::isfinite(b.y))return false;
         // Only exposed on-run endpoints receive caps. The end of one
