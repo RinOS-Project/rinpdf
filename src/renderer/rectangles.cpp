@@ -194,11 +194,25 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
      std::max(std::abs(bx*dy-by*dx),std::abs(cx*dy-cy*dx))/chord:
      std::max(std::hypot(bx,by),std::hypot(cx,cy));
     if(!std::isfinite(deviation))return false;
+    // Collinear control points can still overshoot the endpoint chord.
+    // A flatness test based only on perpendicular distance would erase
+    // that reversal and change both stroke coverage and dash length.
+    const double chord2=dx*dx+dy*dy;
+    double overshoot=0;
+    if(chord2>1e-24){
+     const double tb=(bx*dx+by*dy)/chord2;
+     const double tc=(cx*dx+cy*dy)/chord2;
+     if(!std::isfinite(tb)||!std::isfinite(tc))return false;
+     overshoot=std::max({0.0,-tb*chord,(tb-1.0)*chord,
+                        -tc*chord,(tc-1.0)*chord});
+    }
+    if(!std::isfinite(overshoot))return false;
+    const double flatness=std::max(deviation,overshoot);
     // Reaching the subdivision limit is not evidence of sufficient
     // geometric accuracy. Reject unresolved curves rather than
     // silently emitting a potentially visibly incorrect chord.
-    if(deviation>tolerance_pixels&&seg.depth>=12)return false;
-    if(deviation<=tolerance_pixels){
+    if(flatness>tolerance_pixels&&seg.depth>=12)return false;
+    if(flatness<=tolerance_pixels){
      if(poly.size()>=4096)return false;
      poly.push_back(seg.d);polygon_matrices.back().push_back(matrix());
      continue;
