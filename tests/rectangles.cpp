@@ -560,5 +560,11 @@ int main(){
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(dashed_cubic),sizeof(dashed_cubic)-1,16,16,dashed_cubic_pixels.data(),64))return 278;
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(solid_cubic),sizeof(solid_cubic)-1,16,16,solid_cubic_pixels.data(),64))return 279;
  if(dashed_cubic_pixels==solid_cubic_pixels)return 280;
+ const char dashed_collinear[]="[2 1] 0 d 0 G 1 w 0 J 2 8 m 5 8 9 8 12 8 c S";
+ const char dashed_straight[]="[2 1] 0 d 0 G 1 w 0 J 2 8 m 12 8 l S";
+ std::vector<unsigned char> dashed_collinear_pixels(16*16*4),dashed_straight_pixels(16*16*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(dashed_collinear),sizeof(dashed_collinear)-1,16,16,dashed_collinear_pixels.data(),64))return 281;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(dashed_straight),sizeof(dashed_straight)-1,16,16,dashed_straight_pixels.data(),64))return 282;
+ if(dashed_collinear_pixels!=dashed_straight_pixels)return 283;
  return 0;
 }
