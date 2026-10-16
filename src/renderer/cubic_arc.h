@@ -74,4 +74,32 @@ inline Point cubic_point(Point a,Point b,Point c,Point d,double t){
  return {u*u*u*a.x+3*u*u*t*b.x+3*u*t*t*c.x+t*t*t*d.x,
          u*u*u*a.y+3*u*u*t*b.y+3*u*t*t*c.y+t*t*t*d.y};
 }
+// Derivative-based tangent at a cubic endpoint. Degenerate endpoint
+// handles use the first nonzero control polygon vector, preserving
+// direction at an endpoint cusp without normalizing a zero vector.
+inline bool cubic_endpoint_tangent(Point a,Point b,Point c,Point d,
+                                   bool at_end,Point& tangent){
+ Point from=at_end?d:a;
+ Point candidate[3];
+ if(at_end){
+  candidate[0]={d.x-c.x,d.y-c.y};
+  candidate[1]={d.x-b.x,d.y-b.y};
+  candidate[2]={d.x-a.x,d.y-a.y};
+ }else{
+  candidate[0]={b.x-a.x,b.y-a.y};
+  candidate[1]={c.x-a.x,c.y-a.y};
+  candidate[2]={d.x-a.x,d.y-a.y};
+ }
+ (void)from;
+ for(Point v:candidate){
+  const double len=std::hypot(v.x,v.y);
+  if(!std::isfinite(len))return false;
+  if(len>0){
+   tangent={v.x/len,v.y/len};
+   return std::isfinite(tangent.x)&&std::isfinite(tangent.y);
+  }
+ }
+ return false;
+}
+
 }
