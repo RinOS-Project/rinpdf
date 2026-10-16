@@ -607,5 +607,11 @@ int main(){
  for(size_t i=0;i<scaled_curved_pixels.size();i+=4)
   if(scaled_curved_pixels[i]<255){scaled_curved_ink=true;break;}
  if(!scaled_curved_ink)return 297;
+ const char dash_before_curve[]="[2 1] 0 d 0 G 1 w 2 2 m 2 14 14 2 14 14 c S";
+ const char dash_after_curve[]="0 G 1 w 2 2 m 2 14 14 2 14 14 c [2 1] 0 d S";
+ std::vector<unsigned char> dash_before_pixels(16*16*4),dash_after_pixels(16*16*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(dash_before_curve),sizeof(dash_before_curve)-1,16,16,dash_before_pixels.data(),64))return 298;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(dash_after_curve),sizeof(dash_after_curve)-1,16,16,dash_after_pixels.data(),64))return 299;
+ if(dash_before_pixels!=dash_after_pixels)return 300;
  return 0;
 }
