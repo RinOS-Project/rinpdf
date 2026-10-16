@@ -474,7 +474,11 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
       }
       for(size_t k=0;k<spans.size();++k){
        const auto& span=spans[k];
-       if(!span.painted||span.t1<=span.t0)continue;
+       if(!span.painted||span.t1<=span.t0){
+        if(!span.painted)continuing_on=false;
+        continue;
+       }
+       const bool run_starts_here=!continuing_on;
        const unsigned steps=is_curve?64:1;
        for(unsigned j=0;j<steps;++j){
         if(++emitted>65536)return false;
@@ -503,7 +507,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
         }
         const bool at_start=j==0,at_end=j+1==steps;
         if(!segment(a,b,mat,false,
-           at_start&&!continuing_on,at_end&&!next_on))return false;
+           at_start&&run_starts_here,at_end&&!next_on))return false;
         if(at_end)continuing_on=next_on;
        }
       }
