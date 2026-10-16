@@ -691,5 +691,17 @@ int main(){
  for(size_t i=0;i<closed_join_pixels.size();i+=4)
   if(closed_join_pixels[i]<255){closed_ink=true;break;}
  if(!closed_ink)return 321;
+ // Closed cubic contours with an off-region at the seam take the
+ // inverse arc-length path without synthesizing a seam join.
+ const char closed_cubic_off_seam[]="[2 2] 2 d 0 G 1 w 0 J 4 4 m 4 14 14 14 14 4 c h S";
+ const char closed_cubic_off_seam_late[]="0 G 1 w 0 J 4 4 m 4 14 14 14 14 4 c h [2 2] 2 d S";
+ std::vector<unsigned char> off_seam(32*32*4),off_seam_late(32*32*4);
+ if(!rinpdf::renderer::render_rectangles(
+ reinterpret_cast<const unsigned char*>(closed_cubic_off_seam),
+ sizeof(closed_cubic_off_seam)-1,32,32,off_seam.data(),128))return 322;
+ if(!rinpdf::renderer::render_rectangles(
+ reinterpret_cast<const unsigned char*>(closed_cubic_off_seam_late),
+ sizeof(closed_cubic_off_seam_late)-1,32,32,off_seam_late.data(),128))return 323;
+ if(off_seam!=off_seam_late)return 324;
  return 0;
 }
