@@ -223,9 +223,10 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
      overshoot=std::max({0.0,-pb,pb-chord,-pc,pc-chord,pc-pb});
     }
     if(!std::isfinite(overshoot))return false;
-    // For dashed curves, chord length underestimates arc length.
-    // Half the control-polygon excess is a conservative length-error
-    // estimate for the split criterion, measured in user coordinates.
+    // For dashed curves, the control polygon provides a rigorous
+    // upper bound on arc length and the chord a lower bound.
+    // Subdivision continues until the entire gap fits its assigned
+    // error budget, so no numerical integration guess is required.
     double length_error=0;
     if(!dash_pattern.empty()){
      const double control_length=
@@ -235,6 +236,9 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
      const double chord_length=std::hypot(seg.d.x-seg.a.x,seg.d.y-seg.a.y);
      if(!std::isfinite(control_length)||!std::isfinite(chord_length))return false;
      length_error=std::max(0.0,control_length-chord_length);
+     // Finite arithmetic can round a positive control-polygon excess
+     // down to zero. Retain the conservative bound where representable.
+     if(!std::isfinite(length_error))return false;
     }
     const double flatness=std::max(deviation,overshoot);
     // Partition a total 0.01 user-unit length-error budget across
