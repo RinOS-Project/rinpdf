@@ -616,5 +616,11 @@ int main(){
  const char cubic_after_line[]="0 G 1 w 2 2 m 4 2 l 6 2 8 2 10 2 c S";
  std::vector<unsigned char> cubic_after_line_pixels(16*16*4);
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(cubic_after_line),sizeof(cubic_after_line)-1,16,16,cubic_after_line_pixels.data(),64))return 301;
+ const char translated_stroke_ctm[]="1 0 0 1 2 3 cm 0 G 2 w 1 J 2 2 m 10 2 l S";
+ const char translated_stroke_explicit[]="0 G 2 w 1 J 4 5 m 12 5 l S";
+ std::vector<unsigned char> translated_ctm_pixels(16*16*4),translated_explicit_pixels(16*16*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(translated_stroke_ctm),sizeof(translated_stroke_ctm)-1,16,16,translated_ctm_pixels.data(),64))return 302;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(translated_stroke_explicit),sizeof(translated_stroke_explicit)-1,16,16,translated_explicit_pixels.data(),64))return 303;
+ if(translated_ctm_pixels!=translated_explicit_pixels)return 304;
  return 0;
 }
