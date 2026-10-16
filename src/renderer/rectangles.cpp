@@ -250,17 +250,9 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    // Adapt the cubic tessellation to device-space curvature.
    // The maximum distance of both control points to the chord bounds
    // the flattening error; subdivide until the bound is small enough.
-   // Measure the actual cubic arc length independently of the chord
-   // approximation; future dash-boundary inversion will use this value.
-   double cubic_length=0;
-   if(!cubic_arc_length(start,p1,p2,p3,cubic_length))return false;
-   if(!std::isfinite(cubic_length))return false;
-   // Exercise the inverse on the actual curve, including loops and
-   // stationary points. Dash placement is not yet wired to this t.
-   // Do not integrate every curve merely to validate a future dash
-   // feature. Keep numerical arc-length work out of the solid-path
-   // hot path until stroke-time dash boundary placement is connected.
-   if(!std::isfinite(cubic_length))return false;
+   // Arc-length helpers are reserved for stroke-time dash placement.
+   // Avoid quadrature during path construction: the path may be filled,
+   // and dash state can change before the stroke operator.
    struct Cubic {Point a,b,c,d;unsigned depth;double length_budget;};
    std::vector<Cubic> pending{{start,p1,p2,p3,0,0.01}};
    // PDF graphics-state operators can change dash settings after a
