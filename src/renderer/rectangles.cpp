@@ -194,7 +194,11 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
      std::max(std::abs(bx*dy-by*dx),std::abs(cx*dy-cy*dx))/chord:
      std::max(std::hypot(bx,by),std::hypot(cx,cy));
     if(!std::isfinite(deviation))return false;
-    if(deviation<=tolerance_pixels||seg.depth>=12){
+    // Reaching the subdivision limit is not evidence of sufficient
+    // geometric accuracy. Reject unresolved curves rather than
+    // silently emitting a potentially visibly incorrect chord.
+    if(deviation>tolerance_pixels&&seg.depth>=12)return false;
+    if(deviation<=tolerance_pixels){
      if(poly.size()>=4096)return false;
      poly.push_back(seg.d);polygon_matrices.back().push_back(matrix());
      continue;
