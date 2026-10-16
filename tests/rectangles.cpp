@@ -581,5 +581,11 @@ int main(){
  const char high_curvature_dashed[]="[1 1] 0 d 0 G 1 w 0 J 1 1 m 1 15 15 1 15 15 c S";
  std::vector<unsigned char> high_curvature_dashed_pixels(16*16*4);
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(high_curvature_dashed),sizeof(high_curvature_dashed)-1,16,16,high_curvature_dashed_pixels.data(),64))return 288;
+ const char scaled_collinear_cubic[]="0 G 1 w 0 J 1 8 m 5 8 11 8 15 8 c S";
+ const char scaled_collinear_line[]="0 G 1 w 0 J 1 8 m 15 8 l S";
+ std::vector<unsigned char> scaled_collinear_pixels(16*16*4),scaled_collinear_line_pixels(16*16*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(scaled_collinear_cubic),sizeof(scaled_collinear_cubic)-1,16,16,scaled_collinear_pixels.data(),64))return 289;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(scaled_collinear_line),sizeof(scaled_collinear_line)-1,16,16,scaled_collinear_line_pixels.data(),64))return 290;
+ if(scaled_collinear_pixels!=scaled_collinear_line_pixels)return 291;
  return 0;
 }
