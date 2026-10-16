@@ -64,5 +64,15 @@ int main(){
  if(cubic_dash_flatten_span({0,0},{1e200,1},{2e200,1},{3e200,0},
                             0,1,1e200,1,invalid_output))return 35;
  if(invalid_output.size()!=1||invalid_output.front().x!=123)return 36;
+ // Reversed collinear handles can create an interior turn even when
+ // both handles project inside the endpoints' chord.
+ std::vector<Point> reversed;
+ if(!cubic_dash_flatten_span({0,0},{9,0},{1,0},{10,0},
+                             0,1,1,1,reversed))return 37;
+ if(reversed.size()<=2)return 38;
+ if(std::abs(reversed.front().x)>1e-9||
+    std::abs(reversed.back().x-10)>1e-9)return 39;
+ for(const Point& point:reversed)
+  if(!std::isfinite(point.x)||!std::isfinite(point.y))return 40;
  return 0;
 }
