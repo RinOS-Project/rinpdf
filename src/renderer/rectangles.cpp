@@ -186,7 +186,16 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    // Dashed curves need a tighter polyline approximation because each
    // chord contributes to cumulative dash phase as well as coverage.
    // This is still an approximation, not exact Bezier arc length.
-   const double tolerance_pixels=dash_pattern.empty()?0.25:0.0625;
+   double tolerance_pixels=0.25;
+   if(!dash_pattern.empty()){
+    // A tiny dash interval needs finer geometry than a fixed pixel
+    // tolerance, otherwise its on/off boundaries drift across corners.
+    double min_dash=std::numeric_limits<double>::infinity();
+    for(double dash:dash_pattern)if(dash>0)min_dash=std::min(min_dash,dash);
+    if(!std::isfinite(min_dash))return false;
+    tolerance_pixels=std::min(0.0625,min_dash*std::min(sx,sy)/8.0);
+    if(!std::isfinite(tolerance_pixels)||tolerance_pixels<=0)return false;
+   }
    double accepted_length_excess=0;
    while(!pending.empty()){
     const Cubic seg=pending.back();pending.pop_back();
