@@ -348,11 +348,14 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     const double radius=0.5*effective_width*metric;
     const double determinant=mat.a*mat.d-mat.b*mat.c;
     if(!std::isfinite(determinant)||std::abs(determinant)<1e-12)return false;
+    const double ia=mat.d/determinant,ib=-mat.b/determinant;
+    const double ic=-mat.c/determinant,id=mat.a/determinant;
+    if(!std::isfinite(ia)||!std::isfinite(ib)||!std::isfinite(ic)||!std::isfinite(id))return false;
     if(!std::isfinite(denom)||!std::isfinite(radius)||radius>2048)return false;
     // Inverse-transform the segment direction once, not for each pixel.
     const double vx=dx/sx,vy=-dy/sy;
-    const double ex=(mat.d*vx-mat.c*vy)/determinant;
-    const double ey=(-mat.b*vx+mat.a*vy)/determinant;
+    const double ex=ia*vx+ic*vy;
+    const double ey=ib*vx+id*vy;
     const double length2=ex*ex+ey*ey;
     if(!std::isfinite(length2))return false;
     const double inv_length=length2>0?1.0/std::sqrt(length2):0.0;
@@ -377,7 +380,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     for(unsigned yy=y_begin;yy<y_end;++yy)for(unsigned xx=x_begin;xx<x_end;++xx){
      auto covered=[&](double px,double py){
       const double ux=(px-x0)/sx,uy=-(py-y0)/sy;
-      const double qx=(mat.d*ux-mat.c*uy)/determinant,qy=(-mat.b*ux+mat.a*uy)/determinant;
+      const double qx=ia*ux+ic*uy,qy=ib*ux+id*uy;
       if(!std::isfinite(qx)||!std::isfinite(qy))return false;
       if(length2==0&&!join_disk&&line_cap==2)
        return std::abs(qx)<=effective_width*0.5&&std::abs(qy)<=effective_width*0.5;
