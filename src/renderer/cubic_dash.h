@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstddef>
 #include <vector>
+#include <utility>
 namespace rinpdf::renderer {
 // An exact-arc-length dash span expressed in cubic parameter space.
 // Carries the consumed dash phase back to the caller for connected segments.
