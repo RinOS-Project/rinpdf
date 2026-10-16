@@ -67,4 +67,28 @@ inline bool cubic_dash_spans(Point a,Point b,Point c,Point d,
  spans=std::move(next);
  return true;
 }
+struct LineDashSpan {double t0,t1;bool painted;};
+// Share the same cursor for straight and cubic segments in one subpath.
+inline bool line_dash_spans(Point a,Point b,const std::vector<double>& pattern,
+ CubicDashCursor& cursor,std::vector<LineDashSpan>& spans){
+ if(pattern.empty())return false;
+ const double length=std::hypot(b.x-a.x,b.y-a.y);
+ if(!std::isfinite(length))return false;
+ std::vector<LineDashSpan> result;
+ if(length==0){spans.clear();return true;}
+ double distance=0;
+ for(size_t n=0;n<65536&&distance<length;++n){
+  if(cursor.remaining<=0&&!cubic_dash_advance(pattern,cursor))return false;
+  const double step=std::min(cursor.remaining,length-distance);
+  if(!std::isfinite(step)||step<=0||distance+step<=distance)return false;
+  const double next=distance+step;
+  result.push_back({distance/length,next/length,cursor.index%2==0});
+  cursor.remaining-=step;
+  distance=next;
+ }
+ if(distance<length)return false;
+ spans=std::move(result);
+ return true;
+}
+
 }
