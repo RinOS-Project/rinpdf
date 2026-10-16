@@ -569,5 +569,8 @@ int main(){
  const char dashed_curved_phase[]="[3 2] 1 d 0 G 1 w 0 J 2 2 m 2 14 14 2 14 14 c S";
  std::vector<unsigned char> dashed_curved_phase_pixels(16*16*4);
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(dashed_curved_phase),sizeof(dashed_curved_phase)-1,16,16,dashed_curved_phase_pixels.data(),64))return 284;
+ const char chained_dashed_curves[]="[3 2] 1 d 0 G 1 w 0 J 2 2 m 2 14 14 2 14 14 c 14 2 2 14 2 2 c S";
+ std::vector<unsigned char> chained_dash_pixels(16*16*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(chained_dashed_curves),sizeof(chained_dashed_curves)-1,16,16,chained_dash_pixels.data(),64))return 285;
  return 0;
 }
