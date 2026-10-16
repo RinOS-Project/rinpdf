@@ -643,5 +643,19 @@ int main(){
  bool has_ink=false;
  for(size_t i=0;i<exact_before.size();i+=4)if(exact_before[i]<255){has_ink=true;break;}
  if(!has_ink)return 310;
+ // Mixed path must preserve dash phase across both lines and cubics.
+ const char mixed_path[]="[2 1] 0 d 0 G 1 w 0 J 1 8 m 5 8 l 7 12 11 12 13 8 c 15 8 l S";
+ std::vector<unsigned char> mixed_pixels(32*32*4);
+ if(!rinpdf::renderer::render_rectangles(
+ reinterpret_cast<const unsigned char*>(mixed_path),sizeof(mixed_path)-1,
+ 32,32,mixed_pixels.data(),128))return 311;
+ bool mixed_ink=false;
+ for(size_t i=0;i<mixed_pixels.size();i+=4)if(mixed_pixels[i]<255){mixed_ink=true;break;}
+ if(!mixed_ink)return 312;
+ const char double_cubic[]="[2 1] 1 d 0 G 1 w 0 J 2 8 m 4 12 8 12 10 8 c 12 4 16 4 18 8 c S";
+ std::vector<unsigned char> double_pixels(32*32*4);
+ if(!rinpdf::renderer::render_rectangles(
+ reinterpret_cast<const unsigned char*>(double_cubic),sizeof(double_cubic)-1,
+ 32,32,double_pixels.data(),128))return 313;
  return 0;
 }
