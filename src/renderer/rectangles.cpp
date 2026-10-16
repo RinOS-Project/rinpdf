@@ -179,8 +179,8 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    // Adapt the cubic tessellation to device-space curvature.
    // The maximum distance of both control points to the chord bounds
    // the flattening error; subdivide until the bound is small enough.
-   struct Cubic {Point a,b,c,d;unsigned depth;};
-   std::vector<Cubic> pending{{start,p1,p2,p3,0}};
+   struct Cubic {Point a,b,c,d;unsigned depth;double length_budget;};
+   std::vector<Cubic> pending{{start,p1,p2,p3,0,0.01}};
    // Evaluate the flattening error in device pixels. The previous
    // scalar tolerance ignored anisotropic page scaling.
    // Dashed curves need a tighter polyline approximation because each
@@ -196,7 +196,6 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     tolerance_pixels=std::min(0.0625,min_dash*std::min(sx,sy)/8.0);
     if(!std::isfinite(tolerance_pixels)||tolerance_pixels<=0)return false;
    }
-   double accepted_length_excess=0;
    // Keep the subdivision stack bounded independently of the output
    // vertex limit, including adversarial curves that never flatten.
    constexpr size_t max_pending_cubics=4096;
@@ -238,23 +237,17 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
      length_error=std::max(0.0,control_length-chord_length);
     }
     const double flatness=std::max(deviation,overshoot);
-    // Control polygon length minus chord length is an upper bound on
-    // the unknown arc-length excess. Keep the sum of accepted segment
-    // bounds under a per-curve budget instead of allowing 0.01 error
-    // independently for thousands of flattened pieces.
-    const double length_budget=0.01;
-    // Account for accepted chord error without rescanning the pending
-    // stack. The curve-wide upper bound is checked at each emission.
+    // Partition a total 0.01 user-unit length-error budget across
+    // the subdivision tree. The sum of all leaf allowances is <=0.01,
+    // independent of traversal order and without quadratic rescans.
     const bool length_accurate=dash_pattern.empty()||
-      (std::isfinite(accepted_length_excess+length_error)&&
-       accepted_length_excess+length_error<=length_budget);
+      length_error<=seg.length_budget;
     // Reaching the subdivision limit is not evidence of sufficient
     // geometric accuracy. Reject unresolved curves rather than
     // silently emitting a potentially visibly incorrect chord.
     if((flatness>tolerance_pixels||!length_accurate)&&seg.depth>=12)return false;
     if(flatness<=tolerance_pixels&&length_accurate){
      if(poly.size()>=4096)return false;
-     accepted_length_excess+=length_error;
      poly.push_back(seg.d);polygon_matrices.back().push_back(matrix());
      continue;
     }
@@ -262,8 +255,8 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     const Point ab=midpoint(seg.a,seg.b),bc=midpoint(seg.b,seg.c),cd=midpoint(seg.c,seg.d);
     const Point abc=midpoint(ab,bc),bcd=midpoint(bc,cd),mid=midpoint(abc,bcd);
     if(pending.size()>max_pending_cubics-2)return false;
-    pending.push_back({mid,bcd,cd,seg.d,seg.depth+1});
-    pending.push_back({seg.a,ab,abc,mid,seg.depth+1});
+    pending.push_back({mid,bcd,cd,seg.d,seg.depth+1,seg.length_budget*.5});
+    pending.push_back({seg.a,ab,abc,mid,seg.depth+1,seg.length_budget*.5});
    }
    stack.clear();
   }else if(word=="h"){
