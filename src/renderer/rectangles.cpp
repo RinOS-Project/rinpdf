@@ -55,8 +55,9 @@ static bool cubic_arc_length(Point a,Point b,Point c,Point d,double& result,doub
   }
   previous=total;
  }
- result=previous;
- return true;
+ // The quadrature failed to meet its convergence criterion.
+ // Do not report an unverified approximation as successful.
+ return false;
 }
 // Invert the numerically integrated arc length by monotone bisection.
 // The caller can use the returned t to place a dash boundary on B(t).
@@ -74,7 +75,10 @@ static bool cubic_inverse_arc_length(Point a,Point b,Point c,Point d,
   if(length<distance)lo=mid;else hi=mid;
  }
  t=(lo+hi)*0.5;
- return std::isfinite(t);
+ if(!std::isfinite(t))return false;
+ double check=0;
+ if(!cubic_arc_length(a,b,c,d,check,t))return false;
+ return std::abs(check-distance)<=1e-7*std::max(1.0,total);
 }
 bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,unsigned height,uint8_t *rgba,size_t stride,PageBox box){
  if(!std::isfinite(box.x0)||!std::isfinite(box.y0)||!std::isfinite(box.x1)||!std::isfinite(box.y1)||box.x1<=box.x0||box.y1<=box.y0)return false;
