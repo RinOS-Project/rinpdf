@@ -566,5 +566,8 @@ int main(){
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(dashed_collinear),sizeof(dashed_collinear)-1,16,16,dashed_collinear_pixels.data(),64))return 281;
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(dashed_straight),sizeof(dashed_straight)-1,16,16,dashed_straight_pixels.data(),64))return 282;
  if(dashed_collinear_pixels!=dashed_straight_pixels)return 283;
+ const char dashed_curved_phase[]="[3 2] 1 d 0 G 1 w 0 J 2 2 m 2 14 14 2 14 14 c S";
+ std::vector<unsigned char> dashed_curved_phase_pixels(16*16*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(dashed_curved_phase),sizeof(dashed_curved_phase)-1,16,16,dashed_curved_phase_pixels.data(),64))return 284;
  return 0;
 }
