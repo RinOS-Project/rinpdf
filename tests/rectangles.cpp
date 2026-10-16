@@ -598,5 +598,14 @@ int main(){
  bool loop_ink=false;
  for(size_t i=0;i<loop_cubic_pixels.size();i+=4)if(loop_cubic_pixels[i]<255){loop_ink=true;break;}
  if(!loop_ink)return 295;
+ const char scaled_curved_stroke[]="0 G 1 w 1 J 2 2 m 2 14 14 2 14 14 c S";
+ std::vector<unsigned char> scaled_curved_pixels(128*32*4);
+ if(!rinpdf::renderer::render_rectangles_box(
+     reinterpret_cast<const unsigned char*>(scaled_curved_stroke),
+     sizeof(scaled_curved_stroke)-1,128,32,scaled_curved_pixels.data(),512,{0,0,16,16}))return 296;
+ bool scaled_curved_ink=false;
+ for(size_t i=0;i<scaled_curved_pixels.size();i+=4)
+  if(scaled_curved_pixels[i]<255){scaled_curved_ink=true;break;}
+ if(!scaled_curved_ink)return 297;
  return 0;
 }
