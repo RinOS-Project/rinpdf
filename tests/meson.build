@@ -13,3 +13,5 @@ test('rinpdf-path-mask',executable('rinpdf-path-mask','path_mask.cpp',dependenci
 test('rinpdf-antialias',executable('rinpdf-antialias','antialias.cpp',dependencies:rinpdf_dep))
 
 test('rinpdf-clip-budget',executable('rinpdf-clip-budget','clip_budget.cpp',dependencies:rinpdf_dep))
+
+test('rinpdf-cubic-arc',executable('rinpdf-cubic-arc','cubic_arc.cpp',dependencies:rinpdf_dep))
