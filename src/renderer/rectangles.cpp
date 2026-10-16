@@ -260,10 +260,18 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     const Point abc=midpoint(ab,bc),bcd=midpoint(bc,cd),mid=midpoint(abc,bcd);
     for(const Point point:{ab,bc,cd,abc,bcd,mid})
      if(!std::isfinite(point.x)||!std::isfinite(point.y))return false;
-    // Stop if floating-point midpoint rounding prevents subdivision:
-    // accepting an unresolved segment here would violate the error bound.
-    if((mid.x==seg.a.x&&mid.y==seg.a.y)||
-       (mid.x==seg.d.x&&mid.y==seg.d.y))return false;
+    // A looping cubic can legitimately have its midpoint equal to
+    // an endpoint while its control polygon still has nonzero extent.
+    // Only reject subdivision when *both* children are geometrically
+    // identical to the parent (no representable progress). The depth
+    // limit independently bounds repeated degenerate subdivisions.
+    const bool no_progress=
+      ab.x==seg.a.x&&ab.y==seg.a.y&&
+      abc.x==seg.a.x&&abc.y==seg.a.y&&
+      mid.x==seg.a.x&&mid.y==seg.a.y&&
+      bcd.x==seg.d.x&&bcd.y==seg.d.y&&
+      cd.x==seg.d.x&&cd.y==seg.d.y;
+    if(no_progress)return false;
     if(pending.size()>max_pending_cubics-2)return false;
     pending.push_back({mid,bcd,cd,seg.d,seg.depth+1,seg.length_budget*.5});
     pending.push_back({seg.a,ab,abc,mid,seg.depth+1,seg.length_budget*.5});
