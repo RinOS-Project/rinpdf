@@ -182,21 +182,11 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    // the flattening error; subdivide until the bound is small enough.
    struct Cubic {Point a,b,c,d;unsigned depth;double length_budget;};
    std::vector<Cubic> pending{{start,p1,p2,p3,0,0.01}};
-   // Evaluate the flattening error in device pixels. The previous
-   // scalar tolerance ignored anisotropic page scaling.
-   // Dashed curves need a tighter polyline approximation because each
-   // chord contributes to cumulative dash phase as well as coverage.
-   // This is still an approximation, not exact Bezier arc length.
-   double tolerance_pixels=0.25;
-   if(!dash_pattern.empty()){
-    // A tiny dash interval needs finer geometry than a fixed pixel
-    // tolerance, otherwise its on/off boundaries drift across corners.
-    double min_dash=std::numeric_limits<double>::infinity();
-    for(double dash:dash_pattern)if(dash>0)min_dash=std::min(min_dash,dash);
-    if(!std::isfinite(min_dash))return false;
-    tolerance_pixels=std::min(0.0625,min_dash*std::min(sx,sy)/8.0);
-    if(!std::isfinite(tolerance_pixels)||tolerance_pixels<=0)return false;
-   }
+   // PDF graphics-state operators can change dash settings after a
+   // path is constructed and before it is stroked. Tessellation must
+   // not depend on the dash state at the time of the 'c' operator.
+   // Use a consistent geometry and arc-length tolerance for all cubics.
+   constexpr double tolerance_pixels=0.0625;
    // Keep the subdivision stack bounded independently of the output
    // vertex limit, including adversarial curves that never flatten.
    constexpr size_t max_pending_cubics=4096;
@@ -233,7 +223,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     // Subdivision continues until the entire gap fits its assigned
     // error budget, so no numerical integration guess is required.
     double length_error=0;
-    if(!dash_pattern.empty()){
+    {
      const double control_length=
       std::hypot(seg.b.x-seg.a.x,seg.b.y-seg.a.y)+
       std::hypot(seg.c.x-seg.b.x,seg.c.y-seg.b.y)+
@@ -249,8 +239,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     // Partition a total 0.01 user-unit length-error budget across
     // the subdivision tree. The sum of all leaf allowances is <=0.01,
     // independent of traversal order and without quadratic rescans.
-    const bool length_accurate=dash_pattern.empty()||
-      length_error<=seg.length_budget;
+    const bool length_accurate=length_error<=seg.length_budget;
     // Reaching the subdivision limit is not evidence of sufficient
     // geometric accuracy. Reject unresolved curves rather than
     // silently emitting a potentially visibly incorrect chord.
