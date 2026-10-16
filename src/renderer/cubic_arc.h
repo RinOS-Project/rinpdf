@@ -79,7 +79,6 @@ inline Point cubic_point(Point a,Point b,Point c,Point d,double t){
 // direction at an endpoint cusp without normalizing a zero vector.
 inline bool cubic_endpoint_tangent(Point a,Point b,Point c,Point d,
                                    bool at_end,Point& tangent){
- Point from=at_end?d:a;
  Point candidate[3];
  if(at_end){
   candidate[0]={d.x-c.x,d.y-c.y};
@@ -90,7 +89,6 @@ inline bool cubic_endpoint_tangent(Point a,Point b,Point c,Point d,
   candidate[1]={c.x-a.x,c.y-a.y};
   candidate[2]={d.x-a.x,d.y-a.y};
  }
- (void)from;
  for(Point v:candidate){
   const double len=std::hypot(v.x,v.y);
   if(!std::isfinite(len))return false;
