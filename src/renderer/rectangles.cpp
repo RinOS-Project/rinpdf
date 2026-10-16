@@ -206,8 +206,12 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     const double bx=(seg.b.x-seg.a.x)*sx,by=(seg.b.y-seg.a.y)*sy;
     const double cx=(seg.c.x-seg.a.x)*sx,cy=(seg.c.y-seg.a.y)*sy;
     const double chord=std::hypot(dx,dy);
+    // Use a unit chord normal rather than cross products followed by
+    // division. This avoids unnecessary overflow for large but finite
+    // device-space control vectors.
     const double deviation=chord>1e-12?
-     std::max(std::abs(bx*dy-by*dx),std::abs(cx*dy-cy*dx))/chord:
+     std::max(std::abs(bx*(dy/chord)-by*(dx/chord)),
+              std::abs(cx*(dy/chord)-cy*(dx/chord))):
      std::max(std::hypot(bx,by),std::hypot(cx,cy));
     if(!std::isfinite(deviation))return false;
     // Collinear control points can still overshoot the endpoint chord.
