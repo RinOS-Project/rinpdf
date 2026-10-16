@@ -250,7 +250,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     // A degenerate segment has no exposed square footprint when both
     // endpoint caps are suppressed (e.g. an interior zero-length edge).
     if(denom==0&&!join_disk&&(line_cap==0||
-       (line_cap==2&&!start_cap&&!end_cap)))return true;
+       (!start_cap&&!end_cap)))return true;
     const double metric=std::hypot(std::hypot(mat.a*sx,mat.b*sy),std::hypot(mat.c*sx,mat.d*sy));
     const double effective_width=line_width==0?(metric>0?1.0/metric:0):line_width;
     // Frobenius norm bounds the transformed unit normals. This is a
