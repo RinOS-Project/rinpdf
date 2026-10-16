@@ -228,7 +228,13 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
      length_error=std::max(0.0,control_length-chord_length);
     }
     const double flatness=std::max(deviation,overshoot);
-    const bool length_accurate=dash_pattern.empty()||length_error<=0.01;
+    // Control polygon length minus chord length is an upper bound on
+    // the unknown arc-length excess. Keep the sum of accepted segment
+    // bounds under a per-curve budget instead of allowing 0.01 error
+    // independently for thousands of flattened pieces.
+    const double length_budget=0.01;
+    const bool length_accurate=dash_pattern.empty()||
+      length_error<=length_budget/4096.0;
     // Reaching the subdivision limit is not evidence of sufficient
     // geometric accuracy. Reject unresolved curves rather than
     // silently emitting a potentially visibly incorrect chord.
