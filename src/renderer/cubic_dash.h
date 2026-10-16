@@ -163,12 +163,19 @@ inline bool cubic_dash_flatten_span(Point a,Point b,Point c,Point d,
   const double len=std::hypot(dx,dy);
   const double ux=len>0?dx/len:0,uy=len>0?dy/len:0;
   double max_error=0;
+  double previous_projection=0;
   for(unsigned j=1;j<=2;++j){
    const double vx=(n.p[j].x-n.p[0].x)*scale_x;
    const double vy=(n.p[j].y-n.p[0].y)*scale_y;
    const double projected=vx*ux+vy*uy;
    const double deviation=len>0?std::abs(vx*uy-vy*ux):std::hypot(vx,vy);
-   max_error=std::max(max_error,std::max(deviation,std::max(0.0,std::max(-projected,projected-len))));
+   if(!std::isfinite(projected)||!std::isfinite(deviation))return false;
+   // Collinear controls may reverse order *inside* the chord without
+   // exceeding its endpoints. Such a curve is not a straight segment.
+   const double reversal=std::max(0.0,previous_projection-projected);
+   max_error=std::max({max_error,deviation,reversal,
+                       std::max(0.0,std::max(-projected,projected-len))});
+   previous_projection=projected;
   }
   if(!std::isfinite(max_error))return false;
   if(max_error<=0.125){
