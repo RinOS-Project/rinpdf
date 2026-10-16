@@ -1,6 +1,7 @@
 #include "rectangles.h"
 #include "path_mask.h"
 #include "cubic_arc.h"
+#include "cubic_dash.h"
 #include <algorithm>
 #include <charconv>
 #include <cmath>
@@ -41,6 +42,9 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
  std::vector<double> stack;
  std::vector<Rect> path;
  std::vector<std::vector<Point>> polygons;
+ // Single-cubic stroke fast path; all other paths retain the existing renderer.
+ struct CubicStroke {Point p0,p1,p2,p3;size_t polygon,endpoint;};
+ std::vector<CubicStroke> cubic_strokes;
  struct Matrix {double a,b,c,d;};
  std::vector<std::vector<Matrix>> polygon_matrices;
  std::vector<Matrix> rect_matrices;
@@ -160,7 +164,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    if(stack.size()!=2||polygons.empty()||polygons.back().size()>=4096)return false;
    const Point point=transform(stack[0],stack[1]);
    if(!std::isfinite(point.x)||!std::isfinite(point.y))return false;
-   polygons.back().push_back(point);polygon_matrices.back().push_back(matrix());stack.clear();
+   polygons.back().push_back(point);polygon_matrices.back().push_back(matrix());cubic_strokes.clear();stack.clear();
   }else if(word=="c"||word=="v"||word=="y"){
    if(pending_path_clip||pending_rect_clip)return false;
    const size_t required=word=="c"?6:4;
@@ -177,6 +181,8 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     p1=transform_curve(stack[0],stack[1]);p2=transform_curve(stack[2],stack[3]);p3=p2;
    }
    if(!std::isfinite(p1.x)||!std::isfinite(p1.y)||!std::isfinite(p2.x)||!std::isfinite(p2.y)||!std::isfinite(p3.x)||!std::isfinite(p3.y))return false;
+   const bool isolated_cubic=polygons.size()==1&&path.empty()&&poly.size()==1;
+   if(!isolated_cubic)cubic_strokes.clear();
    // Adapt the cubic tessellation to device-space curvature.
    // The maximum distance of both control points to the chord bounds
    // the flattening error; subdivide until the bound is small enough.
@@ -276,6 +282,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     pending.push_back({mid,bcd,cd,seg.d,seg.depth+1,seg.length_budget*.5});
     pending.push_back({seg.a,ab,abc,mid,seg.depth+1,seg.length_budget*.5});
    }
+   if(isolated_cubic)cubic_strokes.push_back({start,p1,p2,p3,0,poly.size()-1});
    stack.clear();
   }else if(word=="h"){
    if(pending_path_clip)return false;
@@ -286,10 +293,12 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    if(polygons.back().size()>=4096)return false;
    const Point first=polygons.back().front(),last=polygons.back().back();
    if(first.x!=last.x||first.y!=last.y){polygons.back().push_back(first);polygon_matrices.back().push_back(matrix());}
+   cubic_strokes.clear();
   }else if(word=="re"){
    if(pending_path_clip)return false;
    if(pending_rect_clip)return false;
    if(stack.size()!=4||path.size()>=4096||polygons.size()>=4096)return false;
+   cubic_strokes.clear();
    {const Point p=transform(stack[0],stack[1]);const Point q=transform(stack[0]+stack[2],stack[1]+stack[3]);
    const Point p1=transform(stack[0]+stack[2],stack[1]),p3=transform(stack[0],stack[1]+stack[3]);
    for(const Point point:{p,p1,q,p3})if(!std::isfinite(point.x)||!std::isfinite(point.y))return false;
@@ -306,7 +315,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    // Move-only subpaths contain no drawable segments.
    bool drawable=!path.empty();
    for(const auto& poly:polygons)if(poly.size()>1)drawable=true;
-   if(!drawable){path.clear();polygons.clear();polygon_matrices.clear();rect_matrices.clear();continue;}
+   if(!drawable){path.clear();polygons.clear();polygon_matrices.clear();rect_matrices.clear();cubic_strokes.clear();cubic_strokes.clear();continue;}
    if(word=="s"&&!polygons.empty()){
     auto& poly=polygons.back();
     // A final move-only subpath has no closing segment.
@@ -425,7 +434,51 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
      }
      return true;
     }
-    const size_t count=dash_pattern.size(),cycle=count*(count%2?2:1);
+    // Keep original curve geometry until stroke time so dash boundaries
+   // are placed at B(inverse_arc_length(distance)), not at chord lengths.
+   if(cubic_strokes.size()==1&&path_index==0&&polygons.size()==1&&
+      points.size()==cubic_strokes.front().endpoint+1){
+    const auto& curve=cubic_strokes.front();
+    const Matrix mat=matrices.back();
+    // The isolated curve uses one CTM. Reject mismatches rather than
+    // interpreting transformed arc length as PDF user-space length.
+    if(matrices.front().a==mat.a&&matrices.front().b==mat.b&&
+       matrices.front().c==mat.c&&matrices.front().d==mat.d){
+     const double det=mat.a*mat.d-mat.b*mat.c;
+     if(!std::isfinite(det)||std::abs(det)<1e-12)return false;
+     auto user=[&](Point p)->Point{
+      return {(mat.d*p.x-mat.c*p.y)/det,
+              (-mat.b*p.x+mat.a*p.y)/det};
+     };
+     // Translation does not affect lengths. Work in the inverse CTM
+     // coordinates and transform only the resulting curve points back.
+     const Point p0=user(curve.p0),p1=user(curve.p1),
+                 p2=user(curve.p2),p3=user(curve.p3);
+     CubicDashCursor cursor;
+     std::vector<CubicDashSpan> spans;
+     if(!cubic_dash_start(dash_pattern,dash_phase,cursor)||
+        !cubic_dash_spans(p0,p1,p2,p3,dash_pattern,cursor,spans))return false;
+     size_t emitted=0;
+     for(const auto& span:spans){
+      if(!span.painted||span.t1<=span.t0)continue;
+      // Bounded polyline rasterization within an exact arc-length run.
+      // The dash endpoints are exact (subject to numerical tolerance).
+      constexpr unsigned steps=64;
+      for(unsigned j=0;j<steps;++j){
+       if(++emitted>65536)return false;
+       const double t0=span.t0+(span.t1-span.t0)*j/steps;
+       const double t1=span.t0+(span.t1-span.t0)*(j+1)/steps;
+       const Point a=cubic_point(curve.p0,curve.p1,curve.p2,curve.p3,t0);
+       const Point b=cubic_point(curve.p0,curve.p1,curve.p2,curve.p3,t1);
+       if(!std::isfinite(a.x)||!std::isfinite(a.y)||
+          !std::isfinite(b.x)||!std::isfinite(b.y))return false;
+       if(!segment(a,b,mat,false,j==0,j+1==steps))return false;
+      }
+     }
+     return true;
+    }
+   }
+   const size_t count=dash_pattern.size(),cycle=count*(count%2?2:1);
     size_t index=0;
     double remaining=dash_pattern[0],phase=dash_phase;
     // Skip zero-width dash elements without consuming path length.
@@ -786,7 +839,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     pixel[2]=(uint8_t)((alpha*cb+(255-alpha)*pixel[2]+127)/255);
     pixel[3]=255;
    }
-   path.clear();polygons.clear();polygon_matrices.clear();rect_matrices.clear();
+   path.clear();polygons.clear();polygon_matrices.clear();rect_matrices.clear();cubic_strokes.clear();
   }else if(word=="f"||word=="F"||word=="f*"){
    if((pending_rect_clip||pending_path_clip)||!stack.empty())return false;
    unsigned char cr=(unsigned char)std::lround(red*255);
@@ -815,7 +868,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     pixel[2]=(uint8_t)((alpha*cb+(255-alpha)*pixel[2]+127)/255);
     pixel[3]=255;
    }
-   path.clear();polygons.clear();polygon_matrices.clear();rect_matrices.clear();
+   path.clear();polygons.clear();polygon_matrices.clear();rect_matrices.clear();cubic_strokes.clear();
   }else if(word=="n"){
    if(!stack.empty())return false;
    if(pending_path_clip){
@@ -848,7 +901,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     clip_mask=std::make_shared<const std::vector<uint8_t>>(std::move(mask));
     pending_rect_clip=false;
    }
-   path.clear();polygons.clear();polygon_matrices.clear();rect_matrices.clear();
+   path.clear();polygons.clear();polygon_matrices.clear();rect_matrices.clear();cubic_strokes.clear();
   }else return false; // Do not silently ignore unknown operators.
  }
  return !reading_dash&&!dash_array_ready&&dash_values.empty()&&stack.empty()&&path.empty()&&polygons.empty()&&saved.empty()&&!pending_rect_clip&&!pending_path_clip;
