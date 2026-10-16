@@ -657,5 +657,24 @@ int main(){
  if(!rinpdf::renderer::render_rectangles(
  reinterpret_cast<const unsigned char*>(double_cubic),sizeof(double_cubic)-1,
  32,32,double_pixels.data(),128))return 313;
+ // Off-to-on transitions inside a mixed path must regain an exposed cap.
+ // A monotonic collinear cubic and its equivalent straight segment should
+ // paint the same dash-run endpoints under butt caps.
+ const char mixed_collinear[]="[2 3] 0 d 0 G 1 w 0 J 2 8 m 6 8 l 8 8 12 8 14 8 c S";
+ const char mixed_linear[]="[2 3] 0 d 0 G 1 w 0 J 2 8 m 6 8 l 14 8 l S";
+ std::vector<unsigned char> mixed_collinear_img(32*32*4),mixed_linear_img(32*32*4);
+ if(!rinpdf::renderer::render_rectangles(
+ reinterpret_cast<const unsigned char*>(mixed_collinear),sizeof(mixed_collinear)-1,
+ 32,32,mixed_collinear_img.data(),128))return 314;
+ if(!rinpdf::renderer::render_rectangles(
+ reinterpret_cast<const unsigned char*>(mixed_linear),sizeof(mixed_linear)-1,
+ 32,32,mixed_linear_img.data(),128))return 315;
+ if(mixed_collinear_img!=mixed_linear_img)return 316;
+ const char mixed_collinear_after[]="0 G 1 w 0 J 2 8 m 6 8 l 8 8 12 8 14 8 c [2 3] 0 d S";
+ std::vector<unsigned char> mixed_collinear_after_img(32*32*4);
+ if(!rinpdf::renderer::render_rectangles(
+ reinterpret_cast<const unsigned char*>(mixed_collinear_after),sizeof(mixed_collinear_after)-1,
+ 32,32,mixed_collinear_after_img.data(),128))return 317;
+ if(mixed_collinear_img!=mixed_collinear_after_img)return 318;
  return 0;
 }
