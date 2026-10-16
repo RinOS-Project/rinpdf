@@ -197,6 +197,9 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     if(!std::isfinite(tolerance_pixels)||tolerance_pixels<=0)return false;
    }
    double accepted_length_excess=0;
+   // Keep the subdivision stack bounded independently of the output
+   // vertex limit, including adversarial curves that never flatten.
+   constexpr size_t max_pending_cubics=4096;
    while(!pending.empty()){
     const Cubic seg=pending.back();pending.pop_back();
     const double dx=(seg.d.x-seg.a.x)*sx,dy=(seg.d.y-seg.a.y)*sy;
@@ -261,6 +264,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     auto midpoint=[](Point a,Point b){return Point{(a.x+b.x)*.5,(a.y+b.y)*.5};};
     const Point ab=midpoint(seg.a,seg.b),bc=midpoint(seg.b,seg.c),cd=midpoint(seg.c,seg.d);
     const Point abc=midpoint(ab,bc),bcd=midpoint(bc,cd),mid=midpoint(abc,bcd);
+    if(pending.size()>max_pending_cubics-2)return false;
     pending.push_back({mid,bcd,cd,seg.d,seg.depth+1});
     pending.push_back({seg.a,ab,abc,mid,seg.depth+1});
    }
