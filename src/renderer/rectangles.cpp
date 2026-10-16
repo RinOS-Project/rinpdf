@@ -21,7 +21,9 @@ struct Point {double x,y;};
 // Composite five-point Gauss-Legendre quadrature with bounded bisection.
 // This is an arc-length primitive; dashed curve placement still uses the
 // existing flattened path until inverse arc-length mapping is integrated.
-static bool cubic_arc_length(Point a,Point b,Point c,Point d,double& result){
+static bool cubic_arc_length(Point a,Point b,Point c,Point d,double& result,double upper=1.0){
+ if(!std::isfinite(upper)||upper<0||upper>1)return false;
+ if(upper==0){result=0;return true;}
  constexpr double nodes[5]={0.0,-0.5384693101056831,0.5384693101056831,-0.9061798459386640,0.9061798459386640};
  constexpr double weights[5]={0.5688888888888889,0.4786286704993665,0.4786286704993665,0.2369268850561891,0.2369268850561891};
  auto integrate=[&](double lo,double hi,double& out)->bool{
@@ -39,12 +41,12 @@ static bool cubic_arc_length(Point a,Point b,Point c,Point d,double& result){
   return std::isfinite(out);
  };
  double previous=0;
- if(!integrate(0,1,previous))return false;
+ if(!integrate(0,upper,previous))return false;
  for(unsigned n=2;n<=256;n*=2){
   double total=0;
   for(unsigned j=0;j<n;++j){
    double part=0;
-   if(!integrate((double)j/n,(double)(j+1)/n,part))return false;
+   if(!integrate(upper*(double)j/n,upper*(double)(j+1)/n,part))return false;
    total+=part;
   }
   if(!std::isfinite(total))return false;
@@ -55,6 +57,24 @@ static bool cubic_arc_length(Point a,Point b,Point c,Point d,double& result){
  }
  result=previous;
  return true;
+}
+// Invert the numerically integrated arc length by monotone bisection.
+// The caller can use the returned t to place a dash boundary on B(t).
+static bool cubic_inverse_arc_length(Point a,Point b,Point c,Point d,
+                                    double distance,double& t){
+ double total=0;
+ if(!cubic_arc_length(a,b,c,d,total)||!std::isfinite(distance)||distance<0)return false;
+ if(distance==0){t=0;return true;}
+ if(distance>=total){if(distance>total+1e-9*std::max(1.0,total))return false;t=1;return true;}
+ double lo=0,hi=1;
+ for(unsigned i=0;i<48;++i){
+  const double mid=(lo+hi)*0.5;
+  double length=0;
+  if(!cubic_arc_length(a,b,c,d,length,mid))return false;
+  if(length<distance)lo=mid;else hi=mid;
+ }
+ t=(lo+hi)*0.5;
+ return std::isfinite(t);
 }
 bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,unsigned height,uint8_t *rgba,size_t stride,PageBox box){
  if(!std::isfinite(box.x0)||!std::isfinite(box.y0)||!std::isfinite(box.x1)||!std::isfinite(box.y1)||box.x1<=box.x0||box.y1<=box.y0)return false;
@@ -224,6 +244,13 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    double cubic_length=0;
    if(!cubic_arc_length(start,p1,p2,p3,cubic_length))return false;
    if(!std::isfinite(cubic_length))return false;
+   // Exercise the inverse on the actual curve, including loops and
+   // stationary points. Dash placement is not yet wired to this t.
+   if(cubic_length>0){
+    double half_t=0;
+    if(!cubic_inverse_arc_length(start,p1,p2,p3,cubic_length*.5,half_t))return false;
+    if(half_t<0||half_t>1)return false;
+   }
    struct Cubic {Point a,b,c,d;unsigned depth;double length_budget;};
    std::vector<Cubic> pending{{start,p1,p2,p3,0,0.01}};
    // PDF graphics-state operators can change dash settings after a
