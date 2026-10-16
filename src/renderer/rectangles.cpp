@@ -256,6 +256,15 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     const double determinant=mat.a*mat.d-mat.b*mat.c;
     if(!std::isfinite(determinant)||std::abs(determinant)<1e-12)return false;
     if(!std::isfinite(denom)||!std::isfinite(radius)||radius>2048)return false;
+    // Inverse-transform the segment direction once, not for each pixel.
+    const double vx=dx/sx,vy=-dy/sy;
+    const double ex=(mat.d*vx-mat.c*vy)/determinant;
+    const double ey=(-mat.b*vx+mat.a*vy)/determinant;
+    const double length2=ex*ex+ey*ey;
+    if(!std::isfinite(length2))return false;
+    const double inv_length=length2>0?1.0/std::sqrt(length2):0.0;
+    const double extension=length2>0?(effective_width*0.5)*inv_length:0.0;
+    if(!std::isfinite(inv_length)||!std::isfinite(extension))return false;
     // A square cap extends half a width along and across the segment.
     // Its diagonal reaches sqrt(2) times the half-width from an endpoint.
     double extra=radius*(line_cap==2&&!join_disk?std::sqrt(2.0):1.0)+1;
@@ -272,22 +281,18 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     for(unsigned yy=y_begin;yy<y_end;++yy)for(unsigned xx=x_begin;xx<x_end;++xx){
      auto covered=[&](double px,double py){
       const double ux=(px-x0)/sx,uy=-(py-y0)/sy;
-      const double vx=dx/sx,vy=-dy/sy;
       const double qx=(mat.d*ux-mat.c*uy)/determinant,qy=(-mat.b*ux+mat.a*uy)/determinant;
-      const double ex=(mat.d*vx-mat.c*vy)/determinant,ey=(-mat.b*vx+mat.a*vy)/determinant;
-      const double length2=ex*ex+ey*ey;
-      if(!std::isfinite(length2)||!std::isfinite(qx)||!std::isfinite(qy))return false;
+      if(!std::isfinite(qx)||!std::isfinite(qy))return false;
       if(length2==0&&!join_disk&&line_cap==2)
        return std::abs(qx)<=effective_width*0.5&&std::abs(qy)<=effective_width*0.5;
       double projection=length2>0?(qx*ex+qy*ey)/length2:0;
       if(!std::isfinite(projection))return false;
       if(!join_disk&&((!start_cap&&projection<0)||(!end_cap&&projection>1)||
         (line_cap==0&&(projection<0||projection>1))))return false;
-      const double extension=length2>0?(effective_width*0.5)/std::sqrt(length2):0;
       if(!join_disk&&line_cap==2){
        if(projection<(start_cap?-extension:0)||projection>(end_cap?1+extension:1))return false;
        // Square caps extend the stroke rectangle, not its circular ends.
-       const double perpendicular=std::abs(qx*ey-qy*ex)/std::sqrt(length2);
+       const double perpendicular=std::abs(qx*ey-qy*ex)*inv_length;
        return perpendicular<=effective_width*0.5;
       }
       const double t=join_disk?std::clamp(projection,0.0,1.0):
