@@ -205,6 +205,10 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
      if(!std::isfinite(tb)||!std::isfinite(tc))return false;
      overshoot=std::max({0.0,-tb*chord,(tb-1.0)*chord,
                         -tc*chord,(tc-1.0)*chord});
+     // Even when controls lie inside the endpoint interval, reversing
+     // their projected order can create an interior cusp or reversal.
+     // Force subdivision until the control polygon is monotone.
+     if(tb>tc+1e-12)overshoot=std::max(overshoot,(tb-tc)*chord);
     }
     if(!std::isfinite(overshoot))return false;
     const double flatness=std::max(deviation,overshoot);
