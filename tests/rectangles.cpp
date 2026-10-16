@@ -572,5 +572,11 @@ int main(){
  const char chained_dashed_curves[]="[3 2] 1 d 0 G 1 w 0 J 2 2 m 2 14 14 2 14 14 c 14 2 2 14 2 2 c S";
  std::vector<unsigned char> chained_dash_pixels(16*16*4);
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(chained_dashed_curves),sizeof(chained_dashed_curves)-1,16,16,chained_dash_pixels.data(),64))return 285;
+ const char fine_dash_curve[]="[0.5 0.5] 0.25 d 0 G 1 w 0 J 2 2 m 2 14 14 2 14 14 c S";
+ std::vector<unsigned char> fine_dash_curve_pixels(16*16*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(fine_dash_curve),sizeof(fine_dash_curve)-1,16,16,fine_dash_curve_pixels.data(),64))return 286;
+ bool fine_dash_ink=false;
+ for(size_t i=0;i<fine_dash_curve_pixels.size();i+=4)if(fine_dash_curve_pixels[i]<255){fine_dash_ink=true;break;}
+ if(!fine_dash_ink)return 287;
  return 0;
 }
