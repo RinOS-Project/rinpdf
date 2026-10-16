@@ -64,10 +64,10 @@ int main(){
  if(cubic_dash_flatten_span({0,0},{1e200,1},{2e200,1},{3e200,0},
                             0,1,1e200,1,invalid_output))return 35;
  if(invalid_output.size()!=1||invalid_output.front().x!=123)return 36;
- // Reversed collinear handles can create an interior turn even when
- // both handles project inside the endpoints' chord.
+ // A cubic with control handles beyond its endpoints has a genuine
+ // reversal; reversed handles inside the chord need not reverse B'(t).
  std::vector<Point> reversed;
- if(!cubic_dash_flatten_span({0,0},{9,0},{1,0},{10,0},
+ if(!cubic_dash_flatten_span({0,0},{12,0},{-2,0},{10,0},
                              0,1,1,1,reversed))return 37;
  if(reversed.size()<=2)return 38;
  if(std::abs(reversed.front().x)>1e-9||
