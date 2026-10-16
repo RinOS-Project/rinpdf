@@ -151,6 +151,7 @@ inline bool cubic_dash_flatten_span(Point a,Point b,Point c,Point d,
  Point left[4],right[4],range[4],unused[4];
  split(a,b,c,d,t0,left,right);
  const double relative=(t1-t0)/(1-t0);
+ if(!std::isfinite(relative)||relative<=0||relative>1)return false;
  split(right[0],right[1],right[2],right[3],relative,range,unused);
  struct Node{Point p[4];unsigned depth;};
  std::vector<Node> pending;
