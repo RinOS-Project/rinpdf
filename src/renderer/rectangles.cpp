@@ -293,7 +293,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    if(polygons.back().size()>=4096)return false;
    const Point first=polygons.back().front(),last=polygons.back().back();
    if(first.x!=last.x||first.y!=last.y){polygons.back().push_back(first);polygon_matrices.back().push_back(matrix());}
-   cubic_strokes.clear();
+   // Preserve cubic control points for stroke-time closed contour dashes.
   }else if(word=="re"){
    if(pending_path_clip)return false;
    if(pending_rect_clip)return false;
@@ -438,7 +438,51 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     // combination of straight segments and original cubic curves.
     const bool open_path=points.size()<2||
       points.front().x!=points.back().x||points.front().y!=points.back().y;
-    if(!cubic_strokes.empty()&&path_index==0&&polygons.size()==1&&open_path){
+    // Closed contours without a painted seam can use inverse-arc-length
+    // positioning safely. Painted seams still use the established join
+    // path until cubic tangent joins are implemented.
+    bool use_cubic_dashes=open_path;
+    if(!open_path&&!cubic_strokes.empty()&&path_index==0&&polygons.size()==1){
+     CubicDashCursor probe,initial;
+     if(!cubic_dash_start(dash_pattern,dash_phase,probe))return false;
+     initial=probe;
+     size_t curve_index=0;
+     bool last_on=false,any=false;
+     for(size_t i=1;i<points.size();){
+      const Matrix mat=matrices[i];
+      const double det=mat.a*mat.d-mat.b*mat.c;
+      if(!std::isfinite(det)||std::abs(det)<1e-12)return false;
+      auto user=[&](Point p)->Point{
+       return {(mat.d*p.x-mat.c*p.y)/det,(-mat.b*p.x+mat.a*p.y)/det};
+      };
+      const bool curved=curve_index<cubic_strokes.size()&&cubic_strokes[curve_index].start==i-1;
+      size_t last=i;
+      if(curved){
+       const auto& curve=cubic_strokes[curve_index];
+       last=curve.endpoint;
+       if(last>=points.size()||last<i)return false;
+       for(size_t k=i;k<=last;++k)
+        if(matrices[k].a!=mat.a||matrices[k].b!=mat.b||
+           matrices[k].c!=mat.c||matrices[k].d!=mat.d)return false;
+       std::vector<CubicDashSpan> spans;
+       if(!cubic_dash_spans(user(curve.p0),user(curve.p1),user(curve.p2),
+                           user(curve.p3),dash_pattern,probe,spans))return false;
+       if(!spans.empty()){any=true;last_on=spans.back().painted;}
+       ++curve_index;
+      }else{
+       std::vector<LineDashSpan> spans;
+       if(!line_dash_spans(user(points[i-1]),user(points[i]),
+                           dash_pattern,probe,spans))return false;
+       if(!spans.empty()){any=true;last_on=spans.back().painted;}
+      }
+      i=last+1;
+     }
+     CubicDashSeam seam;
+     if(!cubic_dash_closed_seam(dash_pattern,initial,probe,
+                               {last_on},{any},seam))return false;
+     use_cubic_dashes=!seam.joined;
+    }
+    if(!cubic_strokes.empty()&&path_index==0&&polygons.size()==1&&use_cubic_dashes){
      CubicDashCursor cursor;
      if(!cubic_dash_start(dash_pattern,dash_phase,cursor))return false;
      size_t curve_index=0,emitted=0;
