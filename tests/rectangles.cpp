@@ -578,5 +578,8 @@ int main(){
  bool fine_dash_ink=false;
  for(size_t i=0;i<fine_dash_curve_pixels.size();i+=4)if(fine_dash_curve_pixels[i]<255){fine_dash_ink=true;break;}
  if(!fine_dash_ink)return 287;
+ const char high_curvature_dashed[]="[1 1] 0 d 0 G 1 w 0 J 1 1 m 1 15 15 1 15 15 c S";
+ std::vector<unsigned char> high_curvature_dashed_pixels(16*16*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(high_curvature_dashed),sizeof(high_curvature_dashed)-1,16,16,high_curvature_dashed_pixels.data(),64))return 288;
  return 0;
 }
