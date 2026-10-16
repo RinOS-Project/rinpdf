@@ -234,8 +234,25 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     // bounds under a per-curve budget instead of allowing 0.01 error
     // independently for thousands of flattened pieces.
     const double length_budget=0.01;
+    // Reserve error budget for pending siblings. Otherwise an early
+    // accepted segment can consume all allowance and force later
+    // segments to exceed the depth limit even when a valid global
+    // subdivision exists.
+    double pending_excess=0;
+    if(!dash_pattern.empty()){
+     for(const Cubic& future:pending){
+      const double control=
+       std::hypot(future.b.x-future.a.x,future.b.y-future.a.y)+
+       std::hypot(future.c.x-future.b.x,future.c.y-future.b.y)+
+       std::hypot(future.d.x-future.c.x,future.d.y-future.c.y);
+      const double chord=std::hypot(future.d.x-future.a.x,future.d.y-future.a.y);
+      if(!std::isfinite(control)||!std::isfinite(chord))return false;
+      pending_excess+=std::max(0.0,control-chord);
+      if(!std::isfinite(pending_excess))return false;
+     }
+    }
     const bool length_accurate=dash_pattern.empty()||
-      accepted_length_excess+length_error<=length_budget;
+      accepted_length_excess+length_error+pending_excess<=length_budget;
     // Reaching the subdivision limit is not evidence of sufficient
     // geometric accuracy. Reject unresolved curves rather than
     // silently emitting a potentially visibly incorrect chord.
