@@ -214,12 +214,26 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
      if(tb>tc+1e-12)overshoot=std::max(overshoot,(tb-tc)*chord);
     }
     if(!std::isfinite(overshoot))return false;
+    // For dashed curves, chord length underestimates arc length.
+    // Half the control-polygon excess is a conservative length-error
+    // estimate for the split criterion, measured in user coordinates.
+    double length_error=0;
+    if(!dash_pattern.empty()){
+     const double control_length=
+      std::hypot(seg.b.x-seg.a.x,seg.b.y-seg.a.y)+
+      std::hypot(seg.c.x-seg.b.x,seg.c.y-seg.b.y)+
+      std::hypot(seg.d.x-seg.c.x,seg.d.y-seg.c.y);
+     const double chord_length=std::hypot(seg.d.x-seg.a.x,seg.d.y-seg.a.y);
+     if(!std::isfinite(control_length)||!std::isfinite(chord_length))return false;
+     length_error=std::max(0.0,control_length-chord_length);
+    }
     const double flatness=std::max(deviation,overshoot);
+    const bool length_accurate=dash_pattern.empty()||length_error<=0.01;
     // Reaching the subdivision limit is not evidence of sufficient
     // geometric accuracy. Reject unresolved curves rather than
     // silently emitting a potentially visibly incorrect chord.
-    if(flatness>tolerance_pixels&&seg.depth>=12)return false;
-    if(flatness<=tolerance_pixels){
+    if((flatness>tolerance_pixels||!length_accurate)&&seg.depth>=12)return false;
+    if(flatness<=tolerance_pixels&&length_accurate){
      if(poly.size()>=4096)return false;
      poly.push_back(seg.d);polygon_matrices.back().push_back(matrix());
      continue;
