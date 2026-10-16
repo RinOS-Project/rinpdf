@@ -257,13 +257,10 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    if(!std::isfinite(cubic_length))return false;
    // Exercise the inverse on the actual curve, including loops and
    // stationary points. Dash placement is not yet wired to this t.
-   if(cubic_length>0){
-    double half_t=0;
-    if(!cubic_inverse_arc_length(start,p1,p2,p3,cubic_length*.5,half_t))return false;
-    if(half_t<0||half_t>1)return false;
-    const Point midpoint_on_curve=cubic_point(start,p1,p2,p3,half_t);
-    if(!std::isfinite(midpoint_on_curve.x)||!std::isfinite(midpoint_on_curve.y))return false;
-   }
+   // Do not integrate every curve merely to validate a future dash
+   // feature. Keep numerical arc-length work out of the solid-path
+   // hot path until stroke-time dash boundary placement is connected.
+   if(!std::isfinite(cubic_length))return false;
    struct Cubic {Point a,b,c,d;unsigned depth;double length_budget;};
    std::vector<Cubic> pending{{start,p1,p2,p3,0,0.01}};
    // PDF graphics-state operators can change dash settings after a
