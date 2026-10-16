@@ -258,6 +258,12 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     auto midpoint=[](Point a,Point b){return Point{(a.x+b.x)*.5,(a.y+b.y)*.5};};
     const Point ab=midpoint(seg.a,seg.b),bc=midpoint(seg.b,seg.c),cd=midpoint(seg.c,seg.d);
     const Point abc=midpoint(ab,bc),bcd=midpoint(bc,cd),mid=midpoint(abc,bcd);
+    for(const Point point:{ab,bc,cd,abc,bcd,mid})
+     if(!std::isfinite(point.x)||!std::isfinite(point.y))return false;
+    // Stop if floating-point midpoint rounding prevents subdivision:
+    // accepting an unresolved segment here would violate the error bound.
+    if((mid.x==seg.a.x&&mid.y==seg.a.y)||
+       (mid.x==seg.d.x&&mid.y==seg.d.y))return false;
     if(pending.size()>max_pending_cubics-2)return false;
     pending.push_back({mid,bcd,cd,seg.d,seg.depth+1,seg.length_budget*.5});
     pending.push_back({seg.a,ab,abc,mid,seg.depth+1,seg.length_budget*.5});
