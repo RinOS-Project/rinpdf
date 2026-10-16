@@ -176,12 +176,32 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     p1=transform_curve(stack[0],stack[1]);p2=transform_curve(stack[2],stack[3]);p3=p2;
    }
    if(!std::isfinite(p1.x)||!std::isfinite(p1.y)||!std::isfinite(p2.x)||!std::isfinite(p2.y)||!std::isfinite(p3.x)||!std::isfinite(p3.y))return false;
-   for(unsigned step=1;step<=16;++step){
-    double t=(double)step/16,u=1-t;
-    Point point{u*u*u*start.x+3*u*u*t*p1.x+3*u*t*t*p2.x+t*t*t*p3.x,
-                u*u*u*start.y+3*u*u*t*p1.y+3*u*t*t*p2.y+t*t*t*p3.y};
-    if(!std::isfinite(point.x)||!std::isfinite(point.y))return false;
-    poly.push_back(point);polygon_matrices.back().push_back(matrix());
+   // Adapt the cubic tessellation to device-space curvature.
+   // The maximum distance of both control points to the chord bounds
+   // the flattening error; subdivide until the bound is small enough.
+   struct Cubic {Point a,b,c,d;unsigned depth;};
+   std::vector<Cubic> pending{{start,p1,p2,p3,0}};
+   const double tolerance=0.25/std::max(sx,sy);
+   while(!pending.empty()){
+    const Cubic seg=pending.back();pending.pop_back();
+    const double dx=seg.d.x-seg.a.x,dy=seg.d.y-seg.a.y;
+    const double chord=std::hypot(dx,dy);
+    const double deviation=chord>1e-12?
+     std::max(std::abs((seg.b.x-seg.a.x)*dy-(seg.b.y-seg.a.y)*dx),
+              std::abs((seg.c.x-seg.a.x)*dy-(seg.c.y-seg.a.y)*dx))/chord:
+     std::max(std::hypot(seg.b.x-seg.a.x,seg.b.y-seg.a.y),
+              std::hypot(seg.c.x-seg.a.x,seg.c.y-seg.a.y));
+    if(!std::isfinite(deviation))return false;
+    if(deviation<=tolerance||seg.depth>=12){
+     if(poly.size()>=4096)return false;
+     poly.push_back(seg.d);polygon_matrices.back().push_back(matrix());
+     continue;
+    }
+    auto midpoint=[](Point a,Point b){return Point{(a.x+b.x)*.5,(a.y+b.y)*.5};};
+    const Point ab=midpoint(seg.a,seg.b),bc=midpoint(seg.b,seg.c),cd=midpoint(seg.c,seg.d);
+    const Point abc=midpoint(ab,bc),bcd=midpoint(bc,cd),mid=midpoint(abc,bcd);
+    pending.push_back({mid,bcd,cd,seg.d,seg.depth+1});
+    pending.push_back({seg.a,ab,abc,mid,seg.depth+1});
    }
    stack.clear();
   }else if(word=="h"){
