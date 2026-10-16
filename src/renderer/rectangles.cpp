@@ -267,7 +267,10 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     if(!std::isfinite(inv_length)||!std::isfinite(extension))return false;
     // A square cap extends half a width along and across the segment.
     // Its diagonal reaches sqrt(2) times the half-width from an endpoint.
-    double extra=radius*(line_cap==2&&!join_disk?std::sqrt(2.0):1.0)+1;
+    // Only exposed square endpoints need the diagonal cap extension.
+    // Interior dashed/solid pieces use the ordinary stroke bound.
+    const bool exposed_square_cap=!join_disk&&line_cap==2&&(start_cap||end_cap);
+    const double extra=radius*(exposed_square_cap?std::sqrt(2.0):1.0)+1;
     double low_x=std::min(x0,x1)-extra,high_x=std::max(x0,x1)+extra;
     double low_y=std::min(y0,y1)-extra,high_y=std::max(y0,y1)+extra;
     if(!std::isfinite(low_x)||!std::isfinite(high_x)||!std::isfinite(low_y)||!std::isfinite(high_y))return false;
