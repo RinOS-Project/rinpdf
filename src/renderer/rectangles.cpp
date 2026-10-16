@@ -43,7 +43,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
  std::vector<Rect> path;
  std::vector<std::vector<Point>> polygons;
  // Single-cubic stroke fast path; all other paths retain the existing renderer.
- struct CubicStroke {Point p0,p1,p2,p3;size_t polygon,endpoint;};
+ struct CubicStroke {Point p0,p1,p2,p3;size_t polygon,start,endpoint;};
  std::vector<CubicStroke> cubic_strokes;
  struct Matrix {double a,b,c,d;};
  std::vector<std::vector<Matrix>> polygon_matrices;
@@ -164,7 +164,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    if(stack.size()!=2||polygons.empty()||polygons.back().size()>=4096)return false;
    const Point point=transform(stack[0],stack[1]);
    if(!std::isfinite(point.x)||!std::isfinite(point.y))return false;
-   polygons.back().push_back(point);polygon_matrices.back().push_back(matrix());cubic_strokes.clear();stack.clear();
+   polygons.back().push_back(point);polygon_matrices.back().push_back(matrix());stack.clear();
   }else if(word=="c"||word=="v"||word=="y"){
    if(pending_path_clip||pending_rect_clip)return false;
    const size_t required=word=="c"?6:4;
@@ -181,8 +181,8 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     p1=transform_curve(stack[0],stack[1]);p2=transform_curve(stack[2],stack[3]);p3=p2;
    }
    if(!std::isfinite(p1.x)||!std::isfinite(p1.y)||!std::isfinite(p2.x)||!std::isfinite(p2.y)||!std::isfinite(p3.x)||!std::isfinite(p3.y))return false;
-   const bool isolated_cubic=polygons.size()==1&&path.empty()&&poly.size()==1;
-   if(!isolated_cubic)cubic_strokes.clear();
+   const bool record_cubic=polygons.size()==1&&path.empty();
+   const size_t curve_start=poly.size()-1;
    // Adapt the cubic tessellation to device-space curvature.
    // The maximum distance of both control points to the chord bounds
    // the flattening error; subdivide until the bound is small enough.
@@ -282,7 +282,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     pending.push_back({mid,bcd,cd,seg.d,seg.depth+1,seg.length_budget*.5});
     pending.push_back({seg.a,ab,abc,mid,seg.depth+1,seg.length_budget*.5});
    }
-   if(isolated_cubic)cubic_strokes.push_back({start,p1,p2,p3,0,poly.size()-1});
+   if(record_cubic)cubic_strokes.push_back({start,p1,p2,p3,0,curve_start,poly.size()-1});
    stack.clear();
   }else if(word=="h"){
    if(pending_path_clip)return false;
@@ -434,50 +434,74 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
      }
      return true;
     }
-    // Keep original curve geometry until stroke time so dash boundaries
-   // are placed at B(inverse_arc_length(distance)), not at chord lengths.
-   if(cubic_strokes.size()==1&&path_index==0&&polygons.size()==1&&
-      points.size()==cubic_strokes.front().endpoint+1){
-    const auto& curve=cubic_strokes.front();
-    const Matrix mat=matrices.back();
-    // The isolated curve uses one CTM. Reject mismatches rather than
-    // interpreting transformed arc length as PDF user-space length.
-    if(matrices.front().a==mat.a&&matrices.front().b==mat.b&&
-       matrices.front().c==mat.c&&matrices.front().d==mat.d){
-     const double det=mat.a*mat.d-mat.b*mat.c;
-     if(!std::isfinite(det)||std::abs(det)<1e-12)return false;
-     auto user=[&](Point p)->Point{
-      return {(mat.d*p.x-mat.c*p.y)/det,
-              (-mat.b*p.x+mat.a*p.y)/det};
-     };
-     // Translation does not affect lengths. Work in the inverse CTM
-     // coordinates and transform only the resulting curve points back.
-     const Point p0=user(curve.p0),p1=user(curve.p1),
-                 p2=user(curve.p2),p3=user(curve.p3);
+    // Exact arc-length dash boundaries for an open, single-subpath
+    // combination of straight segments and original cubic curves.
+    const bool open_path=points.size()<2||
+      points.front().x!=points.back().x||points.front().y!=points.back().y;
+    if(!cubic_strokes.empty()&&path_index==0&&polygons.size()==1&&open_path){
      CubicDashCursor cursor;
-     std::vector<CubicDashSpan> spans;
-     if(!cubic_dash_start(dash_pattern,dash_phase,cursor)||
-        !cubic_dash_spans(p0,p1,p2,p3,dash_pattern,cursor,spans))return false;
-     size_t emitted=0;
-     for(const auto& span:spans){
-      if(!span.painted||span.t1<=span.t0)continue;
-      // Bounded polyline rasterization within an exact arc-length run.
-      // The dash endpoints are exact (subject to numerical tolerance).
-      constexpr unsigned steps=64;
-      for(unsigned j=0;j<steps;++j){
-       if(++emitted>65536)return false;
-       const double t0=span.t0+(span.t1-span.t0)*j/steps;
-       const double t1=span.t0+(span.t1-span.t0)*(j+1)/steps;
-       const Point a=cubic_point(curve.p0,curve.p1,curve.p2,curve.p3,t0);
-       const Point b=cubic_point(curve.p0,curve.p1,curve.p2,curve.p3,t1);
-       if(!std::isfinite(a.x)||!std::isfinite(a.y)||
-          !std::isfinite(b.x)||!std::isfinite(b.y))return false;
-       if(!segment(a,b,mat,false,j==0,j+1==steps))return false;
+     if(!cubic_dash_start(dash_pattern,dash_phase,cursor))return false;
+     size_t curve_index=0,emitted=0;
+     for(size_t i=1;i<points.size();){
+      const Matrix mat=matrices[i];
+      const double det=mat.a*mat.d-mat.b*mat.c;
+      if(!std::isfinite(det)||std::abs(det)<1e-12)return false;
+      auto user=[&](Point p)->Point{
+       return {(mat.d*p.x-mat.c*p.y)/det,
+               (-mat.b*p.x+mat.a*p.y)/det};
+      };
+      const bool is_curve=curve_index<cubic_strokes.size()&&
+        cubic_strokes[curve_index].start==i-1;
+      // A cubic may have been authored under a different CTM. Do not
+      // interpret it using a later segment's metric.
+      size_t last=i;
+      std::vector<LineDashSpan> spans;
+      if(is_curve){
+       const auto& curve=cubic_strokes[curve_index];
+       last=curve.endpoint;
+       if(last>=points.size()||last<=i-1)return false;
+       for(size_t k=i;k<=last;++k)
+        if(matrices[k].a!=mat.a||matrices[k].b!=mat.b||
+           matrices[k].c!=mat.c||matrices[k].d!=mat.d)return false;
+       std::vector<CubicDashSpan> cubic_spans;
+       if(!cubic_dash_spans(user(curve.p0),user(curve.p1),user(curve.p2),
+                           user(curve.p3),dash_pattern,cursor,cubic_spans))return false;
+       for(const auto& span:cubic_spans)spans.push_back({span.t0,span.t1,span.painted});
+      }else{
+       if(!line_dash_spans(user(points[i-1]),user(points[i]),
+                           dash_pattern,cursor,spans))return false;
       }
+      for(size_t k=0;k<spans.size();++k){
+       const auto& span=spans[k];
+       if(!span.painted||span.t1<=span.t0)continue;
+       const unsigned steps=is_curve?64:1;
+       for(unsigned j=0;j<steps;++j){
+        if(++emitted>65536)return false;
+        const double t0=span.t0+(span.t1-span.t0)*(double)j/steps;
+        const double t1=span.t0+(span.t1-span.t0)*(double)(j+1)/steps;
+        const auto& curve=is_curve?cubic_strokes[curve_index]:cubic_strokes.front();
+        const Point a=is_curve?cubic_point(curve.p0,curve.p1,curve.p2,curve.p3,t0):
+          Point{points[i-1].x+(points[i].x-points[i-1].x)*t0,
+                points[i-1].y+(points[i].y-points[i-1].y)*t0};
+        const Point b=is_curve?cubic_point(curve.p0,curve.p1,curve.p2,curve.p3,t1):
+          Point{points[i-1].x+(points[i].x-points[i-1].x)*t1,
+                points[i-1].y+(points[i].y-points[i-1].y)*t1};
+        if(!std::isfinite(a.x)||!std::isfinite(a.y)||
+           !std::isfinite(b.x)||!std::isfinite(b.y))return false;
+        const bool run_start=k==0? (i==1||!spans[k].painted):!spans[k-1].painted;
+        const bool at_end=j+1==steps;
+        const bool ends_run=at_end&&(k+1<spans.size()? !spans[k+1].painted:
+          (cursor.remaining<=1e-12&&
+            dash_pattern[(cursor.index+1)%dash_pattern.size()]>0&&
+            (cursor.index+1)%2==1));
+        if(!segment(a,b,mat,false,j==0&&run_start,ends_run||at_end&&last+1==points.size()))return false;
+       }
+      }
+      if(is_curve)++curve_index;
+      i=last+1;
      }
      return true;
     }
-   }
    const size_t count=dash_pattern.size(),cycle=count*(count%2?2:1);
     size_t index=0;
     double remaining=dash_pattern[0],phase=dash_phase;
