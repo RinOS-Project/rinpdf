@@ -622,5 +622,8 @@ int main(){
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(translated_stroke_ctm),sizeof(translated_stroke_ctm)-1,16,16,translated_ctm_pixels.data(),64))return 302;
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(translated_stroke_explicit),sizeof(translated_stroke_explicit)-1,16,16,translated_explicit_pixels.data(),64))return 303;
  if(translated_ctm_pixels!=translated_explicit_pixels)return 304;
+ const char arc_length_loop[]="0 G 1 w 1 J 8 8 m 15 15 1 15 8 8 c S";
+ std::vector<unsigned char> arc_length_loop_pixels(16*16*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(arc_length_loop),sizeof(arc_length_loop)-1,16,16,arc_length_loop_pixels.data(),64))return 305;
  return 0;
 }
