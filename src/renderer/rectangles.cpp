@@ -181,18 +181,20 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    // the flattening error; subdivide until the bound is small enough.
    struct Cubic {Point a,b,c,d;unsigned depth;};
    std::vector<Cubic> pending{{start,p1,p2,p3,0}};
-   const double tolerance=0.25/std::max(sx,sy);
+   // Evaluate the flattening error in device pixels. The previous
+   // scalar tolerance ignored anisotropic page scaling.
+   constexpr double tolerance_pixels=0.25;
    while(!pending.empty()){
     const Cubic seg=pending.back();pending.pop_back();
-    const double dx=seg.d.x-seg.a.x,dy=seg.d.y-seg.a.y;
+    const double dx=(seg.d.x-seg.a.x)*sx,dy=(seg.d.y-seg.a.y)*sy;
+    const double bx=(seg.b.x-seg.a.x)*sx,by=(seg.b.y-seg.a.y)*sy;
+    const double cx=(seg.c.x-seg.a.x)*sx,cy=(seg.c.y-seg.a.y)*sy;
     const double chord=std::hypot(dx,dy);
     const double deviation=chord>1e-12?
-     std::max(std::abs((seg.b.x-seg.a.x)*dy-(seg.b.y-seg.a.y)*dx),
-              std::abs((seg.c.x-seg.a.x)*dy-(seg.c.y-seg.a.y)*dx))/chord:
-     std::max(std::hypot(seg.b.x-seg.a.x,seg.b.y-seg.a.y),
-              std::hypot(seg.c.x-seg.a.x,seg.c.y-seg.a.y));
+     std::max(std::abs(bx*dy-by*dx),std::abs(cx*dy-cy*dx))/chord:
+     std::max(std::hypot(bx,by),std::hypot(cx,cy));
     if(!std::isfinite(deviation))return false;
-    if(deviation<=tolerance||seg.depth>=12){
+    if(deviation<=tolerance_pixels||seg.depth>=12){
      if(poly.size()>=4096)return false;
      poly.push_back(seg.d);polygon_matrices.back().push_back(matrix());
      continue;
