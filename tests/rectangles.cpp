@@ -628,5 +628,20 @@ int main(){
  const char inverse_arc_straight[]="0 G 1 w 2 8 m 5 8 9 8 12 8 c S";
  std::vector<unsigned char> inverse_arc_pixels(16*16*4);
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(inverse_arc_straight),sizeof(inverse_arc_straight)-1,16,16,inverse_arc_pixels.data(),64))return 306;
+ // Exact cubic dash positions must differ from the old polyline-only
+ // approximation for a curved cubic, and remain phase-order invariant.
+ const char curved_dash_before[]="[2 1] 0 d 0 G 1 w 0 J 2 2 m 2 14 14 2 14 14 c S";
+ const char curved_dash_after[]="0 G 1 w 0 J 2 2 m 2 14 14 2 14 14 c [2 1] 0 d S";
+ std::vector<unsigned char> exact_before(32*32*4),exact_after(32*32*4);
+ if(!rinpdf::renderer::render_rectangles(
+ reinterpret_cast<const unsigned char*>(curved_dash_before),
+ sizeof(curved_dash_before)-1,32,32,exact_before.data(),128))return 307;
+ if(!rinpdf::renderer::render_rectangles(
+ reinterpret_cast<const unsigned char*>(curved_dash_after),
+ sizeof(curved_dash_after)-1,32,32,exact_after.data(),128))return 308;
+ if(exact_before!=exact_after)return 309;
+ bool has_ink=false;
+ for(size_t i=0;i<exact_before.size();i+=4)if(exact_before[i]<255){has_ink=true;break;}
+ if(!has_ink)return 310;
  return 0;
 }
