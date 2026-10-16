@@ -587,5 +587,10 @@ int main(){
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(scaled_collinear_cubic),sizeof(scaled_collinear_cubic)-1,16,16,scaled_collinear_pixels.data(),64))return 289;
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(scaled_collinear_line),sizeof(scaled_collinear_line)-1,16,16,scaled_collinear_line_pixels.data(),64))return 290;
  if(scaled_collinear_pixels!=scaled_collinear_line_pixels)return 291;
+ const char dashed_symmetric_cubic[]="[2 1] 0 d 0 G 1 w 0 J 2 8 m 2 14 14 14 14 8 c S";
+ const char dashed_symmetric_cubic_reversed[]="[2 1] 0 d 0 G 1 w 0 J 14 8 m 14 14 2 14 2 8 c S";
+ std::vector<unsigned char> symmetric_dash_pixels(16*16*4),reversed_dash_pixels(16*16*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(dashed_symmetric_cubic),sizeof(dashed_symmetric_cubic)-1,16,16,symmetric_dash_pixels.data(),64))return 292;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(dashed_symmetric_cubic_reversed),sizeof(dashed_symmetric_cubic_reversed)-1,16,16,reversed_dash_pixels.data(),64))return 293;
  return 0;
 }
