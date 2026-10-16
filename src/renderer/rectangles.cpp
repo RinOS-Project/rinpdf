@@ -187,6 +187,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    // chord contributes to cumulative dash phase as well as coverage.
    // This is still an approximation, not exact Bezier arc length.
    const double tolerance_pixels=dash_pattern.empty()?0.25:0.0625;
+   double accepted_length_excess=0;
    while(!pending.empty()){
     const Cubic seg=pending.back();pending.pop_back();
     const double dx=(seg.d.x-seg.a.x)*sx,dy=(seg.d.y-seg.a.y)*sy;
@@ -234,13 +235,14 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     // independently for thousands of flattened pieces.
     const double length_budget=0.01;
     const bool length_accurate=dash_pattern.empty()||
-      length_error<=length_budget/4096.0;
+      accepted_length_excess+length_error<=length_budget;
     // Reaching the subdivision limit is not evidence of sufficient
     // geometric accuracy. Reject unresolved curves rather than
     // silently emitting a potentially visibly incorrect chord.
     if((flatness>tolerance_pixels||!length_accurate)&&seg.depth>=12)return false;
     if(flatness<=tolerance_pixels&&length_accurate){
      if(poly.size()>=4096)return false;
+     accepted_length_excess+=length_error;
      poly.push_back(seg.d);polygon_matrices.back().push_back(matrix());
      continue;
     }
