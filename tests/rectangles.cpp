@@ -592,5 +592,11 @@ int main(){
  std::vector<unsigned char> symmetric_dash_pixels(16*16*4),reversed_dash_pixels(16*16*4);
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(dashed_symmetric_cubic),sizeof(dashed_symmetric_cubic)-1,16,16,symmetric_dash_pixels.data(),64))return 292;
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(dashed_symmetric_cubic_reversed),sizeof(dashed_symmetric_cubic_reversed)-1,16,16,reversed_dash_pixels.data(),64))return 293;
+ const char loop_cubic[]="0 G 1 w 1 J 8 8 m 14 14 2 14 8 8 c S";
+ std::vector<unsigned char> loop_cubic_pixels(16*16*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(loop_cubic),sizeof(loop_cubic)-1,16,16,loop_cubic_pixels.data(),64))return 294;
+ bool loop_ink=false;
+ for(size_t i=0;i<loop_cubic_pixels.size();i+=4)if(loop_cubic_pixels[i]<255){loop_ink=true;break;}
+ if(!loop_ink)return 295;
  return 0;
 }
