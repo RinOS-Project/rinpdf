@@ -126,4 +126,64 @@ inline bool cubic_dash_closed_seam(
  return true;
 }
 
+ // A painted cubic dash span is flattened adaptively in device space.
+ // The first and last points remain exact inverse-arc-length boundaries.
+inline bool cubic_dash_flatten_span(Point a,Point b,Point c,Point d,
+ double t0,double t1,double scale_x,double scale_y,
+ std::vector<Point>& output){
+ if(!std::isfinite(t0)||!std::isfinite(t1)||t0<0||t1>1||t1<=t0||
+    !std::isfinite(scale_x)||!std::isfinite(scale_y)||
+    scale_x<=0||scale_y<=0)return false;
+ auto lerp=[](Point p,Point q,double t)->Point{
+  return {p.x+(q.x-p.x)*t,p.y+(q.y-p.y)*t};
+ };
+ // Restrict the cubic to [t0,t1] via two de Casteljau splits.
+ auto split=[&](Point p0,Point p1,Point p2,Point p3,double t,
+                Point (&left)[4],Point (&right)[4]){
+  const Point p01=lerp(p0,p1,t),p12=lerp(p1,p2,t),p23=lerp(p2,p3,t);
+  const Point p012=lerp(p01,p12,t),p123=lerp(p12,p23,t);
+  const Point mid=lerp(p012,p123,t);
+  left[0]=p0;left[1]=p01;left[2]=p012;left[3]=mid;
+  right[0]=mid;right[1]=p123;right[2]=p23;right[3]=p3;
+ };
+ Point left[4],right[4],range[4],unused[4];
+ split(a,b,c,d,t0,left,right);
+ const double relative=(t1-t0)/(1-t0);
+ split(right[0],right[1],right[2],right[3],relative,range,unused);
+ struct Node{Point p[4];unsigned depth;};
+ std::vector<Node> pending;
+ pending.push_back({{range[0],range[1],range[2],range[3]},0});
+ std::vector<Point> result{range[0]};
+ while(!pending.empty()){
+  Node n=pending.back();pending.pop_back();
+  const double dx=(n.p[3].x-n.p[0].x)*scale_x;
+  const double dy=(n.p[3].y-n.p[0].y)*scale_y;
+  const double len=std::hypot(dx,dy);
+  const double ux=len>0?dx/len:0,uy=len>0?dy/len:0;
+  double max_error=0;
+  for(unsigned j=1;j<=2;++j){
+   const double vx=(n.p[j].x-n.p[0].x)*scale_x;
+   const double vy=(n.p[j].y-n.p[0].y)*scale_y;
+   const double projected=vx*ux+vy*uy;
+   const double deviation=len>0?std::abs(vx*uy-vy*ux):std::hypot(vx,vy);
+   max_error=std::max(max_error,std::max(deviation,std::max(0.0,std::max(-projected,projected-len))));
+  }
+  if(!std::isfinite(max_error))return false;
+  if(max_error<=0.125){
+   if(result.size()>=4096)return false;
+   result.push_back(n.p[3]);continue;
+  }
+  if(n.depth>=12||pending.size()>=4094)return false;
+  Point first[4],second[4];
+  split(n.p[0],n.p[1],n.p[2],n.p[3],0.5,first,second);
+  pending.push_back({{second[0],second[1],second[2],second[3]},n.depth+1});
+  pending.push_back({{first[0],first[1],first[2],first[3]},n.depth+1});
+ }
+ // Force exact endpoints despite floating-point subdivision roundoff.
+ result.front()=cubic_point(a,b,c,d,t0);
+ result.back()=cubic_point(a,b,c,d,t1);
+ output=std::move(result);
+ return true;
+}
+
 }
