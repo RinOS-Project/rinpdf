@@ -134,6 +134,8 @@ inline bool cubic_dash_flatten_span(Point a,Point b,Point c,Point d,
  if(!std::isfinite(t0)||!std::isfinite(t1)||t0<0||t1>1||t1<=t0||
     !std::isfinite(scale_x)||!std::isfinite(scale_y)||
     scale_x<=0||scale_y<=0)return false;
+ for(Point point:{a,b,c,d})
+  if(!std::isfinite(point.x)||!std::isfinite(point.y))return false;
  auto lerp=[](Point p,Point q,double t)->Point{
   return {p.x+(q.x-p.x)*t,p.y+(q.y-p.y)*t};
  };
