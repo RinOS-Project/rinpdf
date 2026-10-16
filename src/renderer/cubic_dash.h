@@ -91,4 +91,36 @@ inline bool line_dash_spans(Point a,Point b,const std::vector<double>& pattern,
  return true;
 }
 
+struct CubicDashSeam {
+ bool first_painted=false;
+ bool last_painted=false;
+ bool joined=false;
+};
+// The terminal span (not the cursor's next phase) determines whether
+// paint reaches the closing vertex. Exact dash boundaries leave a cap.
+inline bool cubic_dash_closed_seam(
+ const std::vector<double>& pattern, const CubicDashCursor& initial,
+ const std::vector<bool>& segment_last_painted,
+ const std::vector<bool>& segment_has_spans,
+ CubicDashSeam& result){
+ if(pattern.empty()||segment_last_painted.size()!=segment_has_spans.size())return false;
+ if(initial.index>=pattern.size()*(pattern.size()%2?2:1)||
+    !std::isfinite(initial.remaining)||initial.remaining<0)return false;
+ CubicDashCursor probe=initial;
+ if(probe.remaining==0&&!cubic_dash_advance(pattern,probe))return false;
+ CubicDashSeam next;
+ next.first_painted=probe.index%2==0;
+ bool saw=false;
+ for(size_t i=0;i<segment_has_spans.size();++i){
+  if(segment_has_spans[i]){
+   saw=true;
+   next.last_painted=segment_last_painted[i];
+  }
+ }
+ // A zero-perimeter contour has no incoming tangent and no seam join.
+ next.joined=saw&&next.first_painted&&next.last_painted;
+ result=next;
+ return true;
+}
+
 }
