@@ -625,5 +625,8 @@ int main(){
  const char arc_length_loop[]="0 G 1 w 1 J 8 8 m 15 15 1 15 8 8 c S";
  std::vector<unsigned char> arc_length_loop_pixels(16*16*4);
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(arc_length_loop),sizeof(arc_length_loop)-1,16,16,arc_length_loop_pixels.data(),64))return 305;
+ const char inverse_arc_straight[]="0 G 1 w 2 8 m 5 8 9 8 12 8 c S";
+ std::vector<unsigned char> inverse_arc_pixels(16*16*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(inverse_arc_straight),sizeof(inverse_arc_straight)-1,16,16,inverse_arc_pixels.data(),64))return 306;
  return 0;
 }
