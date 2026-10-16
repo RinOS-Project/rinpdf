@@ -74,5 +74,13 @@ int main(){
     std::abs(reversed.back().x-10)>1e-9)return 39;
  for(const Point& point:reversed)
   if(!std::isfinite(point.x)||!std::isfinite(point.y))return 40;
+ // A subrange too close to t=1 may round to zero in the
+ // relative de Casteljau split. Do not claim a valid flattened path.
+ std::vector<Point> near_end{{77,88}};
+ const double before_one=std::nextafter(1.0,0.0);
+ if(!cubic_dash_flatten_span(a,b,c,d,before_one,1,1,1,near_end))
+  return 41;
+ if(near_end.empty()||!std::isfinite(near_end.back().x))return 42;
+ if(cubic_dash_flatten_span(a,b,c,d,1,1,1,1,near_end))return 43;
  return 0;
 }
