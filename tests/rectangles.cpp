@@ -613,5 +613,8 @@ int main(){
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(dash_before_curve),sizeof(dash_before_curve)-1,16,16,dash_before_pixels.data(),64))return 298;
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(dash_after_curve),sizeof(dash_after_curve)-1,16,16,dash_after_pixels.data(),64))return 299;
  if(dash_before_pixels!=dash_after_pixels)return 300;
+ const char cubic_after_line[]="0 G 1 w 2 2 m 4 2 l 6 2 8 2 10 2 c S";
+ std::vector<unsigned char> cubic_after_line_pixels(16*16*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(cubic_after_line),sizeof(cubic_after_line)-1,16,16,cubic_after_line_pixels.data(),64))return 301;
  return 0;
 }
