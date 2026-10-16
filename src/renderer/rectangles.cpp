@@ -578,6 +578,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
       length+=std::hypot((mat.d*dx-mat.c*dy)/det,(-mat.b*dx+mat.a*dy)/det);
       if(!std::isfinite(length))return false;
      }
+     const CubicDashCursor initial_cursor{index,remaining};
      size_t probe=index;
      double left=remaining;
      bool resolved=length<=1e-10;
@@ -601,7 +602,13 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
       if(length<=1e-10){
        // If the perimeter ends exactly at a dash boundary, the
        // preceding on-run ends there; it does not continue across seam.
-       seam_on=probe%2==0&&left>1e-10;
+       // Classify the terminal dash state through the shared closed
+       // seam contract; a boundary with no remaining paint is a cap.
+       CubicDashSeam seam;
+       const CubicDashCursor terminal_cursor{probe,left>1e-10?left:0.0};
+       if(!cubic_dash_closed_seam(dash_pattern,initial_cursor,terminal_cursor,
+             {probe%2==0},{true},seam))return false;
+       seam_on=seam.joined;
        resolved=true;
        break;
       }
