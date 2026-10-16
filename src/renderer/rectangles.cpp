@@ -183,7 +183,10 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    std::vector<Cubic> pending{{start,p1,p2,p3,0}};
    // Evaluate the flattening error in device pixels. The previous
    // scalar tolerance ignored anisotropic page scaling.
-   constexpr double tolerance_pixels=0.25;
+   // Dashed curves need a tighter polyline approximation because each
+   // chord contributes to cumulative dash phase as well as coverage.
+   // This is still an approximation, not exact Bezier arc length.
+   const double tolerance_pixels=dash_pattern.empty()?0.25:0.0625;
    while(!pending.empty()){
     const Cubic seg=pending.back();pending.pop_back();
     const double dx=(seg.d.x-seg.a.x)*sx,dy=(seg.d.y-seg.a.y)*sy;
