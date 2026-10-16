@@ -190,6 +190,9 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    // Keep the subdivision stack bounded independently of the output
    // vertex limit, including adversarial curves that never flatten.
    constexpr size_t max_pending_cubics=4096;
+   // The output vertex limit includes the vertices already in this
+   // subpath, so fail before allocating a subdivision that cannot fit.
+   if(poly.size()>=4096)return false;
    while(!pending.empty()){
     const Cubic seg=pending.back();pending.pop_back();
     const double dx=(seg.d.x-seg.a.x)*sx,dy=(seg.d.y-seg.a.y)*sy;
