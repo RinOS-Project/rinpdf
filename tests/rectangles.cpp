@@ -525,5 +525,11 @@ int main(){
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(round_with_zero_interior),sizeof(round_with_zero_interior)-1,16,16,round_zero_pixels.data(),64))return 262;
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(round_without_zero_interior),sizeof(round_without_zero_interior)-1,16,16,round_normal_pixels.data(),64))return 263;
  if(round_zero_pixels!=round_normal_pixels)return 264;
+ const char high_curvature_cubic[]="0 G 1 w 1 J 2 2 m 2 14 14 2 14 14 c S";
+ const char flat_cubic[]="0 G 1 w 1 J 2 2 m 6 6 10 10 14 14 c S";
+ std::vector<unsigned char> high_curve_pixels(16*16*4),flat_curve_pixels(16*16*4);
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(high_curvature_cubic),sizeof(high_curvature_cubic)-1,16,16,high_curve_pixels.data(),64))return 265;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(flat_cubic),sizeof(flat_cubic)-1,16,16,flat_curve_pixels.data(),64))return 266;
+ if(high_curve_pixels==flat_curve_pixels)return 267;
  return 0;
 }
