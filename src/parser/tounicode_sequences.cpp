@@ -1,6 +1,7 @@
 #include "tounicode.h"
 #include "lexer.h"
 #include <utility>
+#include <vector>
 namespace rinpdf::parser {
 namespace {
 bool unicode_sequence(const std::string& bytes,std::u32string& result){
@@ -32,6 +33,7 @@ bool parse_tounicode_sequences(const uint8_t* data,size_t size,
  if(!data||!size||size>1024*1024)return false;
  Lexer lexer(data,size);
  std::map<CMapKey,std::u32string> mapped;
+ std::vector<std::pair<CMapKey,CMapKey>> codespaces;
  size_t total=0;
  while(true){
   Token t=lexer.next();
@@ -52,6 +54,12 @@ bool parse_tounicode_sequences(const uint8_t* data,size_t size,
     CMapKey lo,hi;
     if(!code(lexer.next(),lo)||!code(lexer.next(),hi)||
        lo.width!=hi.width||lo.code>hi.code)return false;
+    if(codespaces.size()>=32)return false;
+    for(const auto& range:codespaces){
+     if(lo.width==range.first.width&&
+        !(hi.code<range.first.code||lo.code>range.second.code))return false;
+    }
+    codespaces.emplace_back(lo,hi);
    }
    const Token end=lexer.next();
    if(end.kind!=TokenKind::Keyword||end.value!="endcodespacerange")return false;
@@ -107,6 +115,15 @@ bool parse_tounicode_sequences(const uint8_t* data,size_t size,
      end.value!=(chars?"endbfchar":"endbfrange"))return false;
  }
  if(mapped.empty())return false;
+ if(!codespaces.empty())for(const auto& entry:mapped){
+  bool covered=false;
+  for(const auto& range:codespaces)
+   if(entry.first.width==range.first.width&&
+      entry.first.code>=range.first.code&&entry.first.code<=range.second.code){
+    covered=true;break;
+   }
+  if(!covered)return false;
+ }
  result=std::move(mapped);return true;
 }
 }
