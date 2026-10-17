@@ -33,6 +33,6 @@ int main(){
       std::to_string(xref)+"\n%%EOF\n";
  std::string result;
  if(!extract_page_text(reinterpret_cast<const uint8_t*>(pdf.data()),pdf.size(),0,result))return 1;
- if(result!=std::string("\\xe4\\xb8\\x96\\xe6\\x97\\xa5\\xe6\\x9c\\xac")+"A")return 2;
+ if(result!=std::string("\xe4\xb8\x96\xe6\x97\xa5\xe6\x9c\xac")+"A")return 2;
  return 0;
 }
