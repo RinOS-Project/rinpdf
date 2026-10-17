@@ -1,16 +1,10 @@
 #include "rinpdf/rinpdf.h"
-#include <charconv>
 #include <fstream>
 #include <iostream>
 #include <string>
 #include <string_view>
 #include <vector>
 
-static bool number(std::string_view input,size_t& result){
- if(input.empty())return false;
- const auto parsed=std::from_chars(input.data(),input.data()+input.size(),result);
- return parsed.ec==std::errc{}&&parsed.ptr==input.data()+input.size();
-}
 static bool expectation(std::string_view name,rinpdf_status actual){
  if(name=="ok")return actual==RINPDF_OK;
  if(name=="unsupported")return actual==RINPDF_UNSUPPORTED;
@@ -38,10 +32,10 @@ int main(int argc,char** argv){
    first=end+1;
   }
   if(fields.size()!=4||fields[0].empty()||
-     fields[0][0]=='-'||fields[1]!="ok"&&fields[1]!="invalid_pdf"&&
-     fields[1]!="io_error"||
-     fields[2]!="ok"&&fields[2]!="unsupported"&&fields[2]!="skip"||
-     fields[3]!="ok"&&fields[3]!="unsupported"&&fields[3]!="skip"){
+     fields[0][0]=='-'||
+     (fields[1]!="ok"&&fields[1]!="invalid_pdf"&&fields[1]!="io_error")||
+     (fields[2]!="ok"&&fields[2]!="unsupported"&&fields[2]!="skip")||
+     (fields[3]!="ok"&&fields[3]!="unsupported"&&fields[3]!="skip")){
    std::cerr<<"Invalid manifest row "<<line_no<<"\n";return 2;
   }
   ++checked;
