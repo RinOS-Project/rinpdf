@@ -36,5 +36,16 @@ int main(){
  invalid.array.push_back(integer(100));
  if(parse_cid_widths(&default_width,&invalid,parsed))return 14;
  if(!cid_width(parsed,21,width)||width!=600)return 15;
+ Value decimal;decimal.kind=Value::Kind::Real;decimal.real=412.5;
+ Value ranges;ranges.kind=Value::Kind::Array;
+ Value items;items.kind=Value::Kind::Array;
+ items.array={decimal};
+ ranges.array={integer(30),items,integer(40),integer(41),decimal};
+ if(!parse_cid_widths(&decimal,&ranges,parsed))return 16;
+ if(!cid_width(parsed,30,width)||width!=412.5)return 17;
+ if(!cid_width(parsed,41,width)||width!=412.5)return 18;
+ if(!cid_width(parsed,99,width)||width!=412.5)return 19;
+ decimal.real=-0.1;
+ if(parse_cid_widths(&decimal,&ranges,parsed))return 20;
  return 0;
 }
