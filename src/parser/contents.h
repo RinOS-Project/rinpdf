@@ -8,6 +8,7 @@ namespace rinpdf::parser {
 struct PageFont {
  std::string base_font;
  std::string subtype;
+ std::vector<uint8_t> embedded_truetype; // decoded /FontFile2, if present
 };
 // Resolve effective inherited /Resources and supported font dictionary metadata.
 // Does not imply font rasterization or character encoding support.
