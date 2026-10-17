@@ -943,6 +943,25 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
          }
         }
        }
+       // Preserve the authored cubic tangents at internal path joins.
+       // Vertex indices refer to the flattened polygon and remain stable
+       // until the stroke command. Only change the join direction.
+       if(k==0&&polygons.size()==1&&!cubic_strokes.empty()&&i>0){
+        const Point p=poly[i];
+        for(const auto& curve:cubic_strokes){
+         Point tangent{};
+         if(curve.endpoint==i&&
+            cubic_endpoint_tangent(curve.p0,curve.p1,curve.p2,curve.p3,true,tangent)){
+          prev={p.x-tangent.x,p.y-tangent.y};
+          if(!std::isfinite(prev.x)||!std::isfinite(prev.y))return false;
+         }
+         if(curve.start==i&&
+            cubic_endpoint_tangent(curve.p0,curve.p1,curve.p2,curve.p3,false,tangent)){
+          next={p.x+tangent.x,p.y+tangent.y};
+          if(!std::isfinite(next.x)||!std::isfinite(next.y))return false;
+         }
+        }
+       }
        if(!paint_corner(prev,poly[i],next,ma,mb))return false;
       }
      }
