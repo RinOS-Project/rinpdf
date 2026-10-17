@@ -538,3 +538,6 @@ LexerのPDFリテラル文字列に8進エスケープ（最大3桁、下位8bit
 
 ## Font resource to Tf selection integration (experimental)
 `rinpdf_render_page` はページごとの継承済み `/Font` 辞書を取得し、描画器の `render_rectangles_box_with_fonts` に渡すようになりました。`BT /F1 12 Tf ET` のような構文でリソース名・正のフォントサイズを検証し、存在しないフォントや不正サイズは拒否します。従来の `render_rectangles_box` は空のフォント表で呼ぶ互換ラッパーとして維持しました。`Tj`、`TJ` の文字表示、グリフ描画は引き続き未対応です。追加テストを含む18件のビルド・PASSは今回まだ未確認です。
+
+## TJ operand parser (experimental)
+`src/renderer/text_show.cpp` に、PDFの `TJ` 配列に含まれるリテラル文字列、16進文字列、数値による字間調整を検査・保持するパーサーを追加しました。最大4096要素、文字列データ合計1MiB、有限の数値に制限し、解析失敗時には出力を変更しません。描画器はテキスト中の `[` を新パーサーへ渡します。ただし、**グリフ描画・文字幅算出が未実装のため、TJのレンダリングは引き続き未対応を返します**。回帰テストを含めたビルド・テストPASSは未確認です。
