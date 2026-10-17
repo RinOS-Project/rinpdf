@@ -82,5 +82,33 @@ int main(){
  const auto page_status=rinpdf_document_page_count(document,&pages);
  rinpdf_document_close(document);
  if(page_status!=RINPDF_OK||pages!=1)return 19;
+ // Latest XRef Stream referencing an older Classic section.
+ std::string hybrid_history="%PDF-1.5\n";
+ const size_t old_object=hybrid_history.size();
+ hybrid_history+="1 0 obj\n<< /Type /Catalog >>\nendobj\n";
+ const size_t old_section=hybrid_history.size();
+ auto width10=[](size_t v){std::string s=std::to_string(v);return std::string(10-s.size(),'0')+s;};
+ hybrid_history+="xref\n0 2\n0000000000 65535 f \n"+
+  width10(old_object)+" 00000 n \ntrailer\n<< /Size 3 /Root 1 0 R >>\n";
+ const size_t newest=hybrid_history.size();
+ hybrid_history+="2 0 obj\n<< /Type /XRef /Size 3 /Index [2 1] /W [1 3 1] /Length 5 /Prev "+
+  std::to_string(old_section)+" >>\nstream\n";
+ // The xref stream's own offset is the type-1 entry.
+ std::string encoded(5,'\0');
+ encoded[0]=1;
+ encoded[1]=static_cast<char>((newest>>16)&255);
+ encoded[2]=static_cast<char>((newest>>8)&255);
+ encoded[3]=static_cast<char>(newest&255);
+ hybrid_history+=encoded;
+ hybrid_history+="\nendstream\nendobj\nstartxref\n"+
+  std::to_string(newest)+"\n%%EOF\n";
+ std::vector<XrefEntry> normal_entries;
+ std::vector<XrefStreamEntry> stream_entries;
+ Value mixed_trailer;
+ if(!read_object_xref(reinterpret_cast<const uint8_t*>(hybrid_history.data()),
+       hybrid_history.size(),normal_entries,stream_entries,mixed_trailer))return 18;
+ if(normal_entries.size()!=2||normal_entries[0].object!=1||
+    normal_entries[0].offset!=old_object||
+    !mixed_trailer.dictionary.count("Root"))return 19;
  return 0;
 }
