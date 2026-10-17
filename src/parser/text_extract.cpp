@@ -38,15 +38,16 @@ bool actual_text(const std::string& raw,std::string& out){
  out=std::move(decoded);return true;
 }
 bool decode_run(const std::string& bytes,const PageFont& font,std::string& out){
- if(font.to_unicode.empty())return false;
+ if(font.unicode_sequences.empty())return false;
  const bool wide=font.subtype=="Type0";
  const unsigned width=wide?2:1;
  if(bytes.size()%width)return false;
  for(size_t i=0;i<bytes.size();i+=width){
   uint16_t code=uint8_t(bytes[i]);
   if(wide)code=uint16_t((code<<8)|uint8_t(bytes[i+1]));
-  const auto it=font.to_unicode.find(CMapKey{uint8_t(width),code});
-  if(it==font.to_unicode.end()||!utf8_append(out,it->second))return false;
+  const auto it=font.unicode_sequences.find(CMapKey{uint8_t(width),code});
+  if(it==font.unicode_sequences.end())return false;
+  for(char32_t cp:it->second)if(!utf8_append(out,uint32_t(cp)))return false;
  }
  return true;
 }
