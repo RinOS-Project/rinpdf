@@ -45,5 +45,22 @@ int main(){
  if(render_embedded_truetype_runs(f,{{false,"Z",0}},16,8,8,
        64,64,rgba.data(),64*4,0,64,1,1,0,0,0,next))return 4;
  if(next!=untouched)return 5;
+ std::vector<uint8_t> all_clipped(64*64,0);
+ std::vector<uint8_t> no_ink(64*64*4,255);
+ double clipped_next=0;
+ if(!render_embedded_truetype_runs(f,{{false,"A",0}},16,8,8,
+       64,64,no_ink.data(),64*4,0,64,1,1,0,0,0,clipped_next,
+       &all_clipped,0,0,64,64))return 6;
+ for(size_t i=0;i<no_ink.size();i+=4)if(no_ink[i]!=255)return 7;
+ if(std::abs(clipped_next-19.2)>0.001)return 8;
+ // Non-uniform scaling is valid even without a font transform.
+ std::vector<uint8_t> stretched(64*64*4,255);
+ double stretched_next=0;
+ if(!render_embedded_truetype_runs(f,{{false,"A",0}},16,8,8,
+       64,64,stretched.data(),64*4,0,64,1,2,0,0,0,stretched_next))
+   return 9;
+ bool stretched_ink=false;
+ for(size_t i=0;i<stretched.size();i+=4)if(stretched[i]<255){stretched_ink=true;break;}
+ if(!stretched_ink)return 10;
  return 0;
 }
