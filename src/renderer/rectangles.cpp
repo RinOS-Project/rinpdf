@@ -42,6 +42,8 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
  std::string pending_font;
  double text_x=0,text_y=0,text_leading=0;
  double text_a=1,text_b=0,text_c=0,text_d=1;
+ double char_spacing=0,word_spacing=0,horizontal_scale=1;
+ std::string pending_text;bool has_pending_text=false;
  std::vector<double> dash_pattern;
  double dash_phase=0;
  bool reading_dash=false;
@@ -96,18 +98,25 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
   if(token.kind==parser::TokenKind::String||
      token.kind==parser::TokenKind::HexString){
    if(compatibility_depth>0)continue;
-   return false; // glyph painting remains unsupported
+   if(!in_text||has_pending_text||!stack.empty())return false;
+   pending_text=token.value;has_pending_text=true;
+   continue;
   }
   const std::string& word=token.value;
   if(!pending_font.empty()&&word!="Tf"&&token.kind!=parser::TokenKind::Integer&&token.kind!=parser::TokenKind::Keyword)return false;
   double v=0;
   if(number(word,v)){if(reading_dash){if(dash_values.size()>=32)return false;dash_values.push_back(v);}else{if(dash_array_ready&&stack.size()>=1)return false;if(stack.size()>=16)return false;stack.push_back(v);}continue;}
   if(word=="["&&in_text){
+   if(has_pending_text||!stack.empty()||selected_font.empty())return false;
    std::vector<TextRun> runs;
-   if(!selected_font.empty()&&parse_text_array(lex,runs)){
-    // Parsing succeeds; rendering is unsupported until glyph painting exists.
-   }
-   return false;
+   if(!parse_text_array(lex,runs))return false;
+   const auto selected=fonts.find(selected_font);
+   if(selected==fonts.end())return false;
+   double advance=0;
+   if(!courier_text_advance(selected->second.base_font,runs,selected_font_size,
+                            char_spacing,word_spacing,horizontal_scale,advance)||
+      !advance_text_origin(advance,text_a,text_b,text_x,text_y))return false;
+   return false; // No glyphs painted yet.
   }
   if(word=="["){if(reading_dash||dash_array_ready||!stack.empty())return false;reading_dash=true;dash_values.clear();continue;}
   if(word=="]"){if(!reading_dash)return false;reading_dash=false;dash_array_ready=true;continue;}
@@ -159,6 +168,26 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
       it->second.subtype.empty())return false;
    selected_font=pending_font;selected_font_size=stack[0];
    pending_font.clear();stack.clear();
+  }else if(word=="Tc"||word=="Tw"||word=="Tz"){
+   if(!in_text||stack.size()!=1)return false;
+   if(word=="Tc")char_spacing=stack[0];
+   else if(word=="Tw")word_spacing=stack[0];
+   else{
+    if(stack[0]<0||stack[0]>1000)return false;
+    horizontal_scale=stack[0]/100;
+   }
+   stack.clear();
+  }else if(word=="Tj"){
+   if(!in_text||!has_pending_text||selected_font.empty()||!stack.empty())
+    return false;
+   const auto selected=fonts.find(selected_font);
+   if(selected==fonts.end())return false;
+   double advance=0;
+   if(!courier_text_advance(selected->second.base_font,
+       std::vector<TextRun>{{false,pending_text,0}},selected_font_size,
+       char_spacing,word_spacing,horizontal_scale,advance)||
+      !advance_text_origin(advance,text_a,text_b,text_x,text_y))return false;
+   return false; // Advance calculated but glyph rasterization unavailable.
   }else if(word=="TL"){
    if(!in_text||stack.size()!=1)return false;
    text_leading=stack[0];stack.clear();
@@ -176,7 +205,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
    if(!in_text||stack.size()!=6)return false;
    text_a=stack[0];text_b=stack[1];text_c=stack[2];text_d=stack[3];
    text_x=stack[4];text_y=stack[5];stack.clear();
-  }else if(word=="Tj"||word=="TJ"||
+  }else if(word=="TJ"||
             word=="'"||word=="\\\"" ){
    // Font and glyph interpretation is not yet implemented.
    return false;
@@ -1171,7 +1200,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
    stack.clear();
   }else return false; // Do not silently ignore unknown operators.
  }
- return pending_font.empty()&&!in_text&&compatibility_depth==0&&!reading_dash&&!dash_array_ready&&dash_values.empty()&&stack.empty()&&path.empty()&&polygons.empty()&&saved.empty()&&!pending_rect_clip&&!pending_path_clip;
+ return !has_pending_text&&pending_font.empty()&&!in_text&&compatibility_depth==0&&!reading_dash&&!dash_array_ready&&dash_values.empty()&&stack.empty()&&path.empty()&&polygons.empty()&&saved.empty()&&!pending_rect_clip&&!pending_path_clip;
 }
 bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,unsigned height,uint8_t *rgba,size_t stride,PageBox box){
  return render_rectangles_box_with_fonts(contents,size,width,height,rgba,stride,box,{});
