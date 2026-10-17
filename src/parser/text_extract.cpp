@@ -4,6 +4,7 @@
 #include "../renderer/text_show.h"
 #include <map>
 #include <vector>
+#include <utility>
 namespace rinpdf::parser {
 namespace {
 bool utf8_append(std::string& out,uint32_t cp){
