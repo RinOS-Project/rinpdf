@@ -320,6 +320,16 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
    operands.push_back(number);continue;
   }
   if(t.kind!=TokenKind::Keyword)continue;
+  // Rendering mode and rise affect glyph painting/placement, not the
+  // Unicode sequence itself. Validate their operands during extraction.
+  if(text&&(t.value=="Tr"||t.value=="Ts")){
+   if(have_pending||operands.size()!=1)return false;
+   const double v=operands.front();
+   if(t.value=="Tr"){
+    if(v<0||v>7||std::trunc(v)!=v)return false;
+   }else if(std::abs(v)>10000)return false;
+   operands.clear();continue;
+  }
   if(text&&(t.value=="Tc"||t.value=="Tw"||t.value=="Tz"||t.value=="TL")){
    if(operands.size()!=1||have_pending)return false;
    const double v=operands.front();
