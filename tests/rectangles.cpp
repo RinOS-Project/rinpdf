@@ -760,5 +760,16 @@ int main(){
  for(size_t i=0;i<joined_miter.size();i+=4)
   if(joined_miter[i]<255){joined_ink=true;break;}
  if(!joined_ink)return 335;
+ // A zero-length dash entry at a cubic boundary must be skipped
+ // when deciding if a painted run continues into the next segment.
+ const char zero_dash_join[]="[5 0 5 3] 0 d 0 G 2 w 0 j 2 8 m 3 12 7 12 8 8 c 9 4 13 4 14 8 c S";
+ std::vector<unsigned char> zero_dash_pixels(32*32*4);
+ if(!rinpdf::renderer::render_rectangles(
+   reinterpret_cast<const unsigned char*>(zero_dash_join),
+   sizeof(zero_dash_join)-1,32,32,zero_dash_pixels.data(),128))return 336;
+ bool zero_dash_ink=false;
+ for(size_t i=0;i<zero_dash_pixels.size();i+=4)
+  if(zero_dash_pixels[i]<255){zero_dash_ink=true;break;}
+ if(!zero_dash_ink)return 337;
  return 0;
 }
