@@ -280,7 +280,7 @@ struct Reader {
          if(!std::isfinite(width)||width<0||width>100000){
           active.erase(id);return false;
          }
-         resource.simple_widths.emplace(uint8_t(first->integer+long long(i)),width);
+         resource.simple_widths.emplace(static_cast<uint8_t>(first->integer+static_cast<long long>(i)),width);
         }
        }
       }
