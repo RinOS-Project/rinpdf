@@ -1,5 +1,6 @@
 #pragma once
 #include "xref.h"
+#include "value.h"
 #include <cstdint>
 #include <cstddef>
 #include <vector>
@@ -18,4 +19,10 @@ struct XrefStreamEntry {
 bool decode_xref_stream_entries(const uint8_t* data,size_t size,
  const std::vector<unsigned>& widths,const std::vector<uint64_t>& index,
  std::vector<XrefStreamEntry>& result);
+// Read a direct-length XRef stream object at the byte offset provided
+// by startxref. The trailer is returned as the stream dictionary.
+// Does not follow /Prev or resolve compressed objects yet.
+bool read_xref_stream_at(const uint8_t* data,size_t size,size_t offset,
+ std::vector<XrefStreamEntry>& entries,Value& trailer);
+
 }
