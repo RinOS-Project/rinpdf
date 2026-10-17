@@ -1,0 +1,123 @@
+#include "sfnt_gsub.h"
+#include <cstddef>
+#include <cstdint>
+namespace rinpdf::renderer {
+namespace {
+bool read16(const uint8_t* d,size_t n,size_t p,uint16_t& v){
+ if(!d||p>n||n-p<2)return false;
+ v=uint16_t((uint16_t(d[p])<<8)|d[p+1]);return true;
+}
+bool read32(const uint8_t* d,size_t n,size_t p,uint32_t& v){
+ if(!d||p>n||n-p<4)return false;
+ v=(uint32_t(d[p])<<24)|(uint32_t(d[p+1])<<16)|
+   (uint32_t(d[p+2])<<8)|d[p+3];return true;
+}
+bool coverage_index(const uint8_t* d,size_t n,size_t p,
+ uint16_t glyph,int& index){
+ uint16_t format=0,count=0;
+ if(!read16(d,n,p,format)||!read16(d,n,p+2,count))return false;
+ index=-1;
+ if(format==1){
+  if(count>4096||p>n||n-p<4+size_t(count)*2)return false;
+  uint16_t previous=0;
+  for(unsigned i=0;i<count;++i){
+   uint16_t item=0;
+   if(!read16(d,n,p+4+i*2,item)||(i&&item<=previous))return false;
+   if(item==glyph)index=int(i);
+   previous=item;
+  }
+ }else if(format==2){
+  if(count>4096||p>n||n-p<4+size_t(count)*6)return false;
+  uint16_t prev_end=0;
+  for(unsigned i=0;i<count;++i){
+   uint16_t first=0,last=0,start=0;
+   if(!read16(d,n,p+4+i*6,first)||
+      !read16(d,n,p+6+i*6,last)||
+      !read16(d,n,p+8+i*6,start)||first>last||
+      (i&&first<=prev_end))return false;
+   if(glyph>=first&&glyph<=last)index=int(start)+glyph-first;
+   prev_end=last;
+  }
+ }else return false;
+ return true;
+}
+bool single_lookup(const uint8_t* d,size_t n,size_t p,
+ uint16_t glyph,uint16_t glyph_count,uint16_t& replacement,bool& found){
+ uint16_t format=0,coverage_offset=0;
+ if(!read16(d,n,p,format)||!read16(d,n,p+2,coverage_offset)||
+    coverage_offset<6||coverage_offset>=n-p)return false;
+ int index=-1;
+ if(!coverage_index(d,n,p+coverage_offset,glyph,index))return false;
+ if(index<0)return true;
+ uint16_t value=0;
+ if(format==1){
+  if(!read16(d,n,p+4,value))return false;
+  replacement=uint16_t((uint32_t(glyph)+value)&65535);
+ }else if(format==2){
+  uint16_t count=0;
+  if(!read16(d,n,p+4,count)||count>4096||
+     index>=count||n-p<6+size_t(count)*2||
+     !read16(d,n,p+6+size_t(index)*2,value))return false;
+  replacement=value;
+ }else return false;
+ if(replacement>=glyph_count)return false;
+ found=true;return true;
+}
+}
+bool sfnt_vertical_substitution(const SfntFont& font,uint16_t glyph,
+ uint16_t& replacement){
+ if(!font.bytes||glyph>=font.glyph_count)return false;
+ replacement=glyph;
+ const SfntTable* table=nullptr;
+ for(const auto& t:font.tables)if(t.tag==0x47535542){table=&t;break;}
+ if(!table)return true;
+ const uint8_t* data=font.bytes+table->offset;
+ const size_t n=table->length;
+ uint16_t major=0,minor=0,features=0,lookups=0;
+ if(n<10||!read16(data,n,0,major)||!read16(data,n,2,minor)||
+    !read16(data,n,6,features)||!read16(data,n,8,lookups)||
+    major!=1||(minor!=0&&minor!=1))return false;
+ uint16_t feature_count=0,lookup_count=0;
+ if(!read16(data,n,features,feature_count)||
+    !read16(data,n,lookups,lookup_count)||
+    feature_count>4096||lookup_count>4096||
+    features>n||n-features<2+size_t(feature_count)*6||
+    lookups>n||n-lookups<2+size_t(lookup_count)*2)return false;
+ // Prefer vrt2 to vert, which are mutually alternative vertical features.
+ for(unsigned pass=0;pass<2;++pass){
+  const uint32_t wanted=pass==0?0x76727432:0x76657274;
+  for(unsigned i=0;i<feature_count;++i){
+   const size_t rec=features+2+size_t(i)*6;
+   uint32_t tag=0;uint16_t relative=0;
+   if(!read32(data,n,rec,tag)||!read16(data,n,rec+4,relative))return false;
+   if(tag!=wanted)continue;
+   const size_t feature=features+relative;
+   uint16_t count=0;
+   if(relative<2||!read16(data,n,feature+2,count)||
+      count>4096||feature>n||n-feature<4+size_t(count)*2)return false;
+   for(unsigned j=0;j<count;++j){
+    uint16_t lookup_index=0,lookup_relative=0,type=0,sub_count=0;
+    if(!read16(data,n,feature+4+size_t(j)*2,lookup_index)||
+       lookup_index>=lookup_count||
+       !read16(data,n,lookups+2+size_t(lookup_index)*2,lookup_relative))
+      return false;
+    const size_t lookup=lookups+lookup_relative;
+    if(lookup_relative<2||!read16(data,n,lookup,type)||
+       !read16(data,n,lookup+4,sub_count)||sub_count>4096||
+       lookup>n||n-lookup<6+size_t(sub_count)*2)return false;
+    if(type!=1)continue; // Unsupported lookup types cannot be substituted.
+    for(unsigned k=0;k<sub_count;++k){
+     uint16_t sub_relative=0;
+     if(!read16(data,n,lookup+6+size_t(k)*2,sub_relative)||
+        sub_relative<6||sub_relative>=n-lookup)return false;
+     bool found=false;
+     if(!single_lookup(data,n,lookup+sub_relative,
+           glyph,font.glyph_count,replacement,found))return false;
+     if(found)return true;
+    }
+   }
+  }
+ }
+ return true;
+}
+}
