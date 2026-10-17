@@ -681,3 +681,8 @@ PDF Catalog の `/Lang` 文字列を `read_page_fonts` で取得し、レンダ�
 `src/parser/text_extract.h` に `extract_page_text(pdf,size,page,utf8)` を追加しました。ページのコンテンツストリームから `Tf` で選択されたフォントの `/ToUnicode` を使用し、`Tj` と `TJ` の1・2バイトコードをUTF-8へ変換します。インラインの `/Span << /ActualText <FEFF...> >> BDC` ではUTF-16BEで指定された代替テキストを一度出力し、囲まれたテキスト演算子の通常の抽出を抑制します。最大64階層、出力4MiBの制限を設けています。`rinpdf-text-extract` の統合テストを追加しました。
 
 これは暫定の**内部API**です。ページリソースの名前付きProperties経由のActualText、Unicode未指定フォントのフォールバック、位置に応じた空白・改行、複数のUnicodeコードポイントへのToUnicode、PDFのすべてのテキスト演算子には未対応です。画像OCRも行いません。今回のビルド・テストPASSは未確認です。
+
+## Named Properties ActualText extraction (experimental)
+ページの継承された `/Resources /Properties` にある名前付き辞書について、`/ActualText` と `/Lang` をそれぞれ保持できるようにしました。`extract_page_text` は `/Span /P1 BDC ... EMC` の名前参照で指定されたUTF-16BE `/ActualText` をUTF-8として出力し、対応するスコープ内の通常の `ToUnicode` テキスト抽出を抑制します。インライン `/ActualText` との併用も可能で、統合テストを追加しました。描画側は `/Lang` だけを利用します。
+
+制限: まだ内部APIであり、ActualTextのUTF-16BE以外の表現、位置情報に基づく文字組み、構造ツリー、完全なMarked Content対応は未実装です。変更後のビルド・全テストPASSは未確認です。
