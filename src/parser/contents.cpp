@@ -55,7 +55,7 @@ struct Reader {
  bool resolve_unicode_cmap(const Value& ref,unsigned depth,
   std::set<size_t>& visiting,std::map<CMapKey,std::u32string>& output,
   std::vector<std::pair<CMapKey,CMapKey>>& spaces,
-  std::string& cmap_name) const {
+  std::string& cmap_name,const Value* page_resources=nullptr) const {
   if(depth>=8||ref.kind!=Value::Kind::Reference||ref.integer<=0||
      !visiting.insert(size_t(ref.integer)).second)return false;
   Value dictionary;
@@ -77,6 +77,7 @@ struct Reader {
     // never guess a built-in CMap from the requested string.
     const Value* resources=get(dictionary,"Resources");
     Value resolved_resources;
+    if(!resources)resources=page_resources;
     if(!resources)return false;
     if(resources->kind==Value::Kind::Reference){
      if(!object(*resources,resolved_resources))return false;
@@ -94,7 +95,7 @@ struct Reader {
     parent_ref=it->second;
    }
    if(!resolve_unicode_cmap(parent_ref,depth+1,visiting,parent,
-        parent_spaces,parent_name))return false;
+        parent_spaces,parent_name,page_resources))return false;
    if(parent_name.empty()||
       (use->kind==Value::Kind::Name&&parent_name!=use->text))return false;
   }
@@ -303,7 +304,7 @@ struct Reader {
        std::set<size_t> visiting;
        std::string cmap_name;
        if(!resolve_unicode_cmap(*cmap,0,visiting,resource.unicode_sequences,
-            resource.unicode_codespaces,cmap_name)){
+            resource.unicode_codespaces,cmap_name,inherited)){
         active.erase(id);return false;
        }
       }
