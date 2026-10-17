@@ -65,7 +65,7 @@ int main(){
  w16(japanese,32,1);w16(japanese,34,0);
  w16(japanese,40,1);w32(japanese,42,0x76727432);
  w16(japanese,46,8);w16(japanese,48,0);w16(japanese,50,1);w16(japanese,52,0);
- d[58]=8; // Restore the valid coverage offset after malformed-input test.
+ w16(d,58,8); // Restore both bytes of the corrupted coverage offset.
  for(unsigned i=0;i<26;++i)japanese[54+i]=d[44+i];
  SfntFont jp{japanese.data(),japanese.size(),4,{{0x47535542,0,86}}};
  if(!sfnt_vertical_substitution(jp,1,result,0x68616e69,0x4a414e20)||
