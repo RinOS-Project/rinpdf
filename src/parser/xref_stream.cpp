@@ -187,81 +187,68 @@ bool read_uncompressed_xref(const uint8_t* data,size_t size,
 bool read_object_xref(const uint8_t* data,size_t size,
  std::vector<XrefEntry>& ordinary,std::vector<XrefStreamEntry>& compressed,
  Value& trailer){
- XrefFormat format=XrefFormat::Classic;
- std::vector<XrefEntry> classic;
- std::vector<XrefStreamEntry> stream;
- Value dict;
- if(!read_xref_section(data,size,format,classic,stream,dict)||
-    dict.kind!=Value::Kind::Dictionary)return false;
- if(dict.dictionary.count("XRefStm")||dict.dictionary.count("Encrypt"))return false;
- if(format==XrefFormat::Classic){
-  std::map<size_t,XrefEntry> merged;
-  for(const auto& entry:classic)
-   if(!merged.emplace(entry.object,entry).second)return false;
-  size_t current=0;
-  if(!find_startxref(data,size,current))return false;
-  Value latest=std::move(dict);
-  Value section=latest;
-  std::set<size_t> visited{current};
-  for(unsigned depth=0;depth<32;++depth){
-   auto prev=section.dictionary.find("Prev");
-   if(prev==section.dictionary.end()){
-    ordinary.clear();ordinary.reserve(merged.size());
-    for(const auto& item:merged)ordinary.push_back(item.second);
-    compressed.clear();trailer=std::move(latest);
-    return true;
-   }
-   if(prev->second.kind!=Value::Kind::Integer||prev->second.integer<0||
-      static_cast<uint64_t>(prev->second.integer)>=current)return false;
-   const size_t offset=static_cast<size_t>(prev->second.integer);
-   if(!visited.insert(offset).second)return false;
-   std::vector<XrefEntry> older;
-   size_t trailer_pos=0;
-   if(!read_classic_xref_at(data,size,offset,older,&trailer_pos))return false;
+ size_t current=0;
+ if(!find_startxref(data,size,current))return false;
+ std::set<size_t> visited;
+ std::map<size_t,XrefStreamEntry> newest;
+ Value latest;
+ for(unsigned depth=0;depth<32;++depth){
+  if(!visited.insert(current).second)return false;
+  std::vector<XrefStreamEntry> section;
+  Value dict;
+  size_t trailer_pos=0;
+  std::vector<XrefEntry> classic;
+  if(read_classic_xref_at(data,size,current,classic,&trailer_pos)){
    Lexer lexer(data+trailer_pos,size-trailer_pos);
-   Value old_trailer;
-   if(!parse_value(lexer,old_trailer)||
-      old_trailer.kind!=Value::Kind::Dictionary||
-      old_trailer.dictionary.count("Encrypt")||
-      old_trailer.dictionary.count("XRefStm"))return false;
-   for(const auto& item:older){
-    if(item.object>1000000)return false;
-    // Only the newest entry for an object number is effective,
-    // including a free entry that masks a formerly live object.
-    merged.emplace(item.object,item);
+   if(!parse_value(lexer,dict)||dict.kind!=Value::Kind::Dictionary)return false;
+   std::set<size_t> local;
+   for(const auto& item:classic){
+    if(item.object>1000000||!local.insert(item.object).second)return false;
+    section.push_back({item.object,static_cast<uint8_t>(item.in_use?1:0),
+                       static_cast<uint64_t>(item.offset),item.generation});
    }
-   if(merged.size()>1000000)return false;
-   for(const auto* key:{"Root","Info","ID"}){
-    if(!latest.dictionary.count(key)){
-     const auto found=old_trailer.dictionary.find(key);
-     if(found!=old_trailer.dictionary.end())
-      latest.dictionary.emplace(key,found->second);
-    }
+  }else if(!read_xref_stream_at(data,size,current,section,dict))return false;
+  if(dict.dictionary.count("Encrypt")||dict.dictionary.count("XRefStm"))return false;
+  if(depth==0)latest=dict;
+  else for(const auto* key:{"Root","Info","ID"}){
+   if(!latest.dictionary.count(key)){
+    auto found=dict.dictionary.find(key);
+    if(found!=dict.dictionary.end())latest.dictionary.emplace(key,found->second);
    }
-   current=offset;
-   section=std::move(old_trailer);
   }
-  return false; // bounded revision chain
- }
- if(dict.dictionary.count("Prev"))return false;
- std::vector<XrefEntry> converted;
- std::set<size_t> seen;
- for(const auto& item:stream){
-  if(!seen.insert(item.object).second)return false;
-  if(item.type==0)continue;
-  if(item.type==2){
-   if(item.field1==0||item.field1>1000000||item.field2>100000)return false;
-   continue;
+  std::set<size_t> local;
+  for(const auto& item:section){
+   if(!local.insert(item.object).second)return false;
+   if(item.type>2)return false;
+   if(item.type==1&&(item.field1>=size||item.field2>65535))return false;
+   if(item.type==2&&(item.field1==0||item.field1>1000000||
+                      item.field2>100000))return false;
+   // Newer free/type-1/type-2 entries all override older revisions.
+   newest.emplace(item.object,item);
   }
-  if(item.type!=1||item.field1>=size||item.field2>65535)return false;
-  converted.push_back({item.object,static_cast<size_t>(item.field1),
-                       static_cast<unsigned>(item.field2),true});
+  if(newest.size()>1000000)return false;
+  auto prev=dict.dictionary.find("Prev");
+  if(prev==dict.dictionary.end()){
+   std::vector<XrefEntry> normals;
+   std::vector<XrefStreamEntry> all;
+   for(const auto& [id,item]:newest){
+    all.push_back(item);
+    if(item.type==1)normals.push_back({
+     id,static_cast<size_t>(item.field1),
+     static_cast<unsigned>(item.field2),true});
+    else if(item.type==0)normals.push_back({id,0,0,false});
+   }
+   if(normals.empty())return false;
+   ordinary=std::move(normals);
+   compressed=std::move(all);
+   trailer=std::move(latest);
+   return true;
+  }
+  if(prev->second.kind!=Value::Kind::Integer||prev->second.integer<0||
+     static_cast<uint64_t>(prev->second.integer)>=current)return false;
+  current=static_cast<size_t>(prev->second.integer);
  }
- if(converted.empty())return false;
- ordinary=std::move(converted);
- compressed=std::move(stream);
- trailer=std::move(dict);
- return true;
+ return false;
 }
 
 }
