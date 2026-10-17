@@ -54,7 +54,8 @@ struct Reader {
  }
  bool walk_fonts(const Value& ref,size_t depth,size_t& current,size_t target,
   std::set<size_t>& active,const Value* inherited,
-  std::map<std::string,PageFont>& output) const {
+  std::map<std::string,PageFont>& output,
+  const std::string& catalog_language) const {
   if(depth>64||ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
   const size_t id=static_cast<size_t>(ref.integer);
   if(!active.insert(id).second)return false;
@@ -186,6 +187,13 @@ struct Reader {
         active.erase(id);return false;
        }
       }
+      resource.language=catalog_language;
+      if(const Value* lang=get(node,"Lang")){
+       if(lang->kind!=Value::Kind::String||lang->text.size()>64){
+        active.erase(id);return false;
+       }
+       resource.language=lang->text;
+      }
       output.emplace(key,std::move(resource));
      }
     }
@@ -196,7 +204,7 @@ struct Reader {
   const Value* kids=get(node,"Kids");
   if(!kids||kids->kind!=Value::Kind::Array){active.erase(id);return false;}
   for(const Value& child:kids->array)
-   if(!walk_fonts(child,depth+1,current,target,active,inherited,output)){
+   if(!walk_fonts(child,depth+1,current,target,active,inherited,output,catalog_language)){
     active.erase(id);return false;
    }
   active.erase(id);return true;
@@ -321,13 +329,13 @@ bool read_page_fonts(const uint8_t* data,size_t size,size_t index,
  if(!type||type->kind!=Value::Kind::Name||type->text!="Catalog"||!pages)return false;
  std::map<std::string,PageFont> result;
  size_t current=0;std::set<size_t> active;
- if(!reader.walk_fonts(*pages,0,current,index,active,nullptr,result)||index>=current)
-  return false;
- // Catalog /Lang is the document-wide language fallback.
- if(const Value* language=get(catalog,"Lang")){
-  if(language->kind!=Value::Kind::String||language->text.size()>64)return false;
-  for(auto& [name,font]:result)font.language=language->text;
+ std::string document_language;
+ if(const Value* lang=get(catalog,"Lang")){
+  if(lang->kind!=Value::Kind::String||lang->text.size()>64)return false;
+  document_language=lang->text;
  }
+ if(!reader.walk_fonts(*pages,0,current,index,active,nullptr,result,document_language)||index>=current)
+  return false;
  fonts=std::move(result);
  return true;
 }
