@@ -30,19 +30,31 @@ bool code(const Token& t,CMapKey& key){
 }
 bool parse_tounicode_sequences(const uint8_t* data,size_t size,
  std::map<CMapKey,std::u32string>& result,
- std::vector<std::pair<CMapKey,CMapKey>>* output_codespaces){
+ std::vector<std::pair<CMapKey,CMapKey>>* output_codespaces,
+ const std::string& parent_name,
+ const std::map<CMapKey,std::u32string>* parent_mapping,
+ const std::vector<std::pair<CMapKey,CMapKey>>* parent_codespaces){
  if(!data||!size||size>1024*1024)return false;
  Lexer lexer(data,size);
  std::map<CMapKey,std::u32string> mapped;
  std::vector<std::pair<CMapKey,CMapKey>> codespaces;
  size_t total=0;
+ bool inherited=false;
+ std::string preceding_name;
  while(true){
   Token t=lexer.next();
   if(t.kind==TokenKind::End)break;
   if(t.kind==TokenKind::Invalid)return false;
-  // An inherited CMap cannot be silently ignored: it changes both
-  // code boundaries and Unicode mappings.
-  if(t.kind==TokenKind::Keyword&&t.value=="usecmap")return false;
+  if(t.kind==TokenKind::Name){preceding_name=t.value;continue;}
+  if(t.kind==TokenKind::Keyword&&t.value=="usecmap"){
+   if(inherited||preceding_name.empty()||preceding_name!=parent_name||
+      !parent_mapping||!parent_codespaces||
+      parent_mapping->size()>4096||parent_codespaces->size()>32)return false;
+   inherited=true;
+   preceding_name.clear();
+   continue;
+  }
+  preceding_name.clear();
   if(t.kind!=TokenKind::Integer)continue;
   unsigned count=0;
   if(t.value.empty()||t.value.size()>4)return false;
@@ -131,6 +143,24 @@ bool parse_tounicode_sequences(const uint8_t* data,size_t size,
    if((long_range.first.code>>shift)<=short_range.second.code&&
       (long_range.second.code>>shift)>=short_range.first.code)return false;
   }
+ if(inherited){
+  // Local definitions override inherited mappings without silently discarding
+  // any inherited mappings or the parent's code boundaries.
+  for(const auto& entry:*parent_mapping){
+   if(mapped.size()>=4096&&!mapped.count(entry.first))return false;
+   mapped.emplace(entry.first,entry.second);
+  }
+  if(codespaces.empty())codespaces=*parent_codespaces;
+  else if(!parent_codespaces->empty()){
+   // Explicit local and inherited code spaces must agree.
+   if(codespaces.size()!=parent_codespaces->size())return false;
+   for(size_t i=0;i<codespaces.size();++i){
+    const auto& l=codespaces[i];const auto& p=(*parent_codespaces)[i];
+    if(l.first.width!=p.first.width||l.first.code!=p.first.code||
+       l.second.width!=p.second.width||l.second.code!=p.second.code)return false;
+   }
+  }
+ }
  if(mapped.empty())return false;
  if(!codespaces.empty())for(const auto& entry:mapped){
   bool covered=false;
