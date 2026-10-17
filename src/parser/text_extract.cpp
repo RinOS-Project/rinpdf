@@ -55,8 +55,10 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
  std::string& utf8){
  std::vector<uint8_t> contents;
  std::map<std::string,PageFont> fonts;
+ PageProperties properties;
  if(!read_page_contents(pdf,size,page,contents)||
-    !read_page_fonts(pdf,size,page,fonts))return false;
+    !read_page_fonts(pdf,size,page,fonts)||
+    !read_page_properties(pdf,size,page,properties))return false;
  Lexer lexer(contents.data(),contents.size());
  std::string selected,output;
  bool text=false;
@@ -110,8 +112,20 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
     Token op=look.next();
     if(op.kind==TokenKind::Keyword&&op.value=="BDC"){
      if(actual_stack.size()>=64)return false;
+     auto property=properties.find(next.value);
+     if(property==properties.end())return false;
+     const bool replace=property->second.has_actual_text;
+     if(replace){
+      std::string replacement;
+      if(!actual_text(property->second.actual_text,replacement))return false;
+      if(!suppressed){
+       if(output.size()+replacement.size()>4*1024*1024)return false;
+       output+=replacement;
+      }
+     }
      actual_stack.push_back({});
-     suppress_stack.push_back(false);
+     suppress_stack.push_back(replace);
+     suppressed+=replace;
      lexer=look;continue;
     }
    }
