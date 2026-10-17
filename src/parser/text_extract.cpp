@@ -320,6 +320,9 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
    operands.push_back(number);continue;
   }
   if(t.kind!=TokenKind::Keyword)continue;
+  // TJ is consumed together with its preceding array, while Tf is consumed
+  // with a font name and size. A bare operator must never be ignored.
+  if(text&&(t.value=="TJ"||t.value=="Tf"))return false;
   // Rendering mode and rise affect glyph painting/placement, not the
   // Unicode sequence itself. Validate their operands during extraction.
   if(text&&(t.value=="Tr"||t.value=="Ts")){
