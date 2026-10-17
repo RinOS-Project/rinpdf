@@ -112,5 +112,18 @@ int main(){
  if(!render_embedded_truetype_runs(f,{{false,cid_one,0}},16,8,8,
        64,64,cid_pixels.data(),64*4,0,64,1,1,0,0,0,cid_next,
        nullptr,0,0,64,64,{},nullptr,"Identity-H",&mapped))return 24;
+ const parser::CIDWidths pdf_widths{900,{{1,500}}};
+ double pdf_advance=0;
+ if(!render_embedded_truetype_runs(f,{{false,cid_one,0}},16,8,8,
+       64,64,cid_pixels.data(),64*4,0,64,1,1,0,0,0,pdf_advance,
+       nullptr,0,0,64,64,{},nullptr,"Identity-H",&identity,&pdf_widths))
+   return 25;
+ if(std::abs(pdf_advance-16)>0.001)return 26; // 8 + 16*500/1000
+ const parser::CIDWidths fallback{900,{}};
+ if(!render_embedded_truetype_runs(f,{{false,cid_one,0}},16,8,8,
+       64,64,cid_pixels.data(),64*4,0,64,1,1,0,0,0,pdf_advance,
+       nullptr,0,0,64,64,{},nullptr,"Identity-H",&identity,&fallback))
+   return 27;
+ if(std::abs(pdf_advance-22.4)>0.001)return 28; // 8 + 16*900/1000
  return 0;
 }
