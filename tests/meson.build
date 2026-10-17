@@ -17,3 +17,5 @@ test('rinpdf-clip-budget',executable('rinpdf-clip-budget','clip_budget.cpp',depe
 test('rinpdf-cubic-arc',executable('rinpdf-cubic-arc','cubic_arc.cpp',dependencies:rinpdf_dep))
 
 test('rinpdf-cubic-dash',executable('rinpdf-cubic-dash','cubic_dash.cpp',dependencies:rinpdf_dep))
+
+test('rinpdf-xref-stream',executable('rinpdf-xref-stream','xref_stream.cpp',dependencies:rinpdf_dep))
