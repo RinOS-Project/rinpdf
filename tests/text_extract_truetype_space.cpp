@@ -47,7 +47,7 @@ int main(){
  append(1,"<< /Type /Catalog /Pages 2 0 R >>");
  append(2,"<< /Type /Pages /Count 1 /Kids [3 0 R] /Resources << /Font << /F1 4 0 R >> >> >>");
  append(3,"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Contents 5 0 R >>");
- append(4,"<< /Type /Font /Subtype /TrueType /BaseFont /Example /Encoding /WinAnsiEncoding /FontDescriptor 8 0 R /ToUnicode 6 0 R >>");
+ append(4,"<< /Type /Font /Subtype /TrueType /BaseFont /Example /Encoding /WinAnsiEncoding /FontDescriptor 8 0 R /FirstChar 32 /LastChar 32 /Widths [250] /ToUnicode 6 0 R >>");
  append(5,"<< /Length "+std::to_string(content.size())+" >>\nstream\n"+content+"\nendstream");
  append(6,"<< /Length "+std::to_string(cmap.size())+" >>\nstream\n"+cmap+"\nendstream");
  append(7,"<< /Length "+std::to_string(font.size())+" >>\nstream\n"+
@@ -65,7 +65,7 @@ int main(){
  std::string out;
  if(!extract_page_text(reinterpret_cast<const uint8_t*>(pdf.data()),
       pdf.size(),0,out))return 1;
- // The 600/1000-em gap is narrower than this embedded font's space (700).
- if(out!="AB")return 2;
+ // PDF Widths declares a 250-unit space; it overrides SFNT's 700-unit advance.
+ if(out!="A B")return 2;
  return 0;
 }
