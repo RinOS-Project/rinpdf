@@ -123,6 +123,10 @@ struct Reader {
        if(!parse_cid_widths(get(descendant,"DW"),get(descendant,"W"),resource.cid_widths)){
         active.erase(id);return false;
        }
+       if(!parse_cid_vertical_metrics(get(descendant,"DW2"),
+            get(descendant,"W2"),resource.cid_widths,resource.vertical_metrics)){
+        active.erase(id);return false;
+       }
        const Value* map=get(descendant,"CIDToGIDMap");
        if(map){
         if(map->kind==Value::Kind::Name){
