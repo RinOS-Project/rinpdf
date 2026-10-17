@@ -2,6 +2,7 @@
 #include "xref.h"
 #include "xref_stream.h"
 #include "object.h"
+#include "object_resolver.h"
 #include "stream_object.h"
 #include "stream.h"
 #include "value.h"
@@ -27,7 +28,7 @@ static bool box_value(const Value& value,MediaBox& box){
  box={v[0],v[1],v[2],v[3]};return true;
 }
 struct Reader {
- const uint8_t *data;size_t size;const std::vector<XrefEntry>& xref;
+ const uint8_t *data;size_t size;const std::vector<XrefEntry>& xref;const std::vector<XrefStreamEntry>& compressed;
  bool entry(const Value& ref,const XrefEntry*& out) const {
   if(ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
   auto it=std::find_if(xref.begin(),xref.end(),[&](const XrefEntry& e){
@@ -36,10 +37,7 @@ struct Reader {
   if(it==xref.end())return false;out=&*it;return true;
  }
  bool object(const Value& ref,Value& out) const {
-  const XrefEntry *e=nullptr;if(!entry(ref,e))return false;
-  size_t a=0,b=0;if(!resolve_object(data,size,*e,a,b)||b<=a)return false;
-  Lexer l(data+a,b-a);
-  return parse_value(l,out)&&l.next().kind==TokenKind::End;
+  return resolve_reference_value(data,size,xref,compressed,ref,out);
  }
  bool stream(const Value& ref,std::vector<uint8_t>& bytes,size_t limit) const {
   const XrefEntry *e=nullptr;if(!entry(ref,e))return false;
@@ -128,11 +126,11 @@ struct Reader {
 };
 bool read_page_contents(const uint8_t *data,size_t size,size_t index,std::vector<uint8_t>& contents,size_t limit){
  contents.clear();if(!data||limit==0)return false;
- std::vector<XrefEntry> xref;Value trailer;
- if(!read_uncompressed_xref(data,size,xref,trailer))return false;
+ std::vector<XrefEntry> xref;std::vector<XrefStreamEntry> compressed;Value trailer;
+ if(!read_object_xref(data,size,xref,compressed,trailer))return false;
  if(get(trailer,"Prev")||get(trailer,"XRefStm")||get(trailer,"Encrypt"))return false;
  const Value *root=get(trailer,"Root");if(!root)return false;
- Reader reader{data,size,xref};Value catalog;
+ Reader reader{data,size,xref,compressed};Value catalog;
  if(!reader.object(*root,catalog))return false;
  const Value *type=get(catalog,"Type"),*pages=get(catalog,"Pages");
  if(!type||type->kind!=Value::Kind::Name||type->text!="Catalog"||!pages)return false;
@@ -141,11 +139,11 @@ bool read_page_contents(const uint8_t *data,size_t size,size_t index,std::vector
 }
 bool read_page_box(const uint8_t *data,size_t size,size_t index,MediaBox& box){
  box={0,0,0,0};if(!data)return false;
- std::vector<XrefEntry> xref;Value trailer;
- if(!read_uncompressed_xref(data,size,xref,trailer))return false;
+ std::vector<XrefEntry> xref;std::vector<XrefStreamEntry> compressed;Value trailer;
+ if(!read_object_xref(data,size,xref,compressed,trailer))return false;
  if(get(trailer,"Prev")||get(trailer,"XRefStm")||get(trailer,"Encrypt"))return false;
  const Value *root=get(trailer,"Root");if(!root)return false;
- Reader reader{data,size,xref};Value catalog;
+ Reader reader{data,size,xref,compressed};Value catalog;
  if(!reader.object(*root,catalog))return false;
  const Value *type=get(catalog,"Type"),*pages=get(catalog,"Pages");
  if(!type||type->kind!=Value::Kind::Name||type->text!="Catalog"||!pages)return false;
