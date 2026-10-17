@@ -1,5 +1,7 @@
 #include "../src/parser/object_stream.h"
 #include "../src/parser/xref_stream.h"
+#include "../src/parser/object_resolver.h"
+#include <map>
 #include <string>
 #include <vector>
 using namespace rinpdf::parser;
@@ -47,5 +49,21 @@ int main(){
  refs[0].type=2;
  if(resolve_compressed_object(reinterpret_cast<const uint8_t*>(pdf.data()),
       pdf.size(),refs,7,resolved))return 11;
+ refs[0].type=1;
+ std::map<size_t,Value> cache;
+ Value reference;
+ reference.kind=Value::Kind::Reference;
+ reference.integer=7;
+ if(!resolve_reference_value(reinterpret_cast<const uint8_t*>(pdf.data()),
+       pdf.size(),{},refs,reference,resolved,&cache))return 12;
+ if(cache.size()!=1||cache.at(7).kind!=Value::Kind::Dictionary)return 13;
+ // Cache hits must not cause additional stream parses.
+ if(!resolve_reference_value(reinterpret_cast<const uint8_t*>(pdf.data()),
+       pdf.size(),{},refs,reference,resolved,&cache))return 14;
+ if(cache.size()!=1||resolved.dictionary.at("Type").text!="Catalog")return 15;
+ reference.generation=1;
+ if(resolve_reference_value(reinterpret_cast<const uint8_t*>(pdf.data()),
+       pdf.size(),{},refs,reference,resolved,&cache))return 16;
+ if(cache.size()!=1)return 17;
  return 0;
 }
