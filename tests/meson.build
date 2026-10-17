@@ -28,3 +28,5 @@ test('rinpdf-compressed-pages',executable('rinpdf-compressed-pages','compressed_
 executable('rinpdf-corpus','pdf_corpus.cpp',dependencies:rinpdf_dep)
 
 test('rinpdf-page-fonts',executable('rinpdf-page-fonts','page_fonts.cpp',dependencies:rinpdf_dep))
+
+test('rinpdf-text-show',executable('rinpdf-text-show','text_show.cpp',dependencies:rinpdf_dep))
