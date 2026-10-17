@@ -91,5 +91,26 @@ int main(){
        64,64,spaced_pixels.data(),64*4,0,64,1,1,0,0,0,adjusted,
        nullptr,0,0,64,64,{1,0,0,1,0,0,1,0,0,1,0,0,0.5}))return 17;
  if(std::abs(adjusted-10)>0.001)return 18;
+ // Identity-H uses two bytes per CID; CID 1 selects glyph 1.
+ const parser::CIDGlyphMap identity;
+ const std::string cid_one("\\0\\1",2);
+ std::vector<uint8_t> cid_pixels(64*64*4,255);
+ double cid_next=0;
+ if(!render_embedded_truetype_runs(f,{{false,cid_one,0}},16,8,8,
+       64,64,cid_pixels.data(),64*4,0,64,1,1,0,0,0,cid_next,
+       nullptr,0,0,64,64,{},nullptr,"Identity-H",&identity))return 19;
+ if(std::abs(cid_next-19.2)>0.001)return 20;
+ bool cid_ink=false;
+ for(size_t i=0;i<cid_pixels.size();i+=4)if(cid_pixels[i]<255)cid_ink=true;
+ if(!cid_ink)return 21;
+ double before=cid_next;
+ if(render_embedded_truetype_runs(f,{{false,std::string(1,'A'),0}},16,8,8,
+       64,64,cid_pixels.data(),64*4,0,64,1,1,0,0,0,cid_next,
+       nullptr,0,0,64,64,{},nullptr,"Identity-H",&identity))return 22;
+ if(cid_next!=before)return 23;
+ const parser::CIDGlyphMap mapped{false,{0,0,0,1}};
+ if(!render_embedded_truetype_runs(f,{{false,cid_one,0}},16,8,8,
+       64,64,cid_pixels.data(),64*4,0,64,1,1,0,0,0,cid_next,
+       nullptr,0,0,64,64,{},nullptr,"Identity-H",&mapped))return 24;
  return 0;
 }
