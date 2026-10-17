@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <map>
 #include <string>
+#include <utility>
 namespace rinpdf::parser {
 // Strict subset of Adobe glyph names; unknown names fail closed.
 inline bool glyph_name_unicode(const std::string& name,uint32_t& code){
