@@ -143,6 +143,7 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
  double font_size=0;
  double character_spacing=0;
  double word_spacing=0;
+ double text_leading=0;
  double pending_tj_adjustment=0;
  bool text_run_emitted=false;
  double horizontal_scale=1;
@@ -335,6 +336,7 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
   if(text&&(t.value=="Td"||t.value=="TD")){
    if(operands.size()!=2||have_pending)return false;
    if(operands[1]!=0&&!suppressed)new_line_pending=true;
+   if(t.value=="TD")text_leading=-operands[1];
    // Td/TD operate in the current text-line coordinate system.
    const double dx=operands[0],dy=operands[1];
    text_line_x+=line_axis_x*dx-line_axis_y*dy;
@@ -368,6 +370,11 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
    pending_tj_adjustment=0;text_run_emitted=false;
    text_line_x=0;text_line_y=0;line_axis_x=1;line_axis_y=0;continue;}
   if(t.value=="T*"&&text){
+   if(have_pending||!operands.empty())return false;
+   text_line_x+=line_axis_y*text_leading;
+   text_line_y-=line_axis_x*text_leading;
+   if(!std::isfinite(text_line_x)||!std::isfinite(text_line_y))return false;
+   has_line_origin=true;
    if(!suppressed)new_line_pending=true;
    continue;
   }
@@ -391,7 +398,11 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
      character_spacing=operands[1];
      operands.clear();
     }else if(!operands.empty())return false;
-    // Quote operators include T*: the new text line is a new gap context.
+    // Quote operators include T*: advance by the current text leading.
+    text_line_x+=line_axis_y*text_leading;
+    text_line_y-=line_axis_x*text_leading;
+    if(!std::isfinite(text_line_x)||!std::isfinite(text_line_y))return false;
+    has_line_origin=true;
     pending_tj_adjustment=0;
     text_run_emitted=false;
     if(!suppressed)new_line_pending=true;
