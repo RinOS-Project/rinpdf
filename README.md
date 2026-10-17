@@ -480,3 +480,8 @@ PDFではパス構築後、ストローク演算子の前に破線設定 `d` を
 `find_startxref` で末尾の `startxref` オフセットを解析し、`read_xref_section` で Classic xref と XRef Stream を振り分ける内部APIを追加しました。XRef Streamのエントリは圧縮オブジェクト情報を残した独立表現とし、Classic形式へ誤変換しません。ストリーム形式の `startxref` 指定と不正オフセットを検査するテストを追加しました。
 
 **制限:** 公開 document/page APIへの統合、`/Prev` とハイブリッド xref、Object Streamからの圧縮オブジェクト解決は未対応です。現段階ではXRef Streamを使う一般PDFのページを開く機能は完成していません。今回の変更後のテストPASSは未確認です。
+
+## Uncompressed XRef Stream page tree integration (experimental)
+`read_uncompressed_xref` を追加し、Classic xrefおよびXRef StreamのType 1通常オブジェクトを既存 `XrefEntry` に変換して `pages.cpp` と `contents.cpp` から使用するようにしました。Type 2圧縮オブジェクト（Object Stream）、`/Prev`、`/XRefStm`、暗号化は未対応として拒否します。XRef Stream形式の最小PDFをテスト内で生成し、公開 `rinpdf_document_page_count` を呼ぶ回帰テストを追加しました。
+
+**制限:** フォント・画像を含む一般PDF、Object Stream参照、増分更新にはまだ対応していません。今回の変更後のビルド・テストPASSは未確認です。
