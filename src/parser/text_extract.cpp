@@ -447,6 +447,8 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
    text_line_x=0;text_line_y=0;line_axis_x=1;line_axis_y=0;continue;}
   if(t.value=="T*"&&text){
    if(have_pending||!operands.empty())return false;
+   // Move to the next line's origin, not the prior line's glyph cursor.
+   text_cursor=0;text_cursor_known=true;
    text_line_x+=line_axis_y*text_leading;
    text_line_y-=line_axis_x*text_leading;
    if(!std::isfinite(text_line_x)||!std::isfinite(text_line_y))return false;
