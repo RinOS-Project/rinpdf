@@ -7,6 +7,7 @@
 #include "stream.h"
 #include "value.h"
 #include <algorithm>
+#include <map>
 #include <set>
 #include <cmath>
 namespace rinpdf::parser {
@@ -29,6 +30,7 @@ static bool box_value(const Value& value,MediaBox& box){
 }
 struct Reader {
  const uint8_t *data;size_t size;const std::vector<XrefEntry>& xref;const std::vector<XrefStreamEntry>& compressed;
+ mutable std::map<size_t,Value> compressed_cache;
  bool entry(const Value& ref,const XrefEntry*& out) const {
   if(ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
   auto it=std::find_if(xref.begin(),xref.end(),[&](const XrefEntry& e){
@@ -37,7 +39,7 @@ struct Reader {
   if(it==xref.end())return false;out=&*it;return true;
  }
  bool object(const Value& ref,Value& out) const {
-  return resolve_reference_value(data,size,xref,compressed,ref,out);
+  return resolve_reference_value(data,size,xref,compressed,ref,out,&compressed_cache);
  }
  bool stream(const Value& ref,std::vector<uint8_t>& bytes,size_t limit) const {
   const XrefEntry *e=nullptr;if(!entry(ref,e))return false;
