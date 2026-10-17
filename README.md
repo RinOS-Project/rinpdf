@@ -656,3 +656,8 @@ wsl ./build-verify-new/tests/rinpdf-gsub-font /usr/share/fonts/truetype/your-fon
 `sfnt_vertical_substitution` にオプションのOpenType script tag・language tagを追加し、対象ScriptTableの指定LangSysで列挙されるFeatureIndexのみを選択します。言語タグを指定せずDefaultLangSysも存在しない場合は、勝手に別言語の機能を有効化しません。指定言語が存在しなければそのスクリプトのDefaultLangSysにフォールバックします。日本語 `hani` / `JAN ` のLangSysによる選択と、未選択時に字形置換を行わない回帰テストを追加しました。従来の引数省略呼び出しも維持します。
 
 現段階ではフォントのメタデータを使った言語自動判定や、PDF文書からの明示的な言語指定の連携は未実装です。変更後のビルド・全テストPASSは未確認です。
+
+## PDF Catalog language to GSUB (experimental)
+PDF Catalog の `/Lang` 文字列を `read_page_fonts` で取得し、レンダラーのフォントリソースを通じて `Identity-V` の GSUB 選択へ渡します。明示された `ja` / `ja-*` は `hani` + `JAN `、`ko` / `ko-*` は `hang` + `KOR ` にマッピングします。それ以外の言語はタグを推測せず従来の既定選択を維持します。Catalog言語の伝搬に関するType0フォントテストを追加しました。
+
+制限: 今回はCatalog `/Lang` のみが対象で、ページ単位の `/Lang` やMarked Contentの `/Lang`、BCP 47の完全解析、フォント別・グリフ別のスクリプト判定は未実装です。変更後のビルド・テストPASSは未確認です。
