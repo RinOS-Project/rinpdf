@@ -72,5 +72,18 @@ int main(){
   "1 beginbfchar <81> <0041> endbfchar";
  if(parse_tounicode_sequences(reinterpret_cast<const uint8_t*>(ambiguous.data()),
     ambiguous.size(),sequences))return 20;
+ const std::map<CMapKey,std::u32string> parent{{{1,0x41},U"A"},{{1,0x42},U"B"}};
+ const std::vector<std::pair<CMapKey,CMapKey>> parent_space{
+   {{1,0x00},{1,0xff}}};
+ const std::string derived=
+   "/MyParent usecmap 1 beginbfchar <41> <005A> endbfchar";
+ if(!parse_tounicode_sequences(
+   reinterpret_cast<const uint8_t*>(derived.data()),derived.size(),
+   sequences,&ranges,"MyParent",&parent,&parent_space))return 21;
+ if(sequences.size()!=2||sequences.at({1,0x41})!=U"Z"||
+    sequences.at({1,0x42})!=U"B"||ranges.size()!=1)return 22;
+ if(parse_tounicode_sequences(
+   reinterpret_cast<const uint8_t*>(derived.data()),derived.size(),
+   sequences,&ranges,"WrongName",&parent,&parent_space))return 23;
  return 0;
 }
