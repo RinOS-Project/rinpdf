@@ -2,6 +2,7 @@
 #include "xref.h"
 #include "xref_stream.h"
 #include "object.h"
+#include "object_resolver.h"
 #include "value.h"
 #include <algorithm>
 #include <set>
@@ -13,18 +14,10 @@ static const Value* field(const Value& v,const char* key){
 }
 static bool named(const Value& v,const char* name){return v.kind==Value::Kind::Name&&v.text==name;}
 struct Context {
- const uint8_t *bytes;size_t length;const std::vector<XrefEntry>& xref;
+ const uint8_t *bytes;size_t length;const std::vector<XrefEntry>& xref;const std::vector<XrefStreamEntry>& compressed;
  std::set<size_t> active;size_t visited=0;
  bool load(const Value& ref,Value& out){
-  if(ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
-  size_t id=(size_t)ref.integer;
-  auto it=std::find_if(xref.begin(),xref.end(),[&](const XrefEntry& e){return e.object==id&&e.generation==ref.generation&&e.in_use;});
-  if(it==xref.end())return false;
-  size_t begin=0,end=0;
-  if(!resolve_object(bytes,length,*it,begin,end)||end<=begin)return false;
-  Lexer lexer(bytes+begin,end-begin);
-  if(!parse_value(lexer,out))return false;
-  return lexer.next().kind==TokenKind::End;
+  return resolve_reference_value(bytes,length,xref,compressed,ref,out);
  }
  bool walk(const Value& ref,size_t depth,size_t& count){
   if(depth>64||visited++>=100000||ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
@@ -51,12 +44,13 @@ struct Context {
 };
 bool count_page_tree(const uint8_t *data,size_t size,size_t& count){
  count=0;std::vector<XrefEntry> entries;
+ std::vector<XrefStreamEntry> compressed;
  Value trailer;
- if(!read_uncompressed_xref(data,size,entries,trailer))return false;
+ if(!read_object_xref(data,size,entries,compressed,trailer))return false;
  if(field(trailer,"Prev")||field(trailer,"XRefStm")||field(trailer,"Encrypt"))return false;
  const Value* root_ref=field(trailer,"Root");
  if(!root_ref||root_ref->kind!=Value::Kind::Reference)return false;
- Context ctx{data,size,entries};
+ Context ctx{data,size,entries,compressed};
  Value root;
  if(!ctx.load(*root_ref,root))return false;
  const Value* type=field(root,"Type");
