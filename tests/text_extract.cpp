@@ -22,7 +22,7 @@ int main(){
  append(1,"<< /Type /Catalog /Pages 2 0 R >>");
  append(2,"<< /Type /Pages /Count 1 /Kids [3 0 R] /Resources << /Font << /F1 4 0 R >> /CMap << /Parent 7 0 R >> /Properties << /P1 << /ActualText <FEFF4E16> >> >> >> >>");
  append(3,"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Contents 5 0 R >>");
- append(4,"<< /Type /Font /Subtype /TrueType /BaseFont /Example /Encoding /WinAnsiEncoding /ToUnicode 6 0 R >>");
+ append(4,"<< /Type /Font /Subtype /TrueType /BaseFont /Example /Encoding /WinAnsiEncoding /FirstChar 65 /LastChar 66 /Widths [600 500] /ToUnicode 6 0 R >>");
  append(5,"<< /Length "+std::to_string(content.size())+" >>\nstream\n"+content+"\nendstream");
  const std::string cmap="2 beginbfchar <20> <0020> <41> <00410042> endbfchar";
  append(6,"<< /UseCMap /Parent /CMapName /Child /Length "+std::to_string(cmap.size())+" >>\nstream\n"+cmap+"\nendstream");
@@ -46,6 +46,8 @@ int main(){
  if(resolved_fonts.count("F1")!=1)return 12;
  const auto& unicode=resolved_fonts.at("F1").unicode_sequences;
  if(unicode.count({1,0x41})!=1||unicode.count({1,0x42})!=1)return 13;
+ if(resolved_fonts.at("F1").simple_widths.at(65)!=600||
+    resolved_fonts.at("F1").simple_widths.at(66)!=500)return 69;
  PageProperties page_properties;
  if(!read_page_properties(reinterpret_cast<const uint8_t*>(pdf.data()),
       pdf.size(),0,page_properties))return 14;
