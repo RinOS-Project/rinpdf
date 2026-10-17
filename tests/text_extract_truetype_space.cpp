@@ -67,5 +67,24 @@ int main(){
       pdf.size(),0,out))return 1;
  // PDF Widths declares a 250-unit space; it overrides SFNT's 700-unit advance.
  if(out!="A B")return 2;
+ // Equal-length fixture mutations preserve all object/xref offsets.
+ // The space code 32 is now absent from Widths; MissingWidth 250 applies.
+ std::string fallback_pdf=pdf;
+ auto replace_once=[&](const std::string& from,const std::string& to){
+  if(from.size()!=to.size())return false;
+  const size_t pos=fallback_pdf.find(from);
+  if(pos==std::string::npos)return false;
+  fallback_pdf.replace(pos,from.size(),to);
+  return true;
+ };
+ if(!replace_once("/FirstChar 32 /LastChar 32 /Widths [250]",
+                  "/FirstChar 65 /LastChar 65 /Widths [500]")||
+    !replace_once("/MissingWidth 900","/MissingWidth 250"))return 3;
+ if(!extract_page_text(reinterpret_cast<const uint8_t*>(fallback_pdf.data()),
+      fallback_pdf.size(),0,out)||out!="A B")return 4;
+ // A negative descriptor width is malformed and must fail closed.
+ if(!replace_once("/MissingWidth 250","/MissingWidth -50"))return 5;
+ if(extract_page_text(reinterpret_cast<const uint8_t*>(fallback_pdf.data()),
+      fallback_pdf.size(),0,out))return 6;
  return 0;
 }
