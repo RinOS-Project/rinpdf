@@ -247,7 +247,8 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
   }
   if(t.kind==TokenKind::ArrayOpen&&text){
    std::vector<renderer::TextRun> runs;
-   if(!renderer::parse_text_array(lexer,runs)||!fonts.count(selected))return false;
+   if(have_pending||!operands.empty()||
+      !renderer::parse_text_array(lexer,runs)||!fonts.count(selected))return false;
    if(!suppressed){
     bool has_glyphs=false;
     for(const auto& run:runs)if(!run.adjustment&&!run.bytes.empty())has_glyphs=true;
