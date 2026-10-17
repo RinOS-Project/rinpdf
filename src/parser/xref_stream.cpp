@@ -1,4 +1,6 @@
 #include "xref_stream.h"
+#include "stream.h"
+#include <cstring>
 #include <limits>
 #include <utility>
 namespace rinpdf::parser {
@@ -50,4 +52,73 @@ bool decode_xref_stream_entries(const uint8_t* data,size_t size,
  result=std::move(decoded);
  return true;
 }
+static bool xref_space(uint8_t c){
+ return c==0||c==9||c==10||c==12||c==13||c==32;
+}
+static bool xref_unsigned(const uint8_t* d,size_t n,size_t& p,uint64_t& out){
+ while(p<n&&xref_space(d[p]))++p;
+ if(p==n||d[p]<'0'||d[p]>'9')return false;
+ uint64_t v=0;
+ while(p<n&&d[p]>='0'&&d[p]<='9'){
+  const unsigned digit=d[p++]-'0';
+  if(v>(UINT64_MAX-digit)/10)return false;
+  v=v*10+digit;
+ }
+ if(p<n&&!xref_space(d[p]))return false;
+ out=v;return true;
+}
+static bool xref_integer(const Value& v,uint64_t& out){
+ if(v.kind!=Value::Kind::Integer||v.integer<0)return false;
+ out=static_cast<uint64_t>(v.integer);return true;
+}
+bool read_xref_stream_at(const uint8_t* data,size_t size,size_t offset,
+ std::vector<XrefStreamEntry>& entries,Value& trailer){
+ if(!data||offset>=size)return false;
+ size_t p=offset;uint64_t object=0,generation=0;
+ if(!xref_unsigned(data,size,p,object)||!xref_unsigned(data,size,p,generation)||
+    object==0||generation!=0||object>1000000)return false;
+ while(p<size&&xref_space(data[p]))++p;
+ if(size-p<3||std::memcmp(data+p,"obj",3)!=0||
+    (p+3<size&&!xref_space(data[p+3])))return false;
+ p+=3;
+ StreamRange stream;
+ if(!locate_stream(data+p,size-p,stream))return false;
+ const auto& dict=stream.dictionary.dictionary;
+ auto type=dict.find("Type"),width=dict.find("W"),size_key=dict.find("Size");
+ if(type==dict.end()||type->second.kind!=Value::Kind::Name||
+    type->second.text!="XRef"||width==dict.end()||
+    width->second.kind!=Value::Kind::Array||width->second.array.size()!=3||
+    size_key==dict.end())return false;
+ uint64_t declared_size=0;
+ if(!xref_integer(size_key->second,declared_size)||declared_size==0||
+    declared_size>1000000)return false;
+ std::vector<unsigned> widths;
+ for(const auto& item:width->second.array){
+  uint64_t w=0;
+  if(!xref_integer(item,w)||w>8)return false;
+  widths.push_back(static_cast<unsigned>(w));
+ }
+ std::vector<uint64_t> index{0,declared_size};
+ auto idx=dict.find("Index");
+ if(idx!=dict.end()){
+  if(idx->second.kind!=Value::Kind::Array||idx->second.array.empty()||
+     idx->second.array.size()%2!=0)return false;
+  index.clear();
+  for(const auto& item:idx->second.array){
+   uint64_t v=0;
+   if(!xref_integer(item,v))return false;
+   index.push_back(v);
+  }
+  for(size_t i=0;i<index.size();i+=2)
+   if(index[i]>declared_size||index[i+1]>declared_size-index[i])return false;
+ }
+ std::vector<uint8_t> decoded;
+ if(!decode_stream(data+p,size-p,stream,decoded,24*1000000))return false;
+ std::vector<XrefStreamEntry> result;
+ if(!decode_xref_stream_entries(decoded.data(),decoded.size(),widths,index,result))return false;
+ entries=std::move(result);
+ trailer=stream.dictionary;
+ return true;
+}
+
 }
