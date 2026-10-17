@@ -17,7 +17,8 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
  GlyphTransform matrix,
  const std::map<uint8_t,uint32_t>* differences,
  const std::string& encoding,
- const parser::CIDGlyphMap* cid_map){
+ const parser::CIDGlyphMap* cid_map,
+ const parser::CIDWidths* cid_widths){
  if(!rgba||!width||!height||width>512||height>512||
     stride<size_t(width)*4||!std::isfinite(em)||em<=0||em>1000||
     !std::isfinite(start_x)||!std::isfinite(baseline)||
@@ -50,8 +51,9 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
     const unsigned char ch=static_cast<unsigned char>(run.bytes[offset]);
     if(++glyph_count>4096)return false;
     uint16_t glyph_id=0;
+    uint16_t cid=0;
     if(cid_map){
-     const uint16_t cid=uint16_t((uint16_t(ch)<<8)|
+     cid=uint16_t((uint16_t(ch)<<8)|
                            uint8_t(run.bytes[offset+1]));
      if(!parser::cid_to_gid(*cid_map,cid,glyph_id)||
         glyph_id>=sfnt.glyph_count)return false;
@@ -83,7 +85,13 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
      point={device_x,device_y};
     }
     paints.push_back(std::move(paint));
-    cursor+=(double(advance)*em/units+matrix.character_spacing+
+    double glyph_advance=double(advance)*em/units;
+    if(cid_map&&cid_widths){
+     double width1000=0;
+     if(!parser::cid_width(*cid_widths,cid,width1000))return false;
+     glyph_advance=width1000*em/1000;
+    }
+    cursor+=(glyph_advance+matrix.character_spacing+
              (!cid_map&&ch==32?matrix.word_spacing:0))*matrix.horizontal_scale;
     if(!std::isfinite(cursor)||std::abs(cursor)>10000000)return false;
    }
