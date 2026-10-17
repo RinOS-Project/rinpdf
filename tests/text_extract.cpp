@@ -47,5 +47,15 @@ int main(){
  if(extract_page_text(reinterpret_cast<const uint8_t*>(missing_parent.data()),
       missing_parent.size(),0,result))return 4;
  if(result!=previous)return 5;
+ // Keep the object size and xref offsets unchanged when testing
+ // a parent whose declared CMapName does not match the resource key.
+ std::string mismatched_name=pdf;
+ const std::string declaration="/CMapName /Parent";
+ const auto name_pos=mismatched_name.find(declaration);
+ if(name_pos==std::string::npos)return 6;
+ mismatched_name.replace(name_pos,declaration.size(),"/CMapName /NoName");
+ if(extract_page_text(reinterpret_cast<const uint8_t*>(mismatched_name.data()),
+      mismatched_name.size(),0,result))return 7;
+ if(result!=previous)return 8;
  return 0;
 }
