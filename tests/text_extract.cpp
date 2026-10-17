@@ -189,6 +189,18 @@ int main(){
       63,64,65))return error;
  if(const int error=reject_boundary("T* <42> Tj","Tf <42> Tj",
       66,67,68))return error;
+ // Non-uniform text matrices must preserve text extraction. The
+ // replacement keeps /Length and all xref offsets unchanged.
+ std::string scaled_baseline=pdf;
+ const std::string original_tm="0 1 -1 0 50 0 Tm";
+ const std::string scaled_tm="0 2 -1 0 50 0 Tm";
+ static_assert(sizeof("0 1 -1 0 50 0 Tm")==sizeof("0 2 -1 0 50 0 Tm"));
+ const auto tm_pos=scaled_baseline.find(original_tm);
+ if(tm_pos==std::string::npos)return 69;
+ scaled_baseline.replace(tm_pos,original_tm.size(),scaled_tm);
+ if(!extract_page_text(reinterpret_cast<const uint8_t*>(scaled_baseline.data()),
+      scaled_baseline.size(),0,result))return 70;
+ if(result!=previous)return 71;
  // The UTF-16BE ActualText payload must reject lone low surrogates.
  // Replace equal-length hex digits so all xref offsets remain valid.
  std::string unpaired_low=pdf;
