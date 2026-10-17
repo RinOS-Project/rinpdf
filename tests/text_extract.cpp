@@ -75,6 +75,18 @@ int main(){
  if(extract_page_text(reinterpret_cast<const uint8_t*>(mismatched_name.data()),
       mismatched_name.size(),0,result))return 7;
  if(result!=previous)return 8;
+ // Extra numeric operands before Tj are malformed. Keep the byte length
+ // unchanged so the stream /Length and following xref offsets stay valid.
+ std::string stray_tj_operands=pdf;
+ const std::string good_show="0 Tw <42> '";
+ const std::string bad_show="1 2 <42> Tj";
+ static_assert(sizeof("0 Tw <42> '")==sizeof("1 2 <42> Tj"));
+ const auto show_pos=stray_tj_operands.find(good_show);
+ if(show_pos==std::string::npos)return 21;
+ stray_tj_operands.replace(show_pos,good_show.size(),bad_show);
+ if(extract_page_text(reinterpret_cast<const uint8_t*>(stray_tj_operands.data()),
+      stray_tj_operands.size(),0,result))return 22;
+ if(result!=previous)return 23;
  // The UTF-16BE ActualText payload must reject lone low surrogates.
  // Replace equal-length hex digits so all xref offsets remain valid.
  std::string unpaired_low=pdf;
