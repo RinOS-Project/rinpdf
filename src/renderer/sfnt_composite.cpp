@@ -56,7 +56,7 @@ static bool resolve(const SfntFont& font,uint16_t id,SimpleGlyph& out,
   pos+=4;
   // Support F2Dot14 scale matrices; point matching and ambiguous offsets
   // are rejected rather than rendered with invented placement.
-  constexpr uint16_t ARG_WORDS=1,ARGS_XY=2,ROUND_XY=4,
+  constexpr uint16_t ARG_WORDS=1,ARGS_XY=2,
                      SCALE=8,MORE=32,XY_SCALE=64,TWO_BY_TWO=128,
                      INSTRUCTIONS=256,SCALED_OFFSET=2048,UNSCALED_OFFSET=4096;
   if(!(flags&ARGS_XY)||(flags&(SCALED_OFFSET|UNSCALED_OFFSET))||
