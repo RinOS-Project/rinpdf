@@ -79,5 +79,17 @@ int main(){
        64,64,translated.data(),64*4,0,64,1,1,0,0,0,moved,
        nullptr,0,0,64,64,{1,0,0,1e300,0,0,1,0,0,1}))return 13;
  if(moved!=previous)return 14;
+ // PDF Tc/Tw/Tz affect advances; Tz also scales glyph outlines.
+ double spaced=0;
+ std::vector<uint8_t> spaced_pixels(64*64*4,255);
+ if(!render_embedded_truetype_runs(f,{{false,"A",0}},16,8,8,
+       64,64,spaced_pixels.data(),64*4,0,64,1,1,0,0,0,spaced,
+       nullptr,0,0,64,64,{1,0,0,1,0,0,1,0,0,1,2,0,0.5}))return 15;
+ if(std::abs(spaced-14.6)>0.001)return 16;
+ double adjusted=0;
+ if(!render_embedded_truetype_runs(f,{{true,{},-250}},16,8,8,
+       64,64,spaced_pixels.data(),64*4,0,64,1,1,0,0,0,adjusted,
+       nullptr,0,0,64,64,{1,0,0,1,0,0,1,0,0,1,0,0,0.5}))return 17;
+ if(std::abs(adjusted-10)>0.001)return 18;
  return 0;
 }
