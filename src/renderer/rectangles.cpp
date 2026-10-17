@@ -132,13 +132,14 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
         (it->second.encoding=="WinAnsiEncoding"||
          it->second.encoding=="MacRomanEncoding"||
          it->second.encoding=="StandardEncoding")||
-       it->second.subtype=="Type0"&&it->second.encoding=="Identity-H")||
+       it->second.subtype=="Type0"&&
+       (it->second.encoding=="Identity-H"||it->second.encoding=="Identity-V"))||
      it->second.embedded_truetype.empty()||
      !pending_font.empty()||selected_font_size<=0||
      !std::isfinite(horizontal_scale)||!std::isfinite(char_spacing)||
      !std::isfinite(word_spacing))
    return false;
-  double next=0;
+  double next=0,next_vertical=text_y;
   if(!render_embedded_truetype_runs(it->second.embedded_truetype,runs,
        selected_font_size,text_x,text_y,width,height,rgba,stride,
        box.x0,box.y1,sx,sy,
@@ -150,10 +151,13 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
         char_spacing,word_spacing,horizontal_scale},
        &it->second.differences,it->second.encoding,
        it->second.subtype=="Type0"?&it->second.cid_map:nullptr,
-       it->second.subtype=="Type0"?&it->second.cid_widths:nullptr))return false;
-  const double advance=next-text_x;
-  const double new_x=text_x+advance*text_a;
-  const double new_y=text_y+advance*text_b;
+       it->second.subtype=="Type0"?&it->second.cid_widths:nullptr,
+       it->second.encoding=="Identity-V"?&it->second.vertical_metrics:nullptr,
+       &next_vertical))return false;
+  const bool vertical=it->second.encoding=="Identity-V";
+  const double advance=vertical?next_vertical-text_y:next-text_x;
+  const double new_x=text_x+advance*(vertical?text_c:text_a);
+  const double new_y=text_y+advance*(vertical?text_d:text_b);
   if(!std::isfinite(new_x)||!std::isfinite(new_y)||
      std::abs(new_x)>10000000||std::abs(new_y)>10000000)return false;
   text_x=new_x;text_y=new_y;return true;
