@@ -548,7 +548,7 @@ int main(){
  const char overshoot_cubic[]="0 G 1 w 0 J 3 8 m 25 8 -15 8 7 8 c S";
  const char overshoot_chord[]="0 G 1 w 0 J 3 8 m 7 8 l S";
  std::vector<unsigned char> overshoot_curve_pixels(20*16*4),overshoot_chord_pixels(20*16*4);
- if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(overshoot_cubic),sizeof(overshoot_cubic)-1,20,16,overshoot_curve_pixels.data(),80))return 273;
+ if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(overshoot_cubic),sizeof(overshoot_cubic)-1,20,16,overshoot_curve_pixels.data(),80))return 73;
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(overshoot_chord),sizeof(overshoot_chord)-1,20,16,overshoot_chord_pixels.data(),80))return 274;
  if(overshoot_curve_pixels==overshoot_chord_pixels)return 275;
  const char reversed_collinear_cubic[]="0 G 1 w 0 J 2 8 m 11 8 3 8 12 8 c S";
