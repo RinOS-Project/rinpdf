@@ -1,5 +1,6 @@
 #include "contents.h"
 #include "xref.h"
+#include "xref_stream.h"
 #include "object.h"
 #include "stream_object.h"
 #include "stream.h"
@@ -127,10 +128,8 @@ struct Reader {
 };
 bool read_page_contents(const uint8_t *data,size_t size,size_t index,std::vector<uint8_t>& contents,size_t limit){
  contents.clear();if(!data||limit==0)return false;
- std::vector<XrefEntry> xref;size_t trailer_pos=0;
- if(!read_classic_xref(data,size,xref,&trailer_pos))return false;
- Lexer lexer(data+trailer_pos,size-trailer_pos);Value trailer;
- if(!parse_value(lexer,trailer))return false;
+ std::vector<XrefEntry> xref;Value trailer;
+ if(!read_uncompressed_xref(data,size,xref,trailer))return false;
  if(get(trailer,"Prev")||get(trailer,"XRefStm")||get(trailer,"Encrypt"))return false;
  const Value *root=get(trailer,"Root");if(!root)return false;
  Reader reader{data,size,xref};Value catalog;
@@ -142,10 +141,8 @@ bool read_page_contents(const uint8_t *data,size_t size,size_t index,std::vector
 }
 bool read_page_box(const uint8_t *data,size_t size,size_t index,MediaBox& box){
  box={0,0,0,0};if(!data)return false;
- std::vector<XrefEntry> xref;size_t trailer_pos=0;
- if(!read_classic_xref(data,size,xref,&trailer_pos))return false;
- Lexer lexer(data+trailer_pos,size-trailer_pos);Value trailer;
- if(!parse_value(lexer,trailer))return false;
+ std::vector<XrefEntry> xref;Value trailer;
+ if(!read_uncompressed_xref(data,size,xref,trailer))return false;
  if(get(trailer,"Prev")||get(trailer,"XRefStm")||get(trailer,"Encrypt"))return false;
  const Value *root=get(trailer,"Root");if(!root)return false;
  Reader reader{data,size,xref};Value catalog;
