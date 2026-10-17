@@ -606,3 +606,8 @@ TrueTypeの文字コード変換に `font_byte_unicode` を接続し、`WinAnsiE
 `src/parser/tounicode.cpp` に、単一／二バイトのPDF文字コードをUnicodeへ対応付ける `beginbfchar` と `beginbfrange` の基本解析を追加しました。UTF-16BEの単一コードポイント、サロゲートペア、連続範囲を扱い、重複コード・不正な文字列・範囲外データは拒否します。フォントの `/ToUnicode` ストリームを取得し、`PageFont.to_unicode` にマッピングを保持します。新たな `rinpdf-tounicode` 回帰テストを追加しました。
 
 **制限:** bfrangeの配列形式、複数Unicode文字への対応、完全なcodespacerange・CMapの検証、usecmap継承、CID→グリフID変換は未対応です。`ToUnicode` は主にテキスト抽出向けのマッピングで、描画時のグリフ選択にはまだ利用していません。今回の変更後のビルド・テストPASSは未確認です。
+
+## Type0 / CIDFontType2 resource resolution (experimental)
+`read_page_fonts` に `/Subtype /Type0` から `/DescendantFonts` の単一 `/CIDFontType2` を取得する経路を追加しました。CIDフォントの `/CIDToGIDMap /Identity` または直接ストリーム参照を解決し、Big Endianの2バイトCID→GID対応表として保持します。子フォントの `/FontDescriptor /FontFile2` もストリーム取得・SFNT検証します。内部関数 `cid_to_gid` は範囲外のCIDを拒否し、失敗時にGIDを書き換えません。`rinpdf-cid-font` と `rinpdf-type0-fonts` の2テストを追加しました。
+
+**未対応:** Type0の `Identity-H` 等を使った実際の文字表示、CIDコード分割、CID幅、CID→GIDによるグリフ描画、CMap継承、縦書きなど。解析したToUnicodeを描画用GIDの代わりに使用しません。変更後のビルドと全テストPASSは未確認です。
