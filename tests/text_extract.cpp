@@ -6,6 +6,7 @@
 using namespace rinpdf::parser;
 int main(){
  const std::string content=
+  "/Span /P1 BDC BT /F1 12 Tf <41> Tj ET EMC "
   "/Span << /ActualText <FEFF65E5672C> >> BDC "
   "BT /F1 12 Tf <41> Tj ET EMC "
   "BT /F1 12 Tf <41> Tj ET";
@@ -16,7 +17,7 @@ int main(){
   pdf+=std::to_string(id)+" 0 obj\n"+body+"\nendobj\n";
  };
  append(1,"<< /Type /Catalog /Pages 2 0 R >>");
- append(2,"<< /Type /Pages /Count 1 /Kids [3 0 R] /Resources << /Font << /F1 4 0 R >> >> >>");
+ append(2,"<< /Type /Pages /Count 1 /Kids [3 0 R] /Resources << /Font << /F1 4 0 R >> /Properties << /P1 << /ActualText <FEFF4E16> >> >> >> >>");
  append(3,"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Contents 5 0 R >>");
  append(4,"<< /Type /Font /Subtype /TrueType /BaseFont /Example /Encoding /WinAnsiEncoding /ToUnicode 6 0 R >>");
  append(5,"<< /Length "+std::to_string(content.size())+" >>\nstream\n"+content+"\nendstream");
