@@ -92,7 +92,7 @@ int main(){
        nullptr,0,0,64,64,{1,0,0,1,0,0,1,0,0,1,0,0,0.5}))return 17;
  if(std::abs(adjusted-10)>0.001)return 18;
  // Identity-H uses two bytes per CID; CID 1 selects glyph 1.
- const parser::CIDGlyphMap identity;
+ const rinpdf::parser::CIDGlyphMap identity;
  const std::string cid_one({char(0),char(1)});
  std::vector<uint8_t> cid_pixels(64*64*4,255);
  double cid_next=0;
@@ -108,25 +108,25 @@ int main(){
        64,64,cid_pixels.data(),64*4,0,64,1,1,0,0,0,cid_next,
        nullptr,0,0,64,64,{},nullptr,"Identity-H",&identity))return 22;
  if(cid_next!=before)return 23;
- const parser::CIDGlyphMap mapped{false,{0,0,0,1}};
+ const rinpdf::parser::CIDGlyphMap mapped{false,{0,0,0,1}};
  if(!render_embedded_truetype_runs(f,{{false,cid_one,0}},16,8,8,
        64,64,cid_pixels.data(),64*4,0,64,1,1,0,0,0,cid_next,
        nullptr,0,0,64,64,{},nullptr,"Identity-H",&mapped))return 24;
- const parser::CIDWidths pdf_widths{900,{{1,500}}};
+ const rinpdf::parser::CIDWidths pdf_widths{900,{{1,500}}};
  double pdf_advance=0;
  if(!render_embedded_truetype_runs(f,{{false,cid_one,0}},16,8,8,
        64,64,cid_pixels.data(),64*4,0,64,1,1,0,0,0,pdf_advance,
        nullptr,0,0,64,64,{},nullptr,"Identity-H",&identity,&pdf_widths))
    return 25;
  if(std::abs(pdf_advance-16)>0.001)return 26; // 8 + 16*500/1000
- const parser::CIDWidths fallback{900,{}};
+ const rinpdf::parser::CIDWidths fallback{900,{}};
  if(!render_embedded_truetype_runs(f,{{false,cid_one,0}},16,8,8,
        64,64,cid_pixels.data(),64*4,0,64,1,1,0,0,0,pdf_advance,
        nullptr,0,0,64,64,{},nullptr,"Identity-H",&identity,&fallback))
    return 27;
  if(std::abs(pdf_advance-22.4)>0.001)return 28; // 8 + 16*900/1000
  // Identity-V: vertical CID origin and PDF w1y advance, not hmtx.
- const parser::CIDVerticalMetrics vertical{{-800,0,0},{{1,{-700,0,0}}}};
+ const rinpdf::parser::CIDVerticalMetrics vertical{{-800,0,0},{{1,{-700,0,0}}}};
  double vertical_x=0,vertical_y=0;
  std::vector<uint8_t> vertical_pixels(64*64*4,255);
  if(!render_embedded_truetype_runs(f,{{false,cid_one,0}},16,8,32,
