@@ -567,3 +567,6 @@ Courier系列の `Tj` / `TJ` に対して文字幅・字間調整から水平移
 
 ## Embedded TrueType glyph horizontal metrics (experimental)
 `sfnt_horizontal_metrics()` を追加しました。埋め込みTrueTypeで `head.unitsPerEm`、`hhea.numberOfHMetrics`、`hmtx` のadvanceWidthを検証して取得します。`numberOfHMetrics`を超えるグリフでは最後のadvanceWidthを継承し、残余left-side-bearing領域の境界も検査します。合成SFNTで正常・不正なメトリクスを検査する `rinpdf-sfnt-metrics` テストを追加しました。**輪郭の配置やTj/TJの実描画にはまだ接続していません。** 新規テストを含めた実行結果は未確認です。
+
+## 限定的な埋め込みTrueType文字描画（試験実装）
+埋め込みTrueTypeの `head.unitsPerEm`、`hhea.numberOfHMetrics`、`hmtx` から実際のグリフ送り幅を取得する `sfnt_horizontal_metrics` を追加しました。`/FontDescriptor` → `/FontFile2` で取得済みのSFNTから、Unicode cmap → 単純glyf輪郭 → 二次曲線平坦化 → 2×2カバレッジ合成を通して `Tj` / `TJ` をピクセルに描画する経路を追加しました。誤った文字割り当てを避けるため、現時点では `/Subtype /TrueType` と `/Encoding /WinAnsiEncoding` が明示され、印字可能ASCII、単純グリフ、変形・クリッピング・字間設定なし、最大512×512画素の描画に限定します。上記制限に当てはまらない文書は未対応として拒否します。合成TrueTypeのグリフ描画・送り幅を検証する `rinpdf-truetype-draw` を追加しました。**新規テストを含むビルド・全件PASSは未確認**です。CFF、複合グリフ、PDF固有Encoding/Differences、正確な一般フォント描画は今後の課題です。
