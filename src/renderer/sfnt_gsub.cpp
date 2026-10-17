@@ -1,6 +1,7 @@
 #include "sfnt_gsub.h"
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 namespace rinpdf::renderer {
 namespace {
 bool read16(const uint8_t* d,size_t n,size_t p,uint16_t& v){
@@ -64,6 +65,45 @@ bool single_lookup(const uint8_t* d,size_t n,size_t p,
  found=true;return true;
 }
 }
+// Select only feature indices enabled by DFLT/default LangSys or a
+// supported CJK script's default LangSys. Do not scan unrelated features.
+bool active_features(const uint8_t* d,size_t n,uint16_t scripts,
+ uint16_t feature_count,std::vector<bool>& enabled){
+ uint16_t count=0;
+ if(!read16(d,n,scripts,count)||count>4096||
+    scripts>n||n-scripts<2+size_t(count)*6)return false;
+ enabled.assign(feature_count,false);
+ const uint32_t tags[]={0x44464c54,0x68616e69,0x6b616e61,0x68616e67};
+ for(uint32_t preferred:tags){
+  for(unsigned i=0;i<count;++i){
+   const size_t rec=scripts+2+size_t(i)*6;
+   uint32_t tag=0;uint16_t offset=0;
+   if(!read32(d,n,rec,tag)||!read16(d,n,rec+4,offset))return false;
+   if(tag!=preferred)continue;
+   const size_t script=size_t(scripts)+offset;
+   uint16_t default_lang=0;
+   if(offset<2||!read16(d,n,script,default_lang))return false;
+   if(default_lang==0)continue;
+   const size_t lang=script+default_lang;
+   uint16_t required=0,features=0;
+   if(default_lang<4||!read16(d,n,lang+2,required)||
+      !read16(d,n,lang+4,features)||features>4096||
+      lang>n||n-lang<6+size_t(features)*2)return false;
+   if(required!=0xffff){
+    if(required>=feature_count)return false;
+    enabled[required]=true;
+   }
+   for(unsigned j=0;j<features;++j){
+    uint16_t index=0;
+    if(!read16(d,n,lang+6+size_t(j)*2,index)||
+       index>=feature_count)return false;
+    enabled[index]=true;
+   }
+   return true;
+  }
+ }
+ return true;
+}
 bool sfnt_vertical_substitution(const SfntFont& font,uint16_t glyph,
  uint16_t& replacement){
  if(!font.bytes||glyph>=font.glyph_count)return false;
@@ -73,9 +113,9 @@ bool sfnt_vertical_substitution(const SfntFont& font,uint16_t glyph,
  if(!table)return true;
  const uint8_t* data=font.bytes+table->offset;
  const size_t n=table->length;
- uint16_t major=0,minor=0,features=0,lookups=0;
+ uint16_t major=0,minor=0,scripts=0,features=0,lookups=0;
  if(n<10||!read16(data,n,0,major)||!read16(data,n,2,minor)||
-    !read16(data,n,6,features)||!read16(data,n,8,lookups)||
+    !read16(data,n,4,scripts)||!read16(data,n,6,features)||!read16(data,n,8,lookups)||
     major!=1||(minor!=0&&minor!=1))return false;
  uint16_t feature_count=0,lookup_count=0;
  if(!read16(data,n,features,feature_count)||
@@ -83,6 +123,8 @@ bool sfnt_vertical_substitution(const SfntFont& font,uint16_t glyph,
     feature_count>4096||lookup_count>4096||
     features>n||n-features<2+size_t(feature_count)*6||
     lookups>n||n-lookups<2+size_t(lookup_count)*2)return false;
+ std::vector<bool> enabled;
+ if(!active_features(data,n,scripts,feature_count,enabled))return false;
  // Prefer vrt2 to vert, which are mutually alternative vertical features.
  for(unsigned pass=0;pass<2;++pass){
   const uint32_t wanted=pass==0?0x76727432:0x76657274;
@@ -90,7 +132,7 @@ bool sfnt_vertical_substitution(const SfntFont& font,uint16_t glyph,
    const size_t rec=features+2+size_t(i)*6;
    uint32_t tag=0;uint16_t relative=0;
    if(!read32(data,n,rec,tag)||!read16(data,n,rec+4,relative))return false;
-   if(tag!=wanted)continue;
+   if(tag!=wanted||!enabled[i])continue;
    const size_t feature=features+relative;
    uint16_t count=0;
    if(relative<2||!read16(data,n,feature+2,count)||
