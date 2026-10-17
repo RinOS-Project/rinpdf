@@ -88,14 +88,18 @@ inline bool cid_vertical_number(const Value& v,double& n){
  return std::isfinite(n)&&std::abs(n)<=100000;
 }
 inline bool cid_vertical_metric(const CIDVerticalMetrics& widths,
- uint16_t cid,CIDVerticalMetric& out){
+ const CIDWidths& horizontal,uint16_t cid,CIDVerticalMetric& out){
  const auto it=widths.overrides.find(cid);
- out=it==widths.overrides.end()?widths.fallback:it->second;
+ if(it!=widths.overrides.end()){out=it->second;return true;}
+ out=widths.fallback;
+ double width=0;
+ if(!cid_width(horizontal,cid,width))return false;
+ out.v1x=width/2;
  return true;
 }
 // /DW2 [v1y w1y], /W2 [c [w1y v1x v1y ...] cfirst clast w1y v1x v1y]
 inline bool parse_cid_vertical_metrics(const Value* dw2,const Value* w2,
- const CIDWidths& horizontal,CIDVerticalMetrics& out){
+ CIDVerticalMetrics& out){
  CIDVerticalMetrics parsed;
  if(dw2){
   if(dw2->kind!=Value::Kind::Array||dw2->array.size()!=2||
@@ -135,9 +139,7 @@ inline bool parse_cid_vertical_metrics(const Value* dw2,const Value* w2,
    }else return false;
   }
  }
- // Omitted v1x is half the CID's horizontal displacement.
- // Vertical origins are resolved lazily by clients using CIDWidths.
- (void)horizontal;
+ // The implicit v1x is computed per CID at lookup time.
  out=std::move(parsed);return true;
 }
 
