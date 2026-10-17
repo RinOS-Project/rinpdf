@@ -49,6 +49,19 @@ int main(){
  if(rinpdf::renderer::render_rectangles(
      reinterpret_cast<const unsigned char*>(text_operators_in_string),
      sizeof(text_operators_in_string)-1,8,8,pixels.data(),32))return 209;
+ const char selected[]="BT /F1 12 Tf ET";
+ const rinpdf::renderer::FontResources fonts{{"F1",{"Helvetica","Type1"}}};
+ if(!rinpdf::renderer::render_rectangles_box_with_fonts(
+     reinterpret_cast<const unsigned char*>(selected),sizeof(selected)-1,
+     8,8,pixels.data(),32,{0,0,8,8},fonts))return 210;
+ const char unknown_font[]="BT /F2 12 Tf ET";
+ if(rinpdf::renderer::render_rectangles_box_with_fonts(
+     reinterpret_cast<const unsigned char*>(unknown_font),sizeof(unknown_font)-1,
+     8,8,pixels.data(),32,{0,0,8,8},fonts))return 211;
+ const char invalid_font_size[]="BT /F1 -12 Tf ET";
+ if(rinpdf::renderer::render_rectangles_box_with_fonts(
+     reinterpret_cast<const unsigned char*>(invalid_font_size),sizeof(invalid_font_size)-1,
+     8,8,pixels.data(),32,{0,0,8,8},fonts))return 212;
  const char unsupported[]="BT /F1 12 Tf ET";
  if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(unsupported),sizeof(unsupported)-1,8,8,pixels.data(),32))return 3;
  const char rgb[]="q 1 0 0 rg 1 1 2 2 re f Q 0 g 4 4 2 2 re f";
