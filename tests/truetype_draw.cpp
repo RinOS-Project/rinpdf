@@ -93,7 +93,7 @@ int main(){
  if(std::abs(adjusted-10)>0.001)return 18;
  // Identity-H uses two bytes per CID; CID 1 selects glyph 1.
  const parser::CIDGlyphMap identity;
- const std::string cid_one("\\0\\1",2);
+ const std::string cid_one({char(0),char(1)});
  std::vector<uint8_t> cid_pixels(64*64*4,255);
  double cid_next=0;
  if(!render_embedded_truetype_runs(f,{{false,cid_one,0}},16,8,8,
