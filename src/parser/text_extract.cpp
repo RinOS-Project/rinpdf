@@ -5,6 +5,7 @@
 #include <map>
 #include <charconv>
 #include <cmath>
+#include <algorithm>
 #include <vector>
 #include <utility>
 namespace rinpdf::parser {
@@ -38,6 +39,21 @@ bool actual_text(const std::string& raw,std::string& out){
   if(!utf8_append(decoded,cp))return false;
  }
  out=std::move(decoded);return true;
+}
+// TJ amounts are in thousandths of an em. Where an Identity-H CID font
+// explicitly maps a two-byte code to U+0020 and supplies that CID's width,
+// use the documented space advance instead of a universal half-em guess.
+double tj_space_threshold(const PageFont& font){
+ if(font.subtype!="Type0"||font.encoding!="Identity-H")return 500;
+ for(const auto& [key,sequence]:font.unicode_sequences){
+  if(key.width!=2||sequence!=U" "||key.code>65535)continue;
+  const auto it=font.cid_widths.overrides.find(uint16_t(key.code));
+  if(it==font.cid_widths.overrides.end())continue;
+  const double width=it->second;
+  if(!std::isfinite(width)||width<=0)continue;
+  return std::clamp(width,250.0,1000.0);
+ }
+ return 500;
 }
 bool decode_run(const std::string& bytes,const PageFont& font,std::string& out){
  if(font.unicode_sequences.empty())return false;
@@ -213,7 +229,8 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
      std::string decoded;
      if(!decode_run(run.bytes,fonts.at(selected),decoded))return false;
      if(decoded.empty())continue;
-     if(emitted_run&&font_size>0&&net_adjustment<=-500&&
+     if(emitted_run&&font_size>0&&
+        net_adjustment<=-tj_space_threshold(fonts.at(selected))&&
         !output.empty()&&output.back()!=' '&&output.back()!='\n'&&
         decoded.front()!=' '&&decoded.front()!='\n'){
       if(output.size()>=4*1024*1024)return false;
