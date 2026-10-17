@@ -52,6 +52,59 @@ struct Reader {
   if(!locate_indirect_stream(data,size,*e,xref,range))return false;
   return decode_stream(data,size,range,bytes,limit);
  }
+ bool walk_properties(const Value& ref,size_t depth,size_t& current,size_t target,
+  std::set<size_t>& active,const Value* inherited,PageProperties& output) const {
+  if(depth>64||ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
+  const size_t id=static_cast<size_t>(ref.integer);
+  if(!active.insert(id).second)return false;
+  Value node,owned_resources;
+  if(!object(ref,node)){active.erase(id);return false;}
+  if(const Value* resources=get(node,"Resources")){
+   if(resources->kind==Value::Kind::Reference){
+    if(!object(*resources,owned_resources)){active.erase(id);return false;}
+   }else owned_resources=*resources;
+   if(owned_resources.kind!=Value::Kind::Dictionary){active.erase(id);return false;}
+   inherited=&owned_resources;
+  }
+  const Value* type=get(node,"Type");
+  if(!type||type->kind!=Value::Kind::Name){active.erase(id);return false;}
+  if(type->text=="Page"){
+   if(current==target&&inherited){
+    if(const Value* source=get(*inherited,"Properties")){
+     Value properties;
+     if(source->kind==Value::Kind::Reference){
+      if(!object(*source,properties)){active.erase(id);return false;}
+     }else properties=*source;
+     if(properties.kind!=Value::Kind::Dictionary||
+        properties.dictionary.size()>4096){active.erase(id);return false;}
+     for(const auto& [key,value]:properties.dictionary){
+      Value dictionary;
+      if(value.kind==Value::Kind::Reference){
+       if(!object(value,dictionary)){active.erase(id);return false;}
+      }else dictionary=value;
+      if(dictionary.kind!=Value::Kind::Dictionary){active.erase(id);return false;}
+      std::string language;
+      if(const Value* lang=get(dictionary,"Lang")){
+       if(lang->kind!=Value::Kind::String||lang->text.size()>64){
+        active.erase(id);return false;
+       }
+       language=lang->text;
+      }
+      output.emplace(key,std::move(language));
+     }
+    }
+   }
+   ++current;active.erase(id);return true;
+  }
+  if(type->text!="Pages"){active.erase(id);return false;}
+  const Value* kids=get(node,"Kids");
+  if(!kids||kids->kind!=Value::Kind::Array){active.erase(id);return false;}
+  for(const auto& child:kids->array)
+   if(!walk_properties(child,depth+1,current,target,active,inherited,output)){
+    active.erase(id);return false;
+   }
+  active.erase(id);return true;
+ }
  bool walk_fonts(const Value& ref,size_t depth,size_t& current,size_t target,
   std::set<size_t>& active,const Value* inherited,
   std::map<std::string,PageFont>& output,
@@ -338,6 +391,30 @@ bool read_page_fonts(const uint8_t* data,size_t size,size_t index,
   return false;
  fonts=std::move(result);
  return true;
+}
+
+bool read_page_properties(const uint8_t* data,size_t size,size_t index,
+ PageProperties& properties){
+ if(!data)return false;
+ std::vector<XrefEntry> xref;
+ std::vector<XrefStreamEntry> compressed;
+ Value trailer;
+ if(!read_object_xref(data,size,xref,compressed,trailer)||
+    get(trailer,"Encrypt"))return false;
+ const Value* root=get(trailer,"Root");
+ if(!root)return false;
+ Reader reader{data,size,xref,compressed,{}};
+ Value catalog;
+ if(!reader.object(*root,catalog))return false;
+ const Value* type=get(catalog,"Type"),*pages=get(catalog,"Pages");
+ if(!type||type->kind!=Value::Kind::Name||
+    type->text!="Catalog"||!pages)return false;
+ size_t current=0;
+ std::set<size_t> active;
+ PageProperties result;
+ if(!reader.walk_properties(*pages,0,current,index,active,nullptr,result)||
+    index>=current)return false;
+ properties=std::move(result);return true;
 }
 
 }
