@@ -1,5 +1,6 @@
 #include "value.h"
 #include <charconv>
+#include <cmath>
 #include <utility>
 namespace rinpdf::parser {
 static bool integer(const std::string& s,long long& v){
@@ -26,7 +27,15 @@ static bool parse(Lexer& l,Value& out,unsigned depth,size_t& budget){
   }
   out.kind=Value::Kind::Integer;out.integer=v;return true;
  }
- case TokenKind::Name:out.kind=Value::Kind::Name;out.text=std::move(t.value);return true;
+ case TokenKind::Real:{
+  double number=0;
+  const auto parsed=std::from_chars(t.value.data(),
+      t.value.data()+t.value.size(),number,std::chars_format::fixed);
+  if(parsed.ec!=std::errc()||parsed.ptr!=t.value.data()+t.value.size()||
+     !std::isfinite(number))return false;
+  out.kind=Value::Kind::Real;out.real=number;return true;
+ }
+  case TokenKind::Name:out.kind=Value::Kind::Name;out.text=std::move(t.value);return true;
  case TokenKind::String:case TokenKind::HexString:out.kind=Value::Kind::String;out.text=std::move(t.value);return true;
  case TokenKind::Keyword:
   if(t.value=="null"){out.kind=Value::Kind::Null;return true;}
