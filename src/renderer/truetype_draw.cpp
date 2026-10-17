@@ -10,12 +10,17 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
  const std::vector<TextRun>& runs,double em,double start_x,double baseline,
  unsigned width,unsigned height,uint8_t* rgba,size_t stride,
  double x0,double y1,double sx,double sy,
- uint8_t red,uint8_t green,uint8_t blue,double& next_x){
+ uint8_t red,uint8_t green,uint8_t blue,double& next_x,
+ const std::vector<uint8_t>* clip_mask,
+ unsigned clip_x0,unsigned clip_y0,unsigned clip_x1,unsigned clip_y1){
  if(!rgba||!width||!height||width>512||height>512||
     stride<size_t(width)*4||!std::isfinite(em)||em<=0||em>1000||
     !std::isfinite(start_x)||!std::isfinite(baseline)||
     !std::isfinite(sx)||!std::isfinite(sy)||sx<=0||sy<=0||
-    runs.size()>4096)return false;
+    runs.size()>4096||
+    (clip_mask&&clip_mask->size()!=size_t(width)*height))return false;
+ if(clip_x1==0&&clip_y1==0){clip_x1=width;clip_y1=height;}
+ if(clip_x0>clip_x1||clip_y0>clip_y1||clip_x1>width||clip_y1>height)return false;
  SfntFont sfnt;
  if(!parse_sfnt(bytes.data(),bytes.size(),sfnt))return false;
  struct Paint {std::vector<std::vector<MaskPoint>> paths;};
@@ -38,9 +43,13 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
     Paint paint;
     if(!flatten_simple_glyph(glyph,em*sx/units,
           (cursor-x0)*sx,(y1-baseline)*sy,0.2,paint.paths))return false;
-    // The outline helper uses a uniform scale. Asymmetric output scales
-    // are unsupported until arbitrary device transforms are introduced.
-    if(std::abs(sx-sy)>1e-8)return false;
+    // Flattening uses x-device scale; map the resulting y coordinates to
+    // their independently scaled positions about the baseline.
+    const double baseline_pixel=(y1-baseline)*sy;
+    for(auto& contour:paint.paths)for(auto& point:contour){
+     point.y=baseline_pixel+(point.y-baseline_pixel)*(sy/sx);
+     if(!std::isfinite(point.y))return false;
+    }
     paints.push_back(std::move(paint));
     cursor+=double(advance)*em/units;
     if(!std::isfinite(cursor)||std::abs(cursor)>10000000)return false;
@@ -61,6 +70,8 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
  }
  for(unsigned y=0;y<height;++y)for(unsigned x=0;x<width;++x){
   unsigned alpha=layer[size_t(y)*width+x];
+  if(x<clip_x0||x>=clip_x1||y<clip_y0||y>=clip_y1)continue;
+  if(clip_mask)alpha=(alpha*(*clip_mask)[size_t(y)*width+x]+127)/255;
   if(!alpha)continue;
   auto* pixel=rgba+size_t(y)*stride+size_t(x)*4;
   pixel[0]=uint8_t((alpha*red+(255-alpha)*pixel[0]+127)/255);
