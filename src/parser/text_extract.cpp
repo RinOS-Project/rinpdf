@@ -416,6 +416,7 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
   if(t.value=="BT"){if(text||have_pending||!operands.empty())return false;
    text=true;operands.clear();has_line_origin=false;
    pending_tj_adjustment=0;text_run_emitted=false;
+   text_cursor=0;text_cursor_known=true;
    text_line_x=0;text_line_y=0;line_axis_x=1;line_axis_y=0;continue;}
   if(t.value=="T*"&&text){
    if(have_pending||!operands.empty())return false;
@@ -453,6 +454,7 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
     has_line_origin=true;
     pending_tj_adjustment=0;
     text_run_emitted=false;
+    text_cursor=0;text_cursor_known=true;
     if(!suppressed)new_line_pending=true;
    }
    if(!suppressed){
