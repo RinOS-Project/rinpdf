@@ -2,6 +2,7 @@
 #include "lexer.h"
 #include "value.h"
 #include "../renderer/text_show.h"
+#include "../renderer/sfnt.h"
 #include <map>
 #include <charconv>
 #include <cmath>
@@ -44,14 +45,28 @@ bool actual_text(const std::string& raw,std::string& out){
 // explicitly maps a two-byte code to U+0020 and supplies that CID's width,
 // use the documented space advance instead of a universal half-em guess.
 double tj_space_threshold(const PageFont& font){
- if(font.subtype!="Type0"||font.encoding!="Identity-H")return 500;
- for(const auto& [key,sequence]:font.unicode_sequences){
-  if(key.width!=2||sequence!=U" "||key.code>65535)continue;
-  const auto it=font.cid_widths.overrides.find(uint16_t(key.code));
-  if(it==font.cid_widths.overrides.end())continue;
-  const double width=it->second;
-  if(!std::isfinite(width)||width<=0)continue;
-  return std::clamp(width,250.0,1000.0);
+ if(font.subtype=="Type0"&&font.encoding=="Identity-H"){
+  for(const auto& [key,sequence]:font.unicode_sequences){
+   if(key.width!=2||sequence!=U" "||key.code>65535)continue;
+   const auto it=font.cid_widths.overrides.find(uint16_t(key.code));
+   if(it==font.cid_widths.overrides.end())continue;
+   const double width=it->second;
+   if(std::isfinite(width)&&width>0)
+    return std::clamp(width,250.0,1000.0);
+  }
+ }
+ if(font.subtype=="TrueType"&&!font.embedded_truetype.empty()){
+  // Only use a font's physical space advance when its Unicode cmap
+  // explicitly resolves U+0020 to a valid glyph. The PDF ToUnicode
+  // mapping is not necessarily identical to the SFNT glyph mapping.
+  renderer::SfntFont face;
+  const auto& bytes=font.embedded_truetype;
+  if(renderer::parse_sfnt(bytes.data(),bytes.size(),face)){
+   uint16_t gid=0,units=0,advance=0;
+   if(renderer::sfnt_glyph_id(face,0x20,gid)&&
+      renderer::sfnt_horizontal_metrics(face,gid,units,advance)&&units)
+    return std::clamp(1000.0*advance/units,250.0,1000.0);
+  }
  }
  return 500;
 }
