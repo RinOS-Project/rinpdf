@@ -127,10 +127,12 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
  // simple fonts. Unknown mappings and transformed text fail closed.
  auto truetype_show=[&](const std::vector<TextRun>& runs)->bool{
   const auto it=fonts.find(selected_font);
-  if(it==fonts.end()||it->second.subtype!="TrueType"||
-     it->second.encoding!="WinAnsiEncoding"&&
-     it->second.encoding!="MacRomanEncoding"&&
-     it->second.encoding!="StandardEncoding"||
+  if(it==fonts.end()||
+     !(it->second.subtype=="TrueType"&&
+        (it->second.encoding=="WinAnsiEncoding"||
+         it->second.encoding=="MacRomanEncoding"||
+         it->second.encoding=="StandardEncoding")||
+       it->second.subtype=="Type0"&&it->second.encoding=="Identity-H")||
      it->second.embedded_truetype.empty()||
      !pending_font.empty()||selected_font_size<=0||
      !std::isfinite(horizontal_scale)||!std::isfinite(char_spacing)||
@@ -146,7 +148,8 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
        clip_mask.get(),clip.x0,clip.y0,clip.x1,clip.y1,
        {a,bx,cx,d,e,f,text_a,text_b,text_c,text_d,
         char_spacing,word_spacing,horizontal_scale},
-       &it->second.differences,it->second.encoding))return false;
+       &it->second.differences,it->second.encoding,
+       it->second.subtype=="Type0"?&it->second.cid_map:nullptr))return false;
   const double advance=next-text_x;
   const double new_x=text_x+advance*text_a;
   const double new_y=text_y+advance*text_b;
