@@ -2,6 +2,7 @@
 #include "sfnt.h"
 #include "glyph_outline.h"
 #include "path_mask.h"
+#include "../parser/font_encoding.h"
 #include <cmath>
 #include <limits>
 #include <utility>
@@ -14,7 +15,8 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
  const std::vector<uint8_t>* clip_mask,
  unsigned clip_x0,unsigned clip_y0,unsigned clip_x1,unsigned clip_y1,
  GlyphTransform matrix,
- const std::map<uint8_t,uint32_t>* differences){
+ const std::map<uint8_t,uint32_t>* differences,
+ const std::string& encoding){
  if(!rgba||!width||!height||width>512||height>512||
     stride<size_t(width)*4||!std::isfinite(em)||em<=0||em>1000||
     !std::isfinite(start_x)||!std::isfinite(baseline)||
@@ -43,12 +45,11 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
    cursor-=run.displacement*em*matrix.horizontal_scale/1000;
   }else{
    for(unsigned char ch:run.bytes){
-    if(ch<32||ch>126||++glyph_count>4096)return false;
-    uint32_t unicode=ch;
-    if(differences){
-     auto override_code=differences->find(ch);
-     if(override_code!=differences->end())unicode=override_code->second;
-    }
+    if(++glyph_count>4096)return false;
+    uint32_t unicode=0;
+    static const std::map<uint8_t,uint32_t> no_overrides;
+    if(!parser::font_byte_unicode(encoding,ch,
+       differences?*differences:no_overrides,unicode))return false;
     uint16_t glyph_id=0;
     if(!sfnt_glyph_id(sfnt,unicode,glyph_id)||
        !sfnt_horizontal_metrics(sfnt,glyph_id,units,advance))return false;
