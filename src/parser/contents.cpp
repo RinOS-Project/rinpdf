@@ -130,7 +130,7 @@ bool read_page_contents(const uint8_t *data,size_t size,size_t index,std::vector
  contents.clear();if(!data||limit==0)return false;
  std::vector<XrefEntry> xref;std::vector<XrefStreamEntry> compressed;Value trailer;
  if(!read_object_xref(data,size,xref,compressed,trailer))return false;
- if(get(trailer,"Prev")||get(trailer,"XRefStm")||get(trailer,"Encrypt"))return false;
+ if(get(trailer,"Encrypt"))return false;
  const Value *root=get(trailer,"Root");if(!root)return false;
  Reader reader{data,size,xref,compressed};Value catalog;
  if(!reader.object(*root,catalog))return false;
@@ -143,7 +143,7 @@ bool read_page_box(const uint8_t *data,size_t size,size_t index,MediaBox& box){
  box={0,0,0,0};if(!data)return false;
  std::vector<XrefEntry> xref;std::vector<XrefStreamEntry> compressed;Value trailer;
  if(!read_object_xref(data,size,xref,compressed,trailer))return false;
- if(get(trailer,"Prev")||get(trailer,"XRefStm")||get(trailer,"Encrypt"))return false;
+ if(get(trailer,"Encrypt"))return false;
  const Value *root=get(trailer,"Root");if(!root)return false;
  Reader reader{data,size,xref,compressed};Value catalog;
  if(!reader.object(*root,catalog))return false;
