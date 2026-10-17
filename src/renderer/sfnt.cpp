@@ -199,4 +199,31 @@ bool sfnt_simple_glyph(const SfntFont& font,uint16_t id,SimpleGlyph& outline){
  return true;
 }
 
+bool sfnt_horizontal_metrics(const SfntFont& font,uint16_t id,
+ uint16_t& units_per_em,uint16_t& advance_width){
+ if(!font.bytes||id>=font.glyph_count)return false;
+ const SfntTable* head=table(font,0x68656164);
+ const SfntTable* hhea=table(font,0x68686561);
+ const SfntTable* hmtx=table(font,0x686d7478);
+ if(!head||!hhea||!hmtx||head->length<54||hhea->length<36)return false;
+ uint16_t units=0,metrics=0;
+ if(!u16(font.bytes,font.size,size_t(head->offset)+18,units)||
+    !u16(font.bytes,font.size,size_t(hhea->offset)+34,metrics)||
+    units<16||units>16384||metrics==0||metrics>font.glyph_count)return false;
+ // LongHorMetric is advanceWidth (2 bytes), leftSideBearing (2 bytes).
+ // Remaining glyphs inherit the last stored advanceWidth.
+ if(size_t(metrics)>hmtx->length/4)return false;
+ const size_t metric_index=std::min<size_t>(id,metrics-1);
+ uint16_t advance=0;
+ if(!u16(font.bytes,font.size,size_t(hmtx->offset)+metric_index*4,advance))
+  return false;
+ if(id>=metrics){
+  const size_t extra=size_t(id)-metrics;
+  if(extra>(SIZE_MAX-size_t(metrics)*4)/2||
+     hmtx->length<size_t(metrics)*4+(extra+1)*2)return false;
+ }
+ units_per_em=units;advance_width=advance;
+ return true;
+}
+
 }
