@@ -696,3 +696,8 @@ PDF Catalog の `/Lang` 文字列を `read_page_fonts` で取得し、レンダ�
 新しい `parse_tounicode_sequences` は1〜4バイトのBig Endianソース文字コードを扱います。`begincodespacerange` の開始・終了コードを検査し、同一幅の範囲重複や範囲外マッピングを拒否します。`extract_page_text` はType0フォントのToUnicode表から1〜4バイトのコードを探索し、見つかった最長のコードを採用します。合成CMapテストに3バイト・4バイトと不正なcodespacerangeを追加しました。従来の単一Unicode値パーサーは維持します。
 
 制限: 複数CMap継承（`usecmap`）、文字コードの曖昧性があるcodespaceの厳密なトークン分割、CID用のカスタムCMapによる描画は未対応です。変更後のビルド・テストPASSは未確認です。
+
+## ToUnicode codespace-aware text segmentation
+解析済み `begincodespacerange` の範囲をフォントリソースへ保持し、テキスト抽出時はマッピング表の最長一致ではなく宣言済みcodespaceに該当するコード単位で分割するよう変更しました。宣言されたコードなのにToUnicode対応表に存在しない場合は、後続バイトと結合して別コードと誤認せず抽出を失敗させます。codespaceが定義されていない古いCMapでは従来の対応表による判定を残します。また、4バイトコードのbfrange展開での16ビット切り詰めを修正し、codespace伝搬・範囲外コードの回帰テストを追加しました。
+
+既存の限定事項として、同じプレフィックスに複数長の有効codespaceが重なる曖昧なCMapの厳密な処理、`usecmap` の継承、一般PDF全体のテキストレイアウト復元は未対応です。今回のビルド・全テストPASSは未確認です。
