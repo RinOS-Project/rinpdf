@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <map>
 #include <string>
+#include <vector>
+#include <utility>
 namespace rinpdf::parser {
 // A deliberately bounded subset of ToUnicode CMap: one-to-four-byte source codes
 // and single Unicode scalar destinations, via beginbfchar/beginbfrange.
