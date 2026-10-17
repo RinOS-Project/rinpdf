@@ -596,3 +596,8 @@ Courier系列の `Tj` / `TJ` に対して文字幅・字間調整から水平移
 Simple fontの `/Encoding` が名前、間接参照、または `<< /BaseEncoding /WinAnsiEncoding /Differences [...] >>` 辞書の場合に取得できるようにしました。Differences配列のコード開始番号と後続グリフ名を解析し、サポートするAdobe glyph nameの限定的な集合をUnicode値に変換して、埋め込みTrueTypeのUnicode cmap検索時に適用します。未知のグリフ名、範囲外コード、不正な配列はfail-closedとします。回帰テスト `rinpdf-font-encoding` を追加しました。
 
 制限: 完全なAdobe Glyph List、Standard/MacRoman/WinAnsiの256文字完全マッピング、CID/Type0、ToUnicode、Differencesの全名称には未対応です。現段階のTrueType描画は従来通り明示的なWinAnsiEncodingとASCIIの入力範囲に限定しています。今回の変更後のビルド・テストPASSは未確認です。
+
+## Font byte encoding tables (experimental)
+TrueTypeの文字コード変換に `font_byte_unicode` を接続し、`WinAnsiEncoding`（Windows-1252の定義済み文字）、`MacRomanEncoding`（128–255のマッピング）、`StandardEncoding`（現時点で32–126の安全に定義した部分集合）を扱うようにしました。未定義コードは拒否し、`/Differences` の明示的な置き換えを基底エンコーディングより優先します。これら3種類がフォントに明示されている場合に限りTrueTypeレンダラーで利用します。回帰テストを追加しました。
+
+制限: `StandardEncoding` の非ASCII領域・完全なAdobe Glyph List・CID/ToUnicode等は引き続き未対応です。今回の変更後のビルド・テストPASSは未確認です。
