@@ -520,3 +520,6 @@ PDFではパス構築後、ストローク演算子の前に破線設定 `d` を
 Classic xrefトレーラーの `/XRefStm` が指す同一改訂内の補助XRef Streamを読み込み、ClassicとType 0/1/2エントリを統合する処理を追加しました。同じオブジェクト番号が双方にある場合はClassicのエントリを優先し、古い `/Prev` 改訂のエントリより現在の改訂を優先します。補助ストリームの循環・不正なオフセット・独立した `/Prev` と `/XRefStm` は拒否します。ハイブリッド形式の成功・不正参照テストを追加しました。
 
 一般PDFに対する網羅的な互換性や17件の全テストPASSは、今回の変更後は未確認です。暗号化、間接Length、破損文書の修復は引き続き対象外です。
+
+## Hybrid XRef public page reader integration
+`read_object_xref` が妥当性を検証済みの `/Prev` および `/XRefStm` を、`pages.cpp` と `contents.cpp` が二重に拒否していた問題を修正しました。圧縮Catalogを含む既存のXRef Stream PDFにClassic xrefと `/XRefStm` を追記したハイブリッドPDFをテスト内で生成し、公開 `rinpdf_document_page_count` がページ数1を返す回帰テストを追加しました。暗号化は引き続き拒否します。現時点で今回の変更後のテスト実行・PASSは未確認です。
