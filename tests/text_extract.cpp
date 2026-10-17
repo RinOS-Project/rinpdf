@@ -21,7 +21,7 @@ int main(){
  append(3,"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Contents 5 0 R >>");
  append(4,"<< /Type /Font /Subtype /TrueType /BaseFont /Example /Encoding /WinAnsiEncoding /ToUnicode 6 0 R >>");
  append(5,"<< /Length "+std::to_string(content.size())+" >>\nstream\n"+content+"\nendstream");
- const std::string cmap="1 beginbfchar <41> <0041> endbfchar";
+ const std::string cmap="1 beginbfchar <41> <00410042> endbfchar";
  append(6,"<< /Length "+std::to_string(cmap.size())+" >>\nstream\n"+cmap+"\nendstream");
  const size_t xref=pdf.size();
  pdf+="xref\n0 7\n0000000000 65535 f \n";
@@ -33,6 +33,6 @@ int main(){
       std::to_string(xref)+"\n%%EOF\n";
  std::string result;
  if(!extract_page_text(reinterpret_cast<const uint8_t*>(pdf.data()),pdf.size(),0,result))return 1;
- if(result!=std::string("\xe4\xb8\x96\xe6\x97\xa5\xe6\x9c\xac")+"A")return 2;
+ if(result!=std::string("\xe4\xb8\x96\xe6\x97\xa5\xe6\x9c\xac")+"AB")return 2;
  return 0;
 }
