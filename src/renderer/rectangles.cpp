@@ -6,6 +6,7 @@
 #include "bitmap_glyph.h"
 #include "truetype_draw.h"
 #include "../parser/lexer.h"
+#include "../parser/value.h"
 #include <algorithm>
 #include <charconv>
 #include <cmath>
@@ -38,6 +39,8 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
  double miter_limit=10;
  double flatness=1;
  unsigned compatibility_depth=0;
+ std::vector<std::string> marked_languages;
+ std::string active_marked_language;
  bool in_text=false;
  std::string selected_font;
  double selected_font_size=0;
@@ -153,7 +156,8 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
        it->second.subtype=="Type0"?&it->second.cid_map:nullptr,
        it->second.subtype=="Type0"?&it->second.cid_widths:nullptr,
        it->second.encoding=="Identity-V"?&it->second.vertical_metrics:nullptr,
-       &next_vertical,it->second.language))return false;
+       &next_vertical,marked_languages.empty()?it->second.language:
+         (active_marked_language.empty()?it->second.language:active_marked_language)))return false;
   const bool vertical=it->second.encoding=="Identity-V";
   const double advance=vertical?next_vertical-text_y:next-text_x;
   const double new_x=text_x+advance*(vertical?text_c:text_a);
@@ -170,6 +174,36 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
   if(token.kind==parser::TokenKind::End)break;
   if(token.kind==parser::TokenKind::Invalid)return false;
   if(token.kind==parser::TokenKind::Name){
+   // Marked content starts with a tag name followed by BMC or an
+   // inline property dictionary followed by BDC.
+   parser::Lexer look=lex;
+   const parser::Token next=look.next();
+   if(next.kind==parser::TokenKind::Keyword&&next.value=="BMC"){
+    if(marked_languages.size()>=64||!stack.empty()||has_pending_text)return false;
+    marked_languages.push_back(active_marked_language);
+    active_marked_language.clear();
+    lex=look;continue;
+   }
+   if(next.kind==parser::TokenKind::DictOpen){
+    parser::Value properties;
+    parser::Lexer properties_lexer=lex;
+    if(!parser::parse_value(properties_lexer,properties,8)||
+       properties.kind!=parser::Value::Kind::Dictionary)return false;
+    const auto op=properties_lexer.next();
+    if(op.kind==parser::TokenKind::Keyword&&op.value=="BDC"){
+     if(marked_languages.size()>=64||!stack.empty()||has_pending_text)return false;
+     std::string lang;
+     auto it=properties.dictionary.find("Lang");
+     if(it!=properties.dictionary.end()){
+      if(it->second.kind!=parser::Value::Kind::String||
+         it->second.text.size()>64)return false;
+      lang=it->second.text;
+     }
+     marked_languages.push_back(active_marked_language);
+     if(!lang.empty())active_marked_language=lang;
+     lex=properties_lexer;continue;
+    }
+   }
    if(in_text&&pending_font.empty()&&stack.empty()){
     pending_font=token.value;
     continue;
@@ -185,6 +219,11 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
    continue;
   }
   const std::string& word=token.value;
+  if(word=="EMC"){
+   if(marked_languages.empty()||!stack.empty()||has_pending_text)return false;
+   active_marked_language=marked_languages.back();
+   marked_languages.pop_back();continue;
+  }
   if(!pending_font.empty()&&word!="Tf"&&token.kind!=parser::TokenKind::Integer&&token.kind!=parser::TokenKind::Keyword)return false;
   double v=0;
   if(number(word,v)){if(reading_dash){if(dash_values.size()>=32)return false;dash_values.push_back(v);}else{if(dash_array_ready&&stack.size()>=1)return false;if(stack.size()>=16)return false;stack.push_back(v);}continue;}
@@ -1304,7 +1343,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
    stack.clear();
   }else return false; // Do not silently ignore unknown operators.
  }
- return !has_pending_text&&pending_font.empty()&&!in_text&&compatibility_depth==0&&!reading_dash&&!dash_array_ready&&dash_values.empty()&&stack.empty()&&path.empty()&&polygons.empty()&&saved.empty()&&!pending_rect_clip&&!pending_path_clip;
+ return !has_pending_text&&pending_font.empty()&&!in_text&&compatibility_depth==0&&!reading_dash&&!dash_array_ready&&dash_values.empty()&&stack.empty()&&path.empty()&&polygons.empty()&&saved.empty()&&marked_languages.empty()&&!pending_rect_clip&&!pending_path_clip;
 }
 bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,unsigned height,uint8_t *rgba,size_t stride,PageBox box){
  return render_rectangles_box_with_fonts(contents,size,width,height,rgba,stride,box,{});
