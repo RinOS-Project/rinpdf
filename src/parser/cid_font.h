@@ -4,6 +4,7 @@
 #include <vector>
 #include <map>
 #include <utility>
+#include <cmath>
 #include "value.h"
 namespace rinpdf::parser {
 // PDF CIDToGIDMap: big-endian uint16 per CID. Identity is implicit.
@@ -30,13 +31,17 @@ inline bool cid_width(const CIDWidths& widths,uint16_t cid,double& width){
  if(value<0||value>100000)return false;
  width=value;return true;
 }
+inline bool cid_numeric_width(const Value& value,double& width){
+ if(value.kind==Value::Kind::Integer)width=static_cast<double>(value.integer);
+ else if(value.kind==Value::Kind::Real)width=value.real;
+ else return false;
+ return std::isfinite(width)&&width>=0&&width<=100000;
+}
 // /W accepts [start [w1 w2 ...]] and [start end w].
 inline bool parse_cid_widths(const Value* dw,const Value* w,CIDWidths& out){
  CIDWidths result;
  if(dw){
-  if(dw->kind!=Value::Kind::Integer||dw->integer<0||
-     dw->integer>100000)return false;
-  result.default_width=static_cast<double>(dw->integer);
+  if(!cid_numeric_width(*dw,result.default_width))return false;
  }
  if(w){
   if(w->kind!=Value::Kind::Array||w->array.size()>65536)return false;
@@ -51,19 +56,20 @@ inline bool parse_cid_widths(const Value* dw,const Value* w,CIDWidths& out){
     if(next.array.empty()||next.array.size()>65536-first)return false;
     for(size_t j=0;j<next.array.size();++j){
      const Value& v=next.array[j];
-     if(v.kind!=Value::Kind::Integer||v.integer<0||v.integer>100000||
+     double width=0;
+     if(!cid_numeric_width(v,width)||
         !result.overrides.emplace(static_cast<uint16_t>(first+j),
-          static_cast<double>(v.integer)).second)return false;
+          width).second)return false;
     }
    }else if(next.kind==Value::Kind::Integer){
     if(next.integer<first||next.integer>65535||
        pos>=w->array.size())return false;
     const Value& width=w->array[pos++];
-    if(width.kind!=Value::Kind::Integer||width.integer<0||
-       width.integer>100000)return false;
+    double numeric_width=0;
+    if(!cid_numeric_width(width,numeric_width))return false;
     for(unsigned i=first;i<=static_cast<unsigned>(next.integer);++i)
      if(!result.overrides.emplace(static_cast<uint16_t>(i),
-        static_cast<double>(width.integer)).second)return false;
+        numeric_width).second)return false;
    }else return false;
   }
  }
