@@ -52,6 +52,43 @@ struct Reader {
   if(!locate_indirect_stream(data,size,*e,xref,range))return false;
   return decode_stream(data,size,range,bytes,limit);
  }
+ bool resolve_unicode_cmap(const Value& ref,unsigned depth,
+  std::set<size_t>& visiting,std::map<CMapKey,std::u32string>& output,
+  std::vector<std::pair<CMapKey,CMapKey>>& spaces,
+  std::string& cmap_name) const {
+  if(depth>=8||ref.kind!=Value::Kind::Reference||ref.integer<=0||
+     !visiting.insert(size_t(ref.integer)).second)return false;
+  Value dictionary;
+  std::vector<uint8_t> decoded;
+  if(!object(ref,dictionary)||dictionary.kind!=Value::Kind::Dictionary||
+     !stream(ref,decoded,1024*1024))return false;
+  if(const Value* name=get(dictionary,"CMapName")){
+   if(name->kind!=Value::Kind::Name||name->text.size()>128)return false;
+   cmap_name=name->text;
+  }
+  const Value* use=get(dictionary,"UseCMap");
+  std::map<CMapKey,std::u32string> parent;
+  std::vector<std::pair<CMapKey,CMapKey>> parent_spaces;
+  std::string parent_name;
+  if(use){
+   if(!resolve_unicode_cmap(*use,depth+1,visiting,parent,
+        parent_spaces,parent_name))return false;
+   if(parent_name.empty())return false;
+  }
+  std::map<CMapKey,std::u32string> result;
+  std::vector<std::pair<CMapKey,CMapKey>> ranges;
+  if(!parse_tounicode_sequences(decoded.data(),decoded.size(),result,&ranges,
+       parent_name,use?&parent:nullptr,use?&parent_spaces:nullptr))return false;
+  // A stream dictionary UseCMap may identify a parent even if the stream
+  // does not contain an inline usecmap operator.
+  if(use){
+   for(const auto& [key,value]:parent)result.emplace(key,value);
+   if(ranges.empty())ranges=parent_spaces;
+  }
+  output=std::move(result);spaces=std::move(ranges);
+  visiting.erase(size_t(ref.integer));
+  return true;
+ }
  bool walk_properties(const Value& ref,size_t depth,size_t& current,size_t target,
   std::set<size_t>& active,const Value* inherited,PageProperties& output) const {
   if(depth>64||ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
@@ -240,11 +277,10 @@ struct Reader {
        }
       }
       if(const Value* cmap=get(font,"ToUnicode")){
-       std::vector<uint8_t> decoded;
-       if(cmap->kind!=Value::Kind::Reference||
-          !stream(*cmap,decoded,1024*1024)||
-          !parse_tounicode_sequences(decoded.data(),decoded.size(),resource.unicode_sequences,
-                                   &resource.unicode_codespaces)){
+       std::set<size_t> visiting;
+       std::string cmap_name;
+       if(!resolve_unicode_cmap(*cmap,0,visiting,resource.unicode_sequences,
+            resource.unicode_codespaces,cmap_name)){
         active.erase(id);return false;
        }
       }
