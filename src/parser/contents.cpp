@@ -6,6 +6,7 @@
 #include "stream_object.h"
 #include "stream.h"
 #include "value.h"
+#include "../renderer/sfnt.h"
 #include <algorithm>
 #include <map>
 #include <set>
@@ -86,7 +87,28 @@ struct Reader {
          subtype->kind!=Value::Kind::Name||base->kind!=Value::Kind::Name){
        active.erase(id);return false;
       }
-      output.emplace(key,PageFont{base->text,subtype->text});
+      PageFont resource{base->text,subtype->text,{}};
+      if(const Value* descriptor=get(font,"FontDescriptor")){
+       Value resolved_descriptor;
+       if(descriptor->kind==Value::Kind::Reference){
+        if(!object(*descriptor,resolved_descriptor)){active.erase(id);return false;}
+       }else resolved_descriptor=*descriptor;
+       if(resolved_descriptor.kind!=Value::Kind::Dictionary){
+        active.erase(id);return false;
+       }
+       if(const Value* file=get(resolved_descriptor,"FontFile2")){
+        if(file->kind!=Value::Kind::Reference||
+           !stream(*file,resource.embedded_truetype,16*1024*1024)){
+         active.erase(id);return false;
+        }
+        renderer::SfntFont sfnt;
+        if(!renderer::parse_sfnt(resource.embedded_truetype.data(),
+                                 resource.embedded_truetype.size(),sfnt)){
+         active.erase(id);return false;
+        }
+       }
+      }
+      output.emplace(key,std::move(resource));
      }
     }
    }
