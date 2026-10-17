@@ -424,6 +424,10 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
   if(text&&t.value=="Tm"){
    if(operands.size()!=6||have_pending)return false;
    const double next_x=operands[4],next_y=operands[5];
+   // Bound the complete matrix, including shear and translation, before
+   // propagating it to Td/T*/quote line positions.
+   for(const double component:operands)
+    if(!std::isfinite(component)||std::abs(component)>1e12)return false;
    const double old_length=std::hypot(line_axis_x,line_axis_y);
    const double next_length=std::hypot(operands[0],operands[1]);
    if(next_length<=1e-12||!std::isfinite(next_length)||
