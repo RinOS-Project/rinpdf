@@ -328,6 +328,10 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
     const double spacing=character_spacing+(word_space?word_spacing:0);
     const double gap_threshold=font_size>0?
        space_units+1000.0*spacing/font_size:space_units;
+    // Compare physical advances when a font width and text cursor are
+    // available; retain the PDF-unit fallback for unsupported metrics.
+    const double physical_space=font_size*horizontal_scale*
+                               gap_threshold/1000.0;
     for(const auto& run:runs){
      if(run.adjustment){
       net_adjustment+=run.displacement;
@@ -348,9 +352,15 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
       text_cursor+=run_advance;
       if(!std::isfinite(text_cursor)||std::abs(text_cursor)>1e12)return false;
      }else text_cursor_known=false;
+     const double physical_gap=-net_adjustment*font_size*
+                               horizontal_scale/1000.0;
+     const bool gap_is_space=text_cursor_known?
+       (std::isfinite(physical_space)&&physical_space>0&&
+        std::isfinite(physical_gap)&&physical_gap>=physical_space):
+       (std::isfinite(gap_threshold)&&gap_threshold>0&&
+        net_adjustment<=-gap_threshold);
      if(emitted_run&&font_size>0&&horizontal_scale>0&&
-        std::isfinite(gap_threshold)&&gap_threshold>0&&
-        net_adjustment<=-gap_threshold&&
+        gap_is_space&&
         !output.empty()&&output.back()!=' '&&output.back()!='\n'&&
         decoded.front()!=' '&&decoded.front()!='\n'){
       if(output.size()>=4*1024*1024)return false;
