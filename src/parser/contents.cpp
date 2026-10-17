@@ -344,6 +344,18 @@ struct Reader {
        if(resolved_descriptor.kind!=Value::Kind::Dictionary){
         active.erase(id);return false;
        }
+       if(resource.subtype!="Type0"){
+        if(const Value* missing=get(resolved_descriptor,"MissingWidth")){
+         double width=0;
+         if(missing->kind==Value::Kind::Integer)width=double(missing->integer);
+         else if(missing->kind==Value::Kind::Real)width=missing->real;
+         else{active.erase(id);return false;}
+         if(!std::isfinite(width)||width<0||width>100000){
+          active.erase(id);return false;
+         }
+         resource.missing_width=width;
+        }
+       }
        if(const Value* file=get(resolved_descriptor,"FontFile2")){
         if(file->kind!=Value::Kind::Reference||
            !stream(*file,resource.embedded_truetype,16*1024*1024)){
