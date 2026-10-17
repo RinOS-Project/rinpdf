@@ -15,6 +15,7 @@ struct PageFont {
  std::map<uint8_t,uint32_t> differences; // explicit PDF byte-to-Unicode overrides
  std::map<CMapKey,uint32_t> to_unicode; // legacy scalar metadata
  std::map<CMapKey,std::u32string> unicode_sequences;
+ std::vector<std::pair<CMapKey,CMapKey>> unicode_codespaces;
  CIDGlyphMap cid_map; // only for Type0 / CIDFontType2
  CIDWidths cid_widths;
  CIDVerticalMetrics vertical_metrics;
