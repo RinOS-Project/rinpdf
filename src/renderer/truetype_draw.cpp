@@ -13,7 +13,8 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
  uint8_t red,uint8_t green,uint8_t blue,double& next_x,
  const std::vector<uint8_t>* clip_mask,
  unsigned clip_x0,unsigned clip_y0,unsigned clip_x1,unsigned clip_y1,
- GlyphTransform matrix){
+ GlyphTransform matrix,
+ const std::map<uint8_t,uint32_t>* differences){
  if(!rgba||!width||!height||width>512||height>512||
     stride<size_t(width)*4||!std::isfinite(em)||em<=0||em>1000||
     !std::isfinite(start_x)||!std::isfinite(baseline)||
@@ -43,8 +44,13 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
   }else{
    for(unsigned char ch:run.bytes){
     if(ch<32||ch>126||++glyph_count>4096)return false;
+    uint32_t unicode=ch;
+    if(differences){
+     auto override_code=differences->find(ch);
+     if(override_code!=differences->end())unicode=override_code->second;
+    }
     uint16_t glyph_id=0;
-    if(!sfnt_glyph_id(sfnt,ch,glyph_id)||
+    if(!sfnt_glyph_id(sfnt,unicode,glyph_id)||
        !sfnt_horizontal_metrics(sfnt,glyph_id,units,advance))return false;
     SimpleGlyph glyph;
     if(!sfnt_glyph_outline(sfnt,glyph_id,glyph))return false;
