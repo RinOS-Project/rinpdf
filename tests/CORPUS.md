@@ -32,3 +32,17 @@ Rendering checks a 64×64 RGBA buffer and verifies that `UNSUPPORTED`
 does not alter the buffer. It does **not** prove pixel correctness; compare
 images separately against MuPDF or PDFium with known reference fixtures.
 Keep proprietary, confidential or licensed PDFs outside Git history.
+
+## Reproducible combined verification
+
+For the eight-file ZIP corpus distributed separately, extract the archive at
+repository root, then run:
+
+```sh
+sh scripts/verify-corpus.sh manifest.tsv
+```
+
+This checks that the manifest is nonempty and every referenced fixture exists,
+runs the Meson unit test suite, then checks the real PDFs with `rinpdf-corpus`.
+A missing fixture, a failed unit test, or a mismatched expected status causes
+a nonzero exit. This is a compatibility check, not a pixel-equivalence test.
