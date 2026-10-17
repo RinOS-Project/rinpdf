@@ -485,3 +485,8 @@ PDFではパス構築後、ストローク演算子の前に破線設定 `d` を
 `read_uncompressed_xref` を追加し、Classic xrefおよびXRef StreamのType 1通常オブジェクトを既存 `XrefEntry` に変換して `pages.cpp` と `contents.cpp` から使用するようにしました。Type 2圧縮オブジェクト（Object Stream）、`/Prev`、`/XRefStm`、暗号化は未対応として拒否します。XRef Stream形式の最小PDFをテスト内で生成し、公開 `rinpdf_document_page_count` を呼ぶ回帰テストを追加しました。
 
 **制限:** フォント・画像を含む一般PDF、Object Stream参照、増分更新にはまだ対応していません。今回の変更後のビルド・テストPASSは未確認です。
+
+## Decoded Object Stream parser (experimental)
+`src/parser/object_stream.cpp` に、既にフィルタ解除された `/ObjStm` データを `/N` と `/First` に基づいて解析する内部処理を追加しました。オブジェクト番号・相対オフセットの組を検証し、重複番号、範囲外オフセット、不正な値、過大な個数を拒否します。失敗時は出力を変更しません。独立した `rinpdf-object-stream` テストを追加しました。
+
+**未接続:** XRef Stream type 2エントリから該当 `/ObjStm` を引く処理、間接ストリームのフィルタ解除とキャッシュ、圧縮オブジェクトの参照解決、ページツリーとの統合は今後の作業です。このコミットだけでは圧縮オブジェクトを含むPDFを開けません。新規テストのPASSは未確認です。
