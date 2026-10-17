@@ -621,3 +621,8 @@ TrueTypeの文字コード変換に `font_byte_unicode` を接続し、`WinAnsiE
 CIDFontType2の `/DW`（既定幅）および `/W`（`[start [w...]]` と `[start end width]`）を解析して `CIDWidths` に保持します。Identity-Hの描画経路では、CIDごとの文字送り幅としてPDFの `/W` を優先し、未指定の場合は `/DW` または仕様上の既定値1000（1/1000 em）を使用します。TrueTypeの輪郭描画自体は既存のSFNT/glyf経路で行います。重複・不正範囲・負数を拒否するテスト、およびCIDのPDF幅を使った送り量テストを追加しました。
 
 現時点では整数で指定された幅のみ対応しており、PDF数値の実数幅、縦書きの `/W2`・`/DW2`、独自CMap等は未対応です。今回の変更後のビルド・全テストPASSは未確認です。
+
+## CIDFont fractional widths
+PDF数値Lexerと値パーサーに符号付き小数値（`Value::Kind::Real`）を追加しました。CIDFontType2の `/DW` と `/W` は整数に加え、`412.5` のような有限の実数文字幅を保持し、水平送りへ適用します。CID番号・範囲境界は従来通り整数に限定します。負数や非有限値、過大な文字幅は拒否します。`rinpdf-value` と `rinpdf-cid-font` のテストを拡張しました。
+
+変更後のビルド・全テストPASSは未確認です。PDF一般の実数値サポートについては、本変更は字幅用途を中心とした第一段階です。
