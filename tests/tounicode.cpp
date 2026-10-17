@@ -41,5 +41,17 @@ int main(){
  if(parse_tounicode_sequences(reinterpret_cast<const uint8_t*>(malformed.data()),
     malformed.size(),sequences))return 11;
  if(sequences.size()!=5)return 12;
+ const std::string long_codes=
+  "2 begincodespacerange <000000> <FFFFFF> <00000000> <FFFFFFFF> endcodespacerange "
+  "2 beginbfchar <010203> <65E5> <10203040> <672C> endbfchar";
+ if(!parse_tounicode_sequences(reinterpret_cast<const uint8_t*>(long_codes.data()),
+     long_codes.size(),sequences))return 13;
+ if(sequences.size()!=2||sequences.at({3,0x010203})!=U"\u65e5"||
+    sequences.at({4,0x10203040})!=U"\u672c")return 14;
+ const std::string bad_space=
+  "1 begincodespacerange <0200> <0100> endcodespacerange "
+  "1 beginbfchar <41> <0041> endbfchar";
+ if(parse_tounicode_sequences(reinterpret_cast<const uint8_t*>(bad_space.data()),
+     bad_space.size(),sequences))return 15;
  return 0;
 }
