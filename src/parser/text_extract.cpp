@@ -225,6 +225,7 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
     if((amount.kind==TokenKind::Integer||amount.kind==TokenKind::Real||
         amount.kind==TokenKind::Keyword)&&tf.kind==TokenKind::Keyword&&
         tf.value=="Tf"&&fonts.count(t.value)){
+     if(have_pending||!operands.empty())return false;
      const char* begin=amount.value.data();
      const char* end=begin+amount.value.size();
      if(begin!=end&&*begin=='+')++begin;
