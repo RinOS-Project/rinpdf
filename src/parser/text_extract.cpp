@@ -39,15 +39,22 @@ bool actual_text(const std::string& raw,std::string& out){
 }
 bool decode_run(const std::string& bytes,const PageFont& font,std::string& out){
  if(font.unicode_sequences.empty())return false;
- const bool wide=font.subtype=="Type0";
- const unsigned width=wide?2:1;
- if(bytes.size()%width)return false;
- for(size_t i=0;i<bytes.size();i+=width){
-  uint16_t code=uint8_t(bytes[i]);
-  if(wide)code=uint16_t((code<<8)|uint8_t(bytes[i+1]));
-  const auto it=font.unicode_sequences.find(CMapKey{uint8_t(width),code});
-  if(it==font.unicode_sequences.end())return false;
-  for(char32_t cp:it->second)if(!utf8_append(out,uint32_t(cp)))return false;
+ const unsigned max_width=font.subtype=="Type0"?4:1;
+ for(size_t i=0;i<bytes.size();){
+  uint32_t code=0;
+  size_t selected_width=0;
+  const std::u32string* sequence=nullptr;
+  for(unsigned width=1;width<=max_width&&i+width<=bytes.size();++width){
+   code=(code<<8)|uint8_t(bytes[i+width-1]);
+   const auto it=font.unicode_sequences.find(CMapKey{uint8_t(width),code});
+   if(it!=font.unicode_sequences.end()){
+    selected_width=width;
+    sequence=&it->second;
+   }
+  }
+  if(!sequence)return false;
+  for(char32_t cp:*sequence)if(!utf8_append(out,uint32_t(cp)))return false;
+  i+=selected_width;
  }
  return true;
 }
