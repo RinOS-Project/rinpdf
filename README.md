@@ -691,3 +691,8 @@ PDF Catalog の `/Lang` 文字列を `read_page_fonts` で取得し、レンダ�
 `parse_tounicode_sequences` を新設し、`beginbfchar` のUTF-16BE複数コードポイントおよびサロゲートペア、`beginbfrange` の配列形式と連続加算形式に対応しました。CMapの1つの文字コードから複数のUnicode文字へ対応付けられるようになり、`extract_page_text` は全コードポイントをUTF-8で連結します。旧単一Unicode値パーサーは互換性のため維持します。最大4096マッピング、1マッピング当たりUTF-16BE 512バイトを上限とし、重複・不正なサロゲート・範囲外値を拒否します。回帰テストとPDFの統合テストを拡張しました。
 
 未対応: 3バイト以上のソース文字コード、`usecmap`、正確なcodespacerange検証、テキスト配置由来の空白・改行。変更後のビルド・全テストPASSは未確認です。
+
+## ToUnicode 3–4バイトコードとcodespacerange（試験実装）
+新しい `parse_tounicode_sequences` は1〜4バイトのBig Endianソース文字コードを扱います。`begincodespacerange` の開始・終了コードを検査し、同一幅の範囲重複や範囲外マッピングを拒否します。`extract_page_text` はType0フォントのToUnicode表から1〜4バイトのコードを探索し、見つかった最長のコードを採用します。合成CMapテストに3バイト・4バイトと不正なcodespacerangeを追加しました。従来の単一Unicode値パーサーは維持します。
+
+制限: 複数CMap継承（`usecmap`）、文字コードの曖昧性があるcodespaceの厳密なトークン分割、CID用のカスタムCMapによる描画は未対応です。変更後のビルド・テストPASSは未確認です。
