@@ -53,6 +53,14 @@ double tj_space_threshold(const PageFont& font){
       std::isfinite(it->second))
     return std::clamp(it->second,250.0,1000.0);
   }
+  // MissingWidth is only a fallback for a code absent from /Widths;
+  // an explicit zero-width entry must not be overridden.
+  for(const auto& [key,sequence]:font.unicode_sequences){
+   if(key.width!=1||sequence!=U" "||key.code>255)continue;
+   if(font.simple_widths.count(uint8_t(key.code)))break;
+   if(font.missing_width>0&&std::isfinite(font.missing_width))
+    return std::clamp(font.missing_width,250.0,1000.0);
+  }
  }
  if(font.subtype=="Type0"&&font.encoding=="Identity-H"){
   for(const auto& [key,sequence]:font.unicode_sequences){
