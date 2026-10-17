@@ -686,3 +686,8 @@ PDF Catalog の `/Lang` 文字列を `read_page_fonts` で取得し、レンダ�
 ページの継承された `/Resources /Properties` にある名前付き辞書について、`/ActualText` と `/Lang` をそれぞれ保持できるようにしました。`extract_page_text` は `/Span /P1 BDC ... EMC` の名前参照で指定されたUTF-16BE `/ActualText` をUTF-8として出力し、対応するスコープ内の通常の `ToUnicode` テキスト抽出を抑制します。インライン `/ActualText` との併用も可能で、統合テストを追加しました。描画側は `/Lang` だけを利用します。
 
 制限: まだ内部APIであり、ActualTextのUTF-16BE以外の表現、位置情報に基づく文字組み、構造ツリー、完全なMarked Content対応は未実装です。変更後のビルド・全テストPASSは未確認です。
+
+## Multi-character ToUnicode mappings (experimental)
+`parse_tounicode_sequences` を新設し、`beginbfchar` のUTF-16BE複数コードポイントおよびサロゲートペア、`beginbfrange` の配列形式と連続加算形式に対応しました。CMapの1つの文字コードから複数のUnicode文字へ対応付けられるようになり、`extract_page_text` は全コードポイントをUTF-8で連結します。旧単一Unicode値パーサーは互換性のため維持します。最大4096マッピング、1マッピング当たりUTF-16BE 512バイトを上限とし、重複・不正なサロゲート・範囲外値を拒否します。回帰テストとPDFの統合テストを拡張しました。
+
+未対応: 3バイト以上のソース文字コード、`usecmap`、正確なcodespacerange検証、テキスト配置由来の空白・改行。変更後のビルド・全テストPASSは未確認です。
