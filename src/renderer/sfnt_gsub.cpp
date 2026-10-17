@@ -147,13 +147,26 @@ bool sfnt_vertical_substitution(const SfntFont& font,uint16_t glyph,
     if(lookup_relative<2||!read16(data,n,lookup,type)||
        !read16(data,n,lookup+4,sub_count)||sub_count>4096||
        lookup>n||n-lookup<6+size_t(sub_count)*2)return false;
-    if(type!=1)continue; // Unsupported lookup types cannot be substituted.
+    if(type!=1&&type!=7)continue; // Only SingleSubst and its extension.
     for(unsigned k=0;k<sub_count;++k){
      uint16_t sub_relative=0;
      if(!read16(data,n,lookup+6+size_t(k)*2,sub_relative)||
         sub_relative<6||sub_relative>=n-lookup)return false;
+     size_t sub=lookup+sub_relative;
+     if(type==7){
+      // ExtensionSubst format 1 holds a 32-bit offset relative to itself.
+      uint16_t format=0,extension_type=0;
+      uint32_t extension_offset=0;
+      if(!read16(data,n,sub,format)||
+         !read16(data,n,sub+2,extension_type)||
+         !read32(data,n,sub+4,extension_offset)||
+         format!=1||extension_offset<8||
+         extension_offset>n-sub)return false;
+      if(extension_type!=1)continue;
+      sub+=extension_offset;
+     }
      bool found=false;
-     if(!single_lookup(data,n,lookup+sub_relative,
+     if(!single_lookup(data,n,sub,
            glyph,font.glyph_count,replacement,found))return false;
      if(found)return true;
     }
