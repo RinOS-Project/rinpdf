@@ -616,3 +616,8 @@ TrueTypeの文字コード変換に `font_byte_unicode` を接続し、`WinAnsiE
 `Identity-H` のType0フォントについて、Tj/TJの文字列を2バイトBEのCIDとして取り出し、`CIDToGIDMap` のIdentity／明示Big EndianマッピングでGIDへ変換し、埋め込み `FontFile2` のTrueTypeグリフ輪郭描画へ接続しました。奇数長の文字列・マップ範囲外CID・存在しないGIDは拒否します。`rinpdf-truetype-draw` に合成SFNTのCID描画と失敗時の位置維持を追加しました。
 
 **制限:** Type0描画は `Identity-H` のみで、`CIDFontType2` の埋め込みTrueTypeが必須です。CID幅の `/W`・`/DW`、縦書き、独自CMap、フォントファイルの未埋め込み・代替、一般的なCIDFontType0/CFFは未対応です。現在の送り幅はTrueType `hmtx` を使用します。今回の変更後のビルド・テストPASSは未確認です。
+
+## CIDFontType2 DW/W horizontal advances (experimental)
+CIDFontType2の `/DW`（既定幅）および `/W`（`[start [w...]]` と `[start end width]`）を解析して `CIDWidths` に保持します。Identity-Hの描画経路では、CIDごとの文字送り幅としてPDFの `/W` を優先し、未指定の場合は `/DW` または仕様上の既定値1000（1/1000 em）を使用します。TrueTypeの輪郭描画自体は既存のSFNT/glyf経路で行います。重複・不正範囲・負数を拒否するテスト、およびCIDのPDF幅を使った送り量テストを追加しました。
+
+現時点では整数で指定された幅のみ対応しており、PDF数値の実数幅、縦書きの `/W2`・`/DW2`、独自CMap等は未対応です。今回の変更後のビルド・全テストPASSは未確認です。
