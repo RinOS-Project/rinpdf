@@ -71,9 +71,32 @@ struct Reader {
   std::vector<std::pair<CMapKey,CMapKey>> parent_spaces;
   std::string parent_name;
   if(use){
-   if(!resolve_unicode_cmap(*use,depth+1,visiting,parent,
+   Value parent_ref=*use;
+   if(use->kind==Value::Kind::Name){
+    // Only an explicitly declared CMap resource can satisfy a name;
+    // never guess a built-in CMap from the requested string.
+    const Value* resources=get(dictionary,"Resources");
+    Value resolved_resources;
+    if(!resources)return false;
+    if(resources->kind==Value::Kind::Reference){
+     if(!object(*resources,resolved_resources))return false;
+    }else resolved_resources=*resources;
+    const Value* cmap_resources=get(resolved_resources,"CMap");
+    Value cmap_dictionary;
+    if(!cmap_resources)return false;
+    if(cmap_resources->kind==Value::Kind::Reference){
+     if(!object(*cmap_resources,cmap_dictionary))return false;
+    }else cmap_dictionary=*cmap_resources;
+    if(cmap_dictionary.kind!=Value::Kind::Dictionary)return false;
+    const auto it=cmap_dictionary.dictionary.find(use->text);
+    if(it==cmap_dictionary.dictionary.end()||
+       it->second.kind!=Value::Kind::Reference)return false;
+    parent_ref=it->second;
+   }
+   if(!resolve_unicode_cmap(parent_ref,depth+1,visiting,parent,
         parent_spaces,parent_name))return false;
-   if(parent_name.empty())return false;
+   if(parent_name.empty()||
+      (use->kind==Value::Kind::Name&&parent_name!=use->text))return false;
   }
   std::map<CMapKey,std::u32string> result;
   std::vector<std::pair<CMapKey,CMapKey>> ranges;
