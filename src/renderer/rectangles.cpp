@@ -130,8 +130,6 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      it->second.encoding!="WinAnsiEncoding"||
      it->second.embedded_truetype.empty()||
      !pending_font.empty()||selected_font_size<=0||
-     text_a!=1||text_b!=0||text_c!=0||text_d!=1||
-     a!=1||bx!=0||cx!=0||d!=1||e!=0||f!=0||
      horizontal_scale!=1||char_spacing!=0||word_spacing!=0)
    return false;
   double next=0;
@@ -141,8 +139,14 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
        static_cast<uint8_t>(std::lround(red*255)),
        static_cast<uint8_t>(std::lround(green*255)),
        static_cast<uint8_t>(std::lround(blue*255)),next,
-       clip_mask.get(),clip.x0,clip.y0,clip.x1,clip.y1))return false;
-  text_x=next;return true;
+       clip_mask.get(),clip.x0,clip.y0,clip.x1,clip.y1,
+       {a,bx,cx,d,e,f,text_a,text_b,text_c,text_d}))return false;
+  const double advance=next-text_x;
+  const double new_x=text_x+advance*text_a;
+  const double new_y=text_y+advance*text_b;
+  if(!std::isfinite(new_x)||!std::isfinite(new_y)||
+     std::abs(new_x)>10000000||std::abs(new_y)>10000000)return false;
+  text_x=new_x;text_y=new_y;return true;
  };
  // Share PDF tokenization rules with the object parser. Whitespace inside
  // literal strings, nested parentheses and hex-string bytes stay atomic.
