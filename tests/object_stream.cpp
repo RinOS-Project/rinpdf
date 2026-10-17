@@ -1,4 +1,5 @@
 #include "../src/parser/object_stream.h"
+#include "../src/parser/xref_stream.h"
 #include <string>
 #include <vector>
 using namespace rinpdf::parser;
@@ -25,5 +26,26 @@ int main(){
  if(decode_object_stream(reinterpret_cast<const uint8_t*>(overlap.data()),
        overlap.size(),2,header.size(),objects))return 6;
  if(objects.size()!=retained)return 7;
+ // XRef type 2 resolves a compressed object by its indexed position.
+ std::string pdf="%PDF-1.5\n";
+ const size_t offset=pdf.size();
+ const std::string embedded="7 0 << /Type /Catalog >>";
+ pdf+="5 0 obj\n<< /Type /ObjStm /N 1 /First 4 /Length "+
+      std::to_string(embedded.size())+" >>\nstream\n";
+ pdf+=embedded;
+ pdf+="\nendstream\nendobj\n";
+ std::vector<XrefStreamEntry> refs{{5,1,offset,0},{7,2,5,0}};
+ Value resolved;
+ if(!resolve_compressed_object(reinterpret_cast<const uint8_t*>(pdf.data()),
+      pdf.size(),refs,7,resolved))return 8;
+ if(resolved.kind!=Value::Kind::Dictionary||
+    resolved.dictionary.at("Type").text!="Catalog")return 9;
+ refs[1].field2=1;
+ if(resolve_compressed_object(reinterpret_cast<const uint8_t*>(pdf.data()),
+      pdf.size(),refs,7,resolved))return 10;
+ refs[1].field2=0;
+ refs[0].type=2;
+ if(resolve_compressed_object(reinterpret_cast<const uint8_t*>(pdf.data()),
+      pdf.size(),refs,7,resolved))return 11;
  return 0;
 }
