@@ -564,3 +564,6 @@ Courier系列の `Tj` / `TJ` に対して文字幅・字間調整から水平移
 
 ## Embedded TrueType FontFile2 pipeline (experimental)
 ページの `/Font` 辞書から `/FontDescriptor` をたどり、存在する `/FontFile2` の間接ストリームを最大16MiBまでデコードして、`parse_sfnt` でテーブル境界と基本形式を検証する処理を追加しました。検証済みの埋め込みTrueTypeデータは `PageFont.embedded_truetype` に保持し、`rinpdf_render_page` を通じて `FontResource` に転送します。`/FontFile2` が存在しない従来の標準フォントには空データを渡します。現状では **TrueTypeデータを実際の Tj/TJ グリフ描画にはまだ使用していません**。埋め込みPDFでの描画テスト・変更後のビルドPASSは未確認です。
+
+## Embedded TrueType glyph horizontal metrics (experimental)
+`sfnt_horizontal_metrics()` を追加しました。埋め込みTrueTypeで `head.unitsPerEm`、`hhea.numberOfHMetrics`、`hmtx` のadvanceWidthを検証して取得します。`numberOfHMetrics`を超えるグリフでは最後のadvanceWidthを継承し、残余left-side-bearing領域の境界も検査します。合成SFNTで正常・不正なメトリクスを検査する `rinpdf-sfnt-metrics` テストを追加しました。**輪郭の配置やTj/TJの実描画にはまだ接続していません。** 新規テストを含めた実行結果は未確認です。
