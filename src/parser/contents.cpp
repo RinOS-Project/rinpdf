@@ -6,6 +6,7 @@
 #include "stream_object.h"
 #include "stream.h"
 #include "value.h"
+#include "font_encoding.h"
 #include "../renderer/sfnt.h"
 #include <algorithm>
 #include <map>
@@ -89,8 +90,20 @@ struct Reader {
       }
       PageFont resource{base->text,subtype->text,"",{}};
       if(const Value* encoding=get(font,"Encoding")){
-       if(encoding->kind!=Value::Kind::Name){active.erase(id);return false;}
-       resource.encoding=encoding->text;
+       Value resolved;
+       if(encoding->kind==Value::Kind::Reference){
+        if(!object(*encoding,resolved)){active.erase(id);return false;}
+       }else resolved=*encoding;
+       if(resolved.kind==Value::Kind::Name)resource.encoding=resolved.text;
+       else if(resolved.kind==Value::Kind::Dictionary){
+        const Value* base_encoding=get(resolved,"BaseEncoding");
+        const Value* differences=get(resolved,"Differences");
+        if(!base_encoding||base_encoding->kind!=Value::Kind::Name||
+           !differences||!decode_font_differences(*differences,resource.differences)){
+         active.erase(id);return false;
+        }
+        resource.encoding=base_encoding->text;
+       }else{active.erase(id);return false;}
       }
       if(const Value* descriptor=get(font,"FontDescriptor")){
        Value resolved_descriptor;
