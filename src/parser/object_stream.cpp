@@ -1,4 +1,7 @@
 #include "object_stream.h"
+#include "xref_stream.h"
+#include "stream_object.h"
+#include "stream.h"
 #include <set>
 #include <limits>
 #include <utility>
@@ -48,4 +51,41 @@ bool decode_object_stream(const uint8_t* payload,size_t length,
  output=std::move(result);
  return true;
 }
+bool resolve_compressed_object(const uint8_t* data,size_t size,
+ const std::vector<XrefStreamEntry>& xref,size_t object,Value& output){
+ if(!data||object==0)return false;
+ const XrefStreamEntry* target=nullptr;
+ for(const auto& item:xref)
+  if(item.object==object){if(target)return false;target=&item;}
+ if(!target||target->type!=2||target->field1==0||
+    target->field1>1000000||target->field2>100000)return false;
+ const XrefStreamEntry* container=nullptr;
+ for(const auto& item:xref)
+  if(item.object==target->field1){if(container)return false;container=&item;}
+ if(!container||container->type!=1||container->field2!=0||
+    container->field1>=size)return false;
+ StreamRange range;
+ const XrefEntry entry{container->object,
+                      static_cast<size_t>(container->field1),0,true};
+ if(!locate_indirect_stream(data,size,entry,{},range))return false;
+ const auto& dict=range.dictionary.dictionary;
+ auto type=dict.find("Type"),n=dict.find("N"),first=dict.find("First");
+ if(type==dict.end()||type->second.kind!=Value::Kind::Name||
+    type->second.text!="ObjStm"||n==dict.end()||first==dict.end()||
+    n->second.kind!=Value::Kind::Integer||
+    first->second.kind!=Value::Kind::Integer||
+    n->second.integer<=0||n->second.integer>100000||
+    first->second.integer<0)return false;
+ std::vector<uint8_t> decoded;
+ if(!decode_stream(data,size,range,decoded,64*1024*1024))return false;
+ std::vector<ObjectStreamItem> objects;
+ if(!decode_object_stream(decoded.data(),decoded.size(),
+       static_cast<size_t>(n->second.integer),
+       static_cast<size_t>(first->second.integer),objects))return false;
+ const size_t index=static_cast<size_t>(target->field2);
+ if(index>=objects.size()||objects[index].object!=object)return false;
+ output=std::move(objects[index].value);
+ return true;
+}
+
 }
