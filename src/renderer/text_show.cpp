@@ -18,6 +18,7 @@ bool parse_text_array(parser::Lexer& lexer,std::vector<TextRun>& runs){
    continue;
   }
   if(token.kind!=parser::TokenKind::Integer&&
+     token.kind!=parser::TokenKind::Real&&
      token.kind!=parser::TokenKind::Keyword)return false;
   double value=0;
   const auto result=std::from_chars(token.value.data(),
