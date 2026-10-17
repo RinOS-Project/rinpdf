@@ -68,13 +68,15 @@ bool single_lookup(const uint8_t* d,size_t n,size_t p,
 // Select only feature indices enabled by DFLT/default LangSys or a
 // supported CJK script's default LangSys. Do not scan unrelated features.
 bool active_features(const uint8_t* d,size_t n,uint16_t scripts,
- uint16_t feature_count,std::vector<bool>& enabled){
+ uint16_t feature_count,std::vector<bool>& enabled,
+ uint32_t script_tag,uint32_t language_tag){
  uint16_t count=0;
  if(!read16(d,n,scripts,count)||count>4096||
     scripts>n||n-scripts<2+size_t(count)*6)return false;
  enabled.assign(feature_count,false);
- const uint32_t tags[]={0x44464c54,0x68616e69,0x6b616e61,0x68616e67};
+ const uint32_t tags[]={script_tag,0x44464c54,0x68616e69,0x6b616e61,0x68616e67};
  for(uint32_t preferred:tags){
+  if(!preferred)continue;
   for(unsigned i=0;i<count;++i){
    const size_t rec=scripts+2+size_t(i)*6;
    uint32_t tag=0;uint16_t offset=0;
@@ -83,10 +85,22 @@ bool active_features(const uint8_t* d,size_t n,uint16_t scripts,
    const size_t script=size_t(scripts)+offset;
    uint16_t default_lang=0;
    if(offset<2||!read16(d,n,script,default_lang))return false;
-   if(default_lang==0)continue;
-   const size_t lang=script+default_lang;
+   uint16_t lang_count=0;
+   if(!read16(d,n,script+2,lang_count)||lang_count>4096||
+      script>n||n-script<4+size_t(lang_count)*6)return false;
+   uint16_t selected=default_lang;
+   if(language_tag){
+    for(unsigned j=0;j<lang_count;++j){
+     uint32_t current=0;uint16_t relative=0;
+     if(!read32(d,n,script+4+size_t(j)*6,current)||
+        !read16(d,n,script+8+size_t(j)*6,relative))return false;
+     if(current==language_tag){selected=relative;break;}
+    }
+   }
+   if(selected==0)continue;
+   const size_t lang=script+selected;
    uint16_t required=0,features=0;
-   if(default_lang<4||!read16(d,n,lang+2,required)||
+   if(selected<4||!read16(d,n,lang+2,required)||
       !read16(d,n,lang+4,features)||features>4096||
       lang>n||n-lang<6+size_t(features)*2)return false;
    if(required!=0xffff){
@@ -105,7 +119,7 @@ bool active_features(const uint8_t* d,size_t n,uint16_t scripts,
  return true;
 }
 bool sfnt_vertical_substitution(const SfntFont& font,uint16_t glyph,
- uint16_t& replacement){
+ uint16_t& replacement,uint32_t script_tag,uint32_t language_tag){
  if(!font.bytes||glyph>=font.glyph_count)return false;
  replacement=glyph;
  const SfntTable* table=nullptr;
@@ -124,7 +138,8 @@ bool sfnt_vertical_substitution(const SfntFont& font,uint16_t glyph,
     features>n||n-features<2+size_t(feature_count)*6||
     lookups>n||n-lookups<2+size_t(lookup_count)*2)return false;
  std::vector<bool> enabled;
- if(!active_features(data,n,scripts,feature_count,enabled))return false;
+ if(!active_features(data,n,scripts,feature_count,enabled,
+       script_tag,language_tag))return false;
  // Prefer vrt2 to vert, which are mutually alternative vertical features.
  for(unsigned pass=0;pass<2;++pass){
   const uint32_t wanted=pass==0?0x76727432:0x76657274;
