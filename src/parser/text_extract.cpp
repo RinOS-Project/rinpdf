@@ -3,6 +3,8 @@
 #include "value.h"
 #include "../renderer/text_show.h"
 #include <map>
+#include <charconv>
+#include <cmath>
 #include <vector>
 #include <utility>
 namespace rinpdf::parser {
@@ -87,6 +89,9 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
  std::string pending;
  bool have_pending=false;
  bool new_line_pending=false;
+ std::vector<double> operands;
+ double text_line_y=0;
+ bool has_line_origin=false;
  unsigned suppressed=0;
  size_t tokens=0;
  while(true){
@@ -187,13 +192,40 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
    }
    continue;
   }
+  if(text&&(t.kind==TokenKind::Integer||t.kind==TokenKind::Real)){
+   double number=0;
+   const char* begin=t.value.data();
+   const char* end=begin+t.value.size();
+   if(begin!=end&&*begin=='+')++begin;
+   auto parsed=std::from_chars(begin,end,number,std::chars_format::fixed);
+   if(parsed.ec!=std::errc()||parsed.ptr!=end||
+      !std::isfinite(number)||operands.size()>=16)return false;
+   operands.push_back(number);continue;
+  }
   if(t.kind!=TokenKind::Keyword)continue;
-  if(t.value=="BT"){text=true;continue;}
+  if(text&&(t.value=="Td"||t.value=="TD")){
+   if(operands.size()!=2||have_pending)return false;
+   if(operands[1]!=0&&!suppressed)new_line_pending=true;
+   text_line_y+=operands[1];
+   if(!std::isfinite(text_line_y))return false;
+   has_line_origin=true;
+   operands.clear();continue;
+  }
+  if(text&&t.value=="Tm"){
+   if(operands.size()!=6||have_pending)return false;
+   const double next_y=operands[5];
+   if(has_line_origin&&std::abs(next_y-text_line_y)>0.001&&!suppressed)
+    new_line_pending=true;
+   text_line_y=next_y;
+   has_line_origin=true;
+   operands.clear();continue;
+  }
+  if(t.value=="BT"){text=true;operands.clear();has_line_origin=false;continue;}
   if(t.value=="T*"&&text){
    if(!suppressed)new_line_pending=true;
    continue;
   }
-  if(t.value=="ET"){text=false;continue;}
+  if(t.value=="ET"){if(!operands.empty())return false;text=false;continue;}
   if(t.value=="EMC"){
    if(actual_stack.empty())return false;
    suppressed-=suppress_stack.back();
