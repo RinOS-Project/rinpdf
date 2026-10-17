@@ -62,4 +62,17 @@ bool courier_text_advance(const std::string& font,
  advance=result;return true;
 }
 
+bool advance_text_origin(double advance,double axis_x,double axis_y,
+ double& origin_x,double& origin_y){
+ if(!std::isfinite(advance)||!std::isfinite(axis_x)||
+    !std::isfinite(axis_y)||!std::isfinite(origin_x)||
+    !std::isfinite(origin_y))return false;
+ const double next_x=origin_x+advance*axis_x;
+ const double next_y=origin_y+advance*axis_y;
+ if(!std::isfinite(next_x)||!std::isfinite(next_y)||
+    std::abs(next_x)>1e12||std::abs(next_y)>1e12)return false;
+ origin_x=next_x;origin_y=next_y;
+ return true;
+}
+
 }
