@@ -33,7 +33,7 @@ int main(){
  if(std::abs(advance-31.2)>0.000001)return 8;
  if(renderer::courier_text_advance("Helvetica",courier_runs,10,0,0,1,advance))
   return 9;
- const std::vector<renderer::TextRun> non_ascii{{false,std::string(1,'\\x01'),0}};
+ const std::vector<renderer::TextRun> non_ascii{{false,std::string(1,'\x01'),0}};
  if(renderer::courier_text_advance("Courier",non_ascii,10,0,0,1,advance))
   return 10;
  if(std::abs(advance-31.2)>0.000001)return 11; // failure does not write
