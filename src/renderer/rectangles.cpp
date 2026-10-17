@@ -3,6 +3,7 @@
 #include "cubic_arc.h"
 #include "cubic_dash.h"
 #include "text_show.h"
+#include "bitmap_glyph.h"
 #include "../parser/lexer.h"
 #include <algorithm>
 #include <charconv>
@@ -80,6 +81,46 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
   return shapes;
  };
 
+ // Explicit opt-in diagnostic font only: does not pretend to be Courier.
+ auto diagnostic_show=[&](const std::vector<TextRun>& runs)->bool{
+  const auto it=fonts.find(selected_font);
+  if(it==fonts.end()||it->second.base_font!="RinPDF-Diagnostic"||
+     selected_font_size<=0||selected_font_size>1000||
+     text_a!=1||text_b!=0||text_c!=0||text_d!=1||
+     a!=1||bx!=0||cx!=0||d!=1||e!=0||f!=0||
+     horizontal_scale!=1||char_spacing!=0||word_spacing!=0||
+     clip_mask||clip.x0!=0||clip.y0!=0||clip.x1!=width||clip.y1!=height)
+   return false;
+  double x=text_x,y=text_y;
+  size_t glyphs=0;
+  for(const auto& run:runs){
+   if(run.adjustment){
+    if(!std::isfinite(run.displacement)||std::abs(run.displacement)>1000000)
+     return false;
+    x-=run.displacement*selected_font_size/1000;
+   }else for(unsigned char ch:run.bytes){
+    if(++glyphs>4096||!diagnostic_glyph_supported(ch))return false;
+    x+=selected_font_size*0.6;
+   }
+   if(!std::isfinite(x)||std::abs(x)>10000000)return false;
+  }
+  // All glyphs validated before writing any pixels.
+  double cursor=text_x;
+  const auto red8=static_cast<uint8_t>(std::lround(red*255));
+  const auto green8=static_cast<uint8_t>(std::lround(green*255));
+  const auto blue8=static_cast<uint8_t>(std::lround(blue*255));
+  for(const auto& run:runs){
+   if(run.adjustment)cursor-=run.displacement*selected_font_size/1000;
+   else for(unsigned char ch:run.bytes){
+    if(!draw_diagnostic_glyph(ch,cursor,text_y,selected_font_size,
+          width,height,rgba,stride,box.x0,box.y1,sx,sy,red8,green8,blue8))
+     return false;
+    cursor+=selected_font_size*0.6;
+   }
+  }
+  text_x=x;
+  return true;
+ };
  // Share PDF tokenization rules with the object parser. Whitespace inside
  // literal strings, nested parentheses and hex-string bytes stay atomic.
  parser::Lexer lex(contents,size);
@@ -113,6 +154,8 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
    const auto selected=fonts.find(selected_font);
    if(selected==fonts.end())return false;
    double advance=0;
+   if(selected->second.base_font=="RinPDF-Diagnostic")
+    {if(!diagnostic_show(runs))return false;continue;}
    if(!courier_text_advance(selected->second.base_font,runs,selected_font_size,
                             char_spacing,word_spacing,horizontal_scale,advance)||
       !advance_text_origin(advance,text_a,text_b,text_x,text_y))return false;
@@ -183,11 +226,16 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
    const auto selected=fonts.find(selected_font);
    if(selected==fonts.end())return false;
    double advance=0;
+   if(selected->second.base_font=="RinPDF-Diagnostic"){
+    if(!diagnostic_show({{false,pending_text,0}}))return false;
+    pending_text.clear();has_pending_text=false;
+    continue;
+   }
    if(!courier_text_advance(selected->second.base_font,
        std::vector<TextRun>{{false,pending_text,0}},selected_font_size,
        char_spacing,word_spacing,horizontal_scale,advance)||
       !advance_text_origin(advance,text_a,text_b,text_x,text_y))return false;
-   return false; // Advance calculated but glyph rasterization unavailable.
+   return false; // Standard Courier outlines are not yet rendered.
   }else if(word=="TL"){
    if(!in_text||stack.size()!=1)return false;
    text_leading=stack[0];stack.clear();
