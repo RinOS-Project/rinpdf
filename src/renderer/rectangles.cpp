@@ -132,8 +132,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      !pending_font.empty()||selected_font_size<=0||
      text_a!=1||text_b!=0||text_c!=0||text_d!=1||
      a!=1||bx!=0||cx!=0||d!=1||e!=0||f!=0||
-     horizontal_scale!=1||char_spacing!=0||word_spacing!=0||
-     clip_mask||clip.x0!=0||clip.y0!=0||clip.x1!=width||clip.y1!=height)
+     horizontal_scale!=1||char_spacing!=0||word_spacing!=0)
    return false;
   double next=0;
   if(!render_embedded_truetype_runs(it->second.embedded_truetype,runs,
@@ -141,7 +140,8 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
        box.x0,box.y1,sx,sy,
        static_cast<uint8_t>(std::lround(red*255)),
        static_cast<uint8_t>(std::lround(green*255)),
-       static_cast<uint8_t>(std::lround(blue*255)),next))return false;
+       static_cast<uint8_t>(std::lround(blue*255)),next,
+       clip_mask.get(),clip.x0,clip.y0,clip.x1,clip.y1))return false;
   text_x=next;return true;
  };
  // Share PDF tokenization rules with the object parser. Whitespace inside
