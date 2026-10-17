@@ -107,30 +107,30 @@ int main(){
  Value mixed_trailer;
  if(!read_object_xref(reinterpret_cast<const uint8_t*>(hybrid_history.data()),
        hybrid_history.size(),normal_entries,stream_entries,mixed_trailer))return 18;
- if(normal_entries.size()!=2||normal_entries[0].object!=1||
-    normal_entries[0].offset!=old_object||
+ if(normal_entries.size()!=3||normal_entries[1].object!=1||
+    normal_entries[1].offset!=old_object||
     !mixed_trailer.dictionary.count("Root"))return 19;
  // Same-revision hybrid: Classic table plus supplementary /XRefStm.
- std::string hybrid="%PDF-1.5\\n";
+ std::string hybrid="%PDF-1.5\n";
  const size_t catalog_pos=hybrid.size();
- hybrid+="1 0 obj\\n<< /Type /Catalog >>\\nendobj\\n";
+ hybrid+="1 0 obj\n<< /Type /Catalog >>\nendobj\n";
  const size_t container_pos=hybrid.size();
- hybrid+="4 0 obj\\n<< /Type /ObjStm /N 1 /First 4 /Length 6 >>\\nstream\\n";
- hybrid+="3 0 42\\n\\nendstream\\nendobj\\n";
+ hybrid+="4 0 obj\n<< /Type /ObjStm /N 1 /First 4 /Length 6 >>\nstream\n";
+ hybrid+="3 0 42\n\nendstream\nendobj\n";
  const size_t supplementary_pos=hybrid.size();
- std::string compressed_entry(5,'\\0');
+ std::string compressed_entry(5,'\0');
  compressed_entry[0]=2;
  compressed_entry[3]=4;
- hybrid+="5 0 obj\\n<< /Type /XRef /Size 6 /Index [3 1] /W [1 3 1] /Length 5 >>\\nstream\\n";
+ hybrid+="5 0 obj\n<< /Type /XRef /Size 6 /Index [3 1] /W [1 3 1] /Length 5 >>\nstream\n";
  hybrid+=compressed_entry;
- hybrid+="\\nendstream\\nendobj\\n";
+ hybrid+="\nendstream\nendobj\n";
  const size_t classic_pos=hybrid.size();
- hybrid+="xref\\n0 2\\n0000000000 65535 f \\n"+width10(catalog_pos)+
-  " 00000 n \\n4 2\\n"+width10(container_pos)+" 00000 n \\n"+
-  width10(supplementary_pos)+" 00000 n \\n";
- hybrid+="trailer\\n<< /Size 6 /Root 1 0 R /XRefStm "+
-  std::to_string(supplementary_pos)+" >>\\nstartxref\\n"+
-  std::to_string(classic_pos)+"\\n%%EOF\\n";
+ hybrid+="xref\n0 2\n0000000000 65535 f \n"+width10(catalog_pos)+
+  " 00000 n \n4 2\n"+width10(container_pos)+" 00000 n \n"+
+  width10(supplementary_pos)+" 00000 n \n";
+ hybrid+="trailer\n<< /Size 6 /Root 1 0 R /XRefStm "+
+  std::to_string(supplementary_pos)+" >>\nstartxref\n"+
+  std::to_string(classic_pos)+"\n%%EOF\n";
  if(!read_object_xref(reinterpret_cast<const uint8_t*>(hybrid.data()),
       hybrid.size(),normal_entries,stream_entries,mixed_trailer))return 20;
  bool found_compressed=false;
