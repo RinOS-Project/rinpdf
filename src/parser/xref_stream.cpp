@@ -2,6 +2,7 @@
 #include "stream.h"
 #include "stream_object.h"
 #include <cstring>
+#include <set>
 #include <limits>
 #include <utility>
 namespace rinpdf::parser {
@@ -147,6 +148,38 @@ bool read_xref_section(const uint8_t* data,size_t size,
  stream_entries=std::move(stream);
  classic_entries.clear();
  trailer=std::move(dict);
+ return true;
+}
+
+bool read_uncompressed_xref(const uint8_t* data,size_t size,
+ std::vector<XrefEntry>& entries,Value& trailer){
+ XrefFormat format=XrefFormat::Classic;
+ std::vector<XrefEntry> classic;
+ std::vector<XrefStreamEntry> stream;
+ Value dictionary;
+ if(!read_xref_section(data,size,format,classic,stream,dictionary))return false;
+ if(dictionary.kind!=Value::Kind::Dictionary)return false;
+ const auto& fields=dictionary.dictionary;
+ if(fields.count("Prev")||fields.count("XRefStm")||fields.count("Encrypt"))return false;
+ if(format==XrefFormat::Classic){
+  entries=std::move(classic);
+  trailer=std::move(dictionary);
+  return true;
+ }
+ std::vector<XrefEntry> resolved;
+ resolved.reserve(stream.size());
+ std::set<size_t> seen;
+ for(const auto& item:stream){
+  if(!seen.insert(item.object).second)return false;
+  if(item.type==2)return false; // ObjStm resolution is not implemented.
+  if(item.type==0)continue;
+  if(item.type!=1||item.field1>=size||item.field2>65535)return false;
+  resolved.push_back({item.object,static_cast<size_t>(item.field1),
+                      static_cast<unsigned>(item.field2),true});
+ }
+ if(resolved.empty())return false;
+ entries=std::move(resolved);
+ trailer=std::move(dictionary);
  return true;
 }
 
