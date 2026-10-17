@@ -85,5 +85,12 @@ int main(){
  if(parse_tounicode_sequences(
    reinterpret_cast<const uint8_t*>(derived.data()),derived.size(),
    sequences,&ranges,"WrongName",&parent,&parent_space))return 23;
+ const std::string inherited_only="begincmap endcmap";
+ if(!parse_tounicode_sequences(
+   reinterpret_cast<const uint8_t*>(inherited_only.data()),
+   inherited_only.size(),sequences,&ranges,
+   "MyParent",&parent,&parent_space))return 24;
+ if(sequences.size()!=2||sequences.at({1,0x41})!=U"A"||
+    sequences.at({1,0x42})!=U"B"||ranges.size()!=1)return 25;
  return 0;
 }
