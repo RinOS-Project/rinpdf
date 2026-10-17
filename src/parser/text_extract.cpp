@@ -45,6 +45,15 @@ bool actual_text(const std::string& raw,std::string& out){
 // explicitly maps a two-byte code to U+0020 and supplies that CID's width,
 // use the documented space advance instead of a universal half-em guess.
 double tj_space_threshold(const PageFont& font){
+ if(font.subtype!="Type0"){
+  for(const auto& [key,sequence]:font.unicode_sequences){
+   if(key.width!=1||sequence!=U" "||key.code>255)continue;
+   const auto it=font.simple_widths.find(uint8_t(key.code));
+   if(it!=font.simple_widths.end()&&it->second>0&&
+      std::isfinite(it->second))
+    return std::clamp(it->second,250.0,1000.0);
+  }
+ }
  if(font.subtype=="Type0"&&font.encoding=="Identity-H"){
   for(const auto& [key,sequence]:font.unicode_sequences){
    if(key.width!=2||sequence!=U" "||key.code>65535)continue;
