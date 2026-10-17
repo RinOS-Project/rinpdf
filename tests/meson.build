@@ -38,3 +38,5 @@ test('rinpdf-glyph-outline',executable('rinpdf-glyph-outline','glyph_outline.cpp
 test('rinpdf-sfnt-metrics',executable('rinpdf-sfnt-metrics','sfnt_metrics.cpp',dependencies:rinpdf_dep))
 
 test('rinpdf-truetype-draw',executable('rinpdf-truetype-draw','truetype_draw.cpp',dependencies:rinpdf_dep))
+
+test('rinpdf-sfnt-composite',executable('rinpdf-sfnt-composite','sfnt_composite.cpp',dependencies:rinpdf_dep))
