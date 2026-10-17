@@ -12,6 +12,7 @@ struct PageFont {
  std::string subtype;
  std::string encoding;
  std::vector<uint8_t> embedded_truetype; // decoded /FontFile2, if present
+ double missing_width=0; // FontDescriptor /MissingWidth; zero means unspecified
  std::map<uint8_t,double> simple_widths; // PDF FirstChar/LastChar/Widths, in glyph units
  std::map<uint8_t,uint32_t> differences; // explicit PDF byte-to-Unicode overrides
  std::map<CMapKey,uint32_t> to_unicode; // legacy scalar metadata
