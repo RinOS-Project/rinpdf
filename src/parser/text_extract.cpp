@@ -196,6 +196,7 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
  std::vector<double> operands;
  double text_line_x=0,text_line_y=0;
  double line_axis_x=1,line_axis_y=0;
+ double line_a=1,line_b=0,line_c=0,line_d=1;
  bool has_line_origin=false;
  unsigned suppressed=0;
  size_t tokens=0;
@@ -414,8 +415,8 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
    if(t.value=="TD")text_leading=-operands[1];
    // Td/TD operate in the current text-line coordinate system.
    const double dx=operands[0],dy=operands[1];
-   text_line_x+=line_axis_x*dx-line_axis_y*dy;
-   text_line_y+=line_axis_y*dx+line_axis_x*dy;
+   text_line_x+=line_a*dx+line_c*dy;
+   text_line_y+=line_b*dx+line_d*dy;
    if(!std::isfinite(text_line_x)||!std::isfinite(text_line_y))return false;
    has_line_origin=true;
    operands.clear();continue;
@@ -437,6 +438,8 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
    text_line_x=next_x;text_line_y=next_y;
    line_axis_x=operands[0]/next_length;
    line_axis_y=operands[1]/next_length;
+   line_a=operands[0];line_b=operands[1];
+   line_c=operands[2];line_d=operands[3];
    has_line_origin=true;
    operands.clear();continue;
   }
@@ -444,13 +447,14 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
    text=true;operands.clear();has_line_origin=false;
    pending_tj_adjustment=0;text_run_emitted=false;
    text_cursor=0;text_cursor_known=true;
-   text_line_x=0;text_line_y=0;line_axis_x=1;line_axis_y=0;continue;}
+   text_line_x=0;text_line_y=0;line_axis_x=1;line_axis_y=0;
+   line_a=1;line_b=0;line_c=0;line_d=1;continue;}
   if(t.value=="T*"&&text){
    if(have_pending||!operands.empty())return false;
    // Move to the next line's origin, not the prior line's glyph cursor.
    text_cursor=0;text_cursor_known=true;
-   text_line_x+=line_axis_y*text_leading;
-   text_line_y-=line_axis_x*text_leading;
+   text_line_x-=line_c*text_leading;
+   text_line_y-=line_d*text_leading;
    if(!std::isfinite(text_line_x)||!std::isfinite(text_line_y))return false;
    has_line_origin=true;
    if(!suppressed)new_line_pending=true;
@@ -477,8 +481,8 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
      operands.clear();
     }else if(!operands.empty())return false;
     // Quote operators include T*: advance by the current text leading.
-    text_line_x+=line_axis_y*text_leading;
-    text_line_y-=line_axis_x*text_leading;
+    text_line_x-=line_c*text_leading;
+    text_line_y-=line_d*text_leading;
     if(!std::isfinite(text_line_x)||!std::isfinite(text_line_y))return false;
     has_line_origin=true;
     pending_tj_adjustment=0;
