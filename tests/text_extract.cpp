@@ -12,7 +12,7 @@ int main(){
   "BT /F1 12 Tf <41> Tj <42> Tj T* <42> Tj 0 -16 Td <42> Tj 1 0 0 1 0 30 Tm <42> Tj "
   "0 1 -1 0 50 0 Tm <42> Tj "
   "0 1 -1 0 50 20 Tm <42> Tj "
-  "0 1 -1 0 40 20 Tm <42> Tj [<42> -600 <> <42>] TJ [<42> -700 250 <42>] TJ [<42> -600] TJ <42> Tj 2 Tc [<42> -600 <42>] TJ 0 Tc 0 Tz [<42> -900 <42>] TJ 100 Tz ET";
+  "0 1 -1 0 40 20 Tm <42> Tj [<42> -600 <> <42>] TJ [<42> -700 250 <42>] TJ [<42> -600] TJ <42> Tj 2 Tc [<42> -600 <42>] TJ 0 Tc 0 Tz [<42> -900 <42>] TJ 100 Tz 2 Tw [<42> -600 <42>] TJ 0 Tw ET";
  std::string pdf="%PDF-1.5\n";
  size_t offsets[8]{};
  auto append=[&](unsigned id,const std::string& body){
@@ -24,7 +24,7 @@ int main(){
  append(3,"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Contents 5 0 R >>");
  append(4,"<< /Type /Font /Subtype /TrueType /BaseFont /Example /Encoding /WinAnsiEncoding /ToUnicode 6 0 R >>");
  append(5,"<< /Length "+std::to_string(content.size())+" >>\nstream\n"+content+"\nendstream");
- const std::string cmap="1 beginbfchar <41> <00410042> endbfchar";
+ const std::string cmap="2 beginbfchar <20> <0020> <41> <00410042> endbfchar";
  append(6,"<< /UseCMap /Parent /CMapName /Child /Length "+std::to_string(cmap.size())+" >>\nstream\n"+cmap+"\nendstream");
  const std::string parent_cmap="1 beginbfchar <42> <0042> endbfchar";
  append(7,"<< /CMapName /Parent /Length "+std::to_string(parent_cmap.size())+" >>\nstream\n"+parent_cmap+"\nendstream");
@@ -53,7 +53,7 @@ int main(){
     !page_properties.at("P1").has_actual_text)return 15;
  std::string result;
  if(!extract_page_text(reinterpret_cast<const uint8_t*>(pdf.data()),pdf.size(),0,result))return 1;
- if(result!=std::string("\xe4\xb8\x96\xe6\x97\xa5\xe6\x9c\xac")+"ABB\nB\nB\nB\nBB\nBB BBBBBBBB")return 2;
+ if(result!=std::string("\xe4\xb8\x96\xe6\x97\xa5\xe6\x9c\xac")+"ABB\nB\nB\nB\nBB\nBB BBBBBBBBBB")return 2;
  // Changing only the resource key keeps object offsets intact and must
  // cause a clean failure rather than silently using an unresolved parent.
  std::string missing_parent=pdf;
