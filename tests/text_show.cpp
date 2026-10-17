@@ -37,5 +37,10 @@ int main(){
  if(renderer::courier_text_advance("Courier",non_ascii,10,0,0,1,advance))
   return 10;
  if(std::abs(advance-31.2)>0.000001)return 11; // failure does not write
+ double tx=2,ty=3;
+ if(!renderer::advance_text_origin(31.2,0,1,tx,ty))return 12;
+ if(std::abs(tx-2)>1e-8||std::abs(ty-34.2)>1e-8)return 13;
+ if(renderer::advance_text_origin(1e300,1e300,0,tx,ty))return 14;
+ if(std::abs(tx-2)>1e-8||std::abs(ty-34.2)>1e-8)return 15;
  return 0;
 }
