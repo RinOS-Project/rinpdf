@@ -12,13 +12,17 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
  double x0,double y1,double sx,double sy,
  uint8_t red,uint8_t green,uint8_t blue,double& next_x,
  const std::vector<uint8_t>* clip_mask,
- unsigned clip_x0,unsigned clip_y0,unsigned clip_x1,unsigned clip_y1){
+ unsigned clip_x0,unsigned clip_y0,unsigned clip_x1,unsigned clip_y1,
+ GlyphTransform matrix){
  if(!rgba||!width||!height||width>512||height>512||
     stride<size_t(width)*4||!std::isfinite(em)||em<=0||em>1000||
     !std::isfinite(start_x)||!std::isfinite(baseline)||
     !std::isfinite(sx)||!std::isfinite(sy)||sx<=0||sy<=0||
     runs.size()>4096||
     (clip_mask&&clip_mask->size()!=size_t(width)*height))return false;
+ for(double v:{matrix.a,matrix.b,matrix.c,matrix.d,matrix.e,matrix.f,
+               matrix.ta,matrix.tb,matrix.tc,matrix.td})
+  if(!std::isfinite(v)||std::abs(v)>100000)return false;
  if(clip_x1==0&&clip_y1==0){clip_x1=width;clip_y1=height;}
  if(clip_x0>clip_x1||clip_y0>clip_y1||clip_x1>width||clip_y1>height)return false;
  SfntFont sfnt;
@@ -41,14 +45,21 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
     SimpleGlyph glyph;
     if(!sfnt_glyph_outline(sfnt,glyph_id,glyph))return false;
     Paint paint;
-    if(!flatten_simple_glyph(glyph,em*sx/units,
-          (cursor-x0)*sx,(y1-baseline)*sy,0.2,paint.paths))return false;
-    // Flattening uses x-device scale; map the resulting y coordinates to
-    // their independently scaled positions about the baseline.
-    const double baseline_pixel=(y1-baseline)*sy;
+    // Build in font-coordinate units, then apply the text basis and CTM
+    // before mapping PDF user coordinates to device pixels.
+    if(!flatten_simple_glyph(glyph,em/units,0,0,0.15,paint.paths))
+     return false;
     for(auto& contour:paint.paths)for(auto& point:contour){
-     point.y=baseline_pixel+(point.y-baseline_pixel)*(sy/sx);
-     if(!std::isfinite(point.y))return false;
+     const double local_x=point.x,local_y=-point.y;
+     const double ux=cursor+matrix.ta*local_x+matrix.tc*local_y;
+     const double uy=baseline+matrix.tb*local_x+matrix.td*local_y;
+     const double px=matrix.a*ux+matrix.c*uy+matrix.e;
+     const double py=matrix.b*ux+matrix.d*uy+matrix.f;
+     const double device_x=(px-x0)*sx,device_y=(y1-py)*sy;
+     if(!std::isfinite(device_x)||!std::isfinite(device_y)||
+        std::abs(device_x)>10000000||std::abs(device_y)>10000000)
+      return false;
+     point={device_x,device_y};
     }
     paints.push_back(std::move(paint));
     cursor+=double(advance)*em/units;
