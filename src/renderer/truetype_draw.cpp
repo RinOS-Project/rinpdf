@@ -1,5 +1,6 @@
 #include "truetype_draw.h"
 #include "sfnt.h"
+#include "sfnt_gsub.h"
 #include "glyph_outline.h"
 #include "path_mask.h"
 #include "../parser/font_encoding.h"
@@ -68,6 +69,8 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
         differences?*differences:no_overrides,unicode)||
         !sfnt_glyph_id(sfnt,unicode,glyph_id))return false;
     }
+    if(vertical&&
+       !sfnt_vertical_substitution(sfnt,glyph_id,glyph_id))return false;
     if(!sfnt_horizontal_metrics(sfnt,glyph_id,units,advance))return false;
     SimpleGlyph glyph;
     if(!sfnt_glyph_outline(sfnt,glyph_id,glyph))return false;
