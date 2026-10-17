@@ -475,3 +475,8 @@ PDFではパス構築後、ストローク演算子の前に破線設定 `d` を
 `read_xref_stream_at` は指定オフセットの間接オブジェクトヘッダー、`/Type /XRef`、`/Size`、`/W`、任意の `/Index` を解析し、既存の間接stream検証・FlateDecodeとエントリデコーダに接続します。直接 `/Length` を持つストリームを対象とした回帰テストを追加しました。
 
 **未完了:** `startxref` 自動検出からの呼び出し、通常document読み込み・ページツリーへの統合、間接 `/Length` の解決、`/Prev`、ハイブリッドXRef、Object Streamの実体解決は未実装です。今回の追加変更のビルドおよびテストPASSは未確認です。
+
+## startxref dispatch (experimental)
+`find_startxref` で末尾の `startxref` オフセットを解析し、`read_xref_section` で Classic xref と XRef Stream を振り分ける内部APIを追加しました。XRef Streamのエントリは圧縮オブジェクト情報を残した独立表現とし、Classic形式へ誤変換しません。ストリーム形式の `startxref` 指定と不正オフセットを検査するテストを追加しました。
+
+**制限:** 公開 document/page APIへの統合、`/Prev` とハイブリッド xref、Object Streamからの圧縮オブジェクト解決は未対応です。現段階ではXRef Streamを使う一般PDFのページを開く機能は完成していません。今回の変更後のテストPASSは未確認です。
