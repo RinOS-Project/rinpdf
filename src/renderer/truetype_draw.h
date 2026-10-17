@@ -31,5 +31,6 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& font,
  const parser::CIDGlyphMap* cid_map=nullptr,
  const parser::CIDWidths* cid_widths=nullptr,
  const parser::CIDVerticalMetrics* vertical_metrics=nullptr,
- double* next_y=nullptr);
+ double* next_y=nullptr,
+ const std::string& pdf_language={});
 }
