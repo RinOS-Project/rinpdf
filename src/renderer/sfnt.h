@@ -22,6 +22,10 @@ struct SimpleGlyph {
 // Decodes a bounded simple TrueType glyf outline. Empty glyphs succeed
 // with zero points. Composite glyphs are currently unsupported.
 bool sfnt_simple_glyph(const SfntFont& font,uint16_t glyph_id,SimpleGlyph& outline);
+// Obtain validated units-per-em and horizontal glyph advance from head,
+// hhea and hmtx. Needed to position real embedded TrueType outlines.
+bool sfnt_horizontal_metrics(const SfntFont& font,uint16_t glyph_id,
+ uint16_t& units_per_em,uint16_t& advance_width);
 // Read a Unicode BMP cmap format 4, or format 12 for supplementary codepoints.
 // Returns false for malformed/unsupported mappings.
 bool sfnt_glyph_id(const SfntFont& font,uint32_t unicode,uint16_t& glyph);
