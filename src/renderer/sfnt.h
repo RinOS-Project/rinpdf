@@ -13,6 +13,15 @@ struct SfntFont {
 // Supports TrueType sfnt and OpenType/CFF containers (directory only).
 // Borrowed data must remain alive as long as SfntFont is used.
 bool parse_sfnt(const uint8_t* bytes,size_t length,SfntFont& font);
+struct GlyphPoint {int16_t x=0,y=0;bool on_curve=false;};
+struct SimpleGlyph {
+ int16_t x_min=0,y_min=0,x_max=0,y_max=0;
+ std::vector<uint16_t> contour_ends;
+ std::vector<GlyphPoint> points;
+};
+// Decodes a bounded simple TrueType glyf outline. Empty glyphs succeed
+// with zero points. Composite glyphs are currently unsupported.
+bool sfnt_simple_glyph(const SfntFont& font,uint16_t glyph_id,SimpleGlyph& outline);
 // Read a Unicode BMP cmap format 4, or format 12 for supplementary codepoints.
 // Returns false for malformed/unsupported mappings.
 bool sfnt_glyph_id(const SfntFont& font,uint32_t unicode,uint16_t& glyph);
