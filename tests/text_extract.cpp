@@ -75,5 +75,21 @@ int main(){
  if(extract_page_text(reinterpret_cast<const uint8_t*>(mismatched_name.data()),
       mismatched_name.size(),0,result))return 7;
  if(result!=previous)return 8;
+ // The UTF-16BE ActualText payload must reject lone low surrogates.
+ // Replace equal-length hex digits so all xref offsets remain valid.
+ std::string unpaired_low=pdf;
+ const std::string valid_actual="<FEFF65E5672C>";
+ const auto actual_pos=unpaired_low.find(valid_actual);
+ if(actual_pos==std::string::npos)return 16;
+ unpaired_low.replace(actual_pos,valid_actual.size(),"<FEFFDC00672C>");
+ if(extract_page_text(reinterpret_cast<const uint8_t*>(unpaired_low.data()),
+      unpaired_low.size(),0,result))return 17;
+ if(result!=previous)return 18;
+ // A high surrogate without its required low surrogate must also fail.
+ std::string unpaired_high=pdf;
+ unpaired_high.replace(actual_pos,valid_actual.size(),"<FEFFD800672C>");
+ if(extract_page_text(reinterpret_cast<const uint8_t*>(unpaired_high.data()),
+      unpaired_high.size(),0,result))return 19;
+ if(result!=previous)return 20;
  return 0;
 }
