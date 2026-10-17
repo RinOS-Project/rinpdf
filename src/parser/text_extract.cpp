@@ -257,8 +257,10 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
    if(!suppressed){
     bool has_glyphs=false;
     for(const auto& run:runs)if(!run.adjustment&&!run.bytes.empty())has_glyphs=true;
-    if(has_glyphs&&new_line_pending&&!output.empty()&&output.back()!='\n')
+    if(has_glyphs&&new_line_pending&&!output.empty()&&output.back()!='\n'){
+     if(output.size()>=4*1024*1024)return false;
      output+='\n';
+    }
     if(has_glyphs)new_line_pending=false;
     // Adjacent TJ adjustments combine: a later positive adjustment can
     // cancel an earlier gap. Only infer a space if the net forward offset
@@ -411,7 +413,10 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
    }
    if(!suppressed){
     if(!pending.empty()&&new_line_pending&&!output.empty()&&
-       output.back()!='\n')output+='\n';
+       output.back()!='\n'){
+     if(output.size()>=4*1024*1024)return false;
+     output+='\n';
+    }
     if(!pending.empty())new_line_pending=false;
     std::string decoded;
     if(!decode_run(pending,fonts.at(selected),decoded))return false;
