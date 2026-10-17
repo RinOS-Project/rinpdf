@@ -161,6 +161,26 @@ int main(){
  // Keep the PDF byte layout unchanged while replacing F1 with F9.
  if(const int error=reject_boundary("/F1 12 Tf <41> Tj <42> Tj",
       "/F9 12 Tf <41> Tj <42> Tj",50,51,52))return error;
+ // Text rendering mode (Tr) and rise (Ts) are accepted as text state.
+ // They do not change the decoded Unicode text.
+ const auto check_valid_state=[&](const std::string& replacement,int missing,int failed){
+  const std::string needle="0 Tw <42> '";
+  if(needle.size()!=replacement.size())return missing;
+  std::string modified=pdf;
+  const auto pos=modified.find(needle);
+  if(pos==std::string::npos)return missing;
+  modified.replace(pos,needle.size(),replacement);
+  if(!extract_page_text(reinterpret_cast<const uint8_t*>(modified.data()),
+      modified.size(),0,result))return failed;
+  return result==previous?0:failed;
+ };
+ if(const int error=check_valid_state("3 Tr <42> '",53,54))return error;
+ if(const int error=check_valid_state("4 Ts <42> '",55,56))return error;
+ // Tr is an integer from 0 through 7.
+ if(const int error=reject_boundary("0 Tw <42> '","9 Tr <42> '",
+      57,58,59))return error;
+ if(const int error=reject_boundary("0 Tw <42> '","1.5Tr<42> '",
+      60,61,62))return error;
  // The UTF-16BE ActualText payload must reject lone low surrogates.
  // Replace equal-length hex digits so all xref offsets remain valid.
  std::string unpaired_low=pdf;
