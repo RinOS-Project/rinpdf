@@ -207,8 +207,35 @@ bool read_object_xref(const uint8_t* data,size_t size,
     section.push_back({item.object,static_cast<uint8_t>(item.in_use?1:0),
                        static_cast<uint64_t>(item.offset),item.generation});
    }
+   // /XRefStm supplements this revision's Classic table. Existing
+   // Classic entries win when the two tables name the same object.
+   auto hybrid=dict.dictionary.find("XRefStm");
+   if(hybrid!=dict.dictionary.end()){
+    if(hybrid->second.kind!=Value::Kind::Integer||
+       hybrid->second.integer<0||
+       static_cast<uint64_t>(hybrid->second.integer)>=current)return false;
+    const size_t supplementary_offset=
+      static_cast<size_t>(hybrid->second.integer);
+    if(!visited.insert(supplementary_offset).second)return false;
+    std::vector<XrefStreamEntry> supplement;
+    Value supplement_dict;
+    if(!read_xref_stream_at(data,size,supplementary_offset,
+                            supplement,supplement_dict))return false;
+    // A supplementary stream must not introduce a second update chain.
+    if(supplement_dict.dictionary.count("Prev")||
+       supplement_dict.dictionary.count("XRefStm")||
+       supplement_dict.dictionary.count("Encrypt"))return false;
+    std::set<size_t> supplement_seen;
+    for(const auto& item:supplement){
+     if(!supplement_seen.insert(item.object).second)return false;
+     if(local.insert(item.object).second)section.push_back(item);
+    }
+   }
   }else if(!read_xref_stream_at(data,size,current,section,dict))return false;
-  if(dict.dictionary.count("Encrypt")||dict.dictionary.count("XRefStm"))return false;
+  if(dict.dictionary.count("Encrypt"))return false;
+  if(dict.dictionary.count("XRefStm")&&
+     (classic.empty()||dict.dictionary.at("XRefStm").kind!=Value::Kind::Integer))
+   return false;
   if(depth==0)latest=dict;
   else for(const auto* key:{"Root","Info","ID"}){
    if(!latest.dictionary.count(key)){
