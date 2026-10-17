@@ -125,5 +125,19 @@ int main(){
        nullptr,0,0,64,64,{},nullptr,"Identity-H",&identity,&fallback))
    return 27;
  if(std::abs(pdf_advance-22.4)>0.001)return 28; // 8 + 16*900/1000
+ // Identity-V: vertical CID origin and PDF w1y advance, not hmtx.
+ const parser::CIDVerticalMetrics vertical{{-800,0,0},{{1,{-700,0,0}}}};
+ double vertical_x=0,vertical_y=0;
+ std::vector<uint8_t> vertical_pixels(64*64*4,255);
+ if(!render_embedded_truetype_runs(f,{{false,cid_one,0}},16,8,32,
+      64,64,vertical_pixels.data(),64*4,0,64,1,1,0,0,0,vertical_x,
+      nullptr,0,0,64,64,{},nullptr,"Identity-V",&identity,
+      &pdf_widths,&vertical,&vertical_y))return 29;
+ if(std::abs(vertical_x-8)>0.001||
+    std::abs(vertical_y-20.8)>0.001)return 30;
+ bool vertical_ink=false;
+ for(size_t i=0;i<vertical_pixels.size();i+=4)
+  if(vertical_pixels[i]<255){vertical_ink=true;break;}
+ if(!vertical_ink)return 31;
  return 0;
 }
