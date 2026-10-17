@@ -573,3 +573,6 @@ Courier系列の `Tj` / `TJ` に対して文字幅・字間調整から水平移
 
 ## TrueType複合グリフの一部対応（実験）
 `sfnt_glyph_outline` と `sfnt_composite.cpp` を追加しました。単純グリフは既存デコーダを利用し、複合グリフはXY座標オフセットだけを指定したコンポーネントを最大32個まで組み立てます。子グリフの輪郭端点と座標を再配置して既存のTrueTypeラスタライザーへ渡します。複合グリフの回帰テスト `rinpdf-sfnt-composite` を追加しました。**入れ子の複合グリフ、拡大縮小、回転、親子ポイント合わせ、各種オフセット補正は未対応として拒否します。** 今回の変更後の全テストPASSは未確認です。
+
+## Composite glyph affine transforms and recursion (experimental)
+`sfnt_glyph_outline` の内部解決処理を最大8階層の再帰と参照中グリフID集合で管理し、自己参照・循環を拒否するようにしました。TrueType複合グリフのF2Dot14単一スケール、非等方スケール、2×2変形行列を解析し、各子グリフの輪郭点へ適用します。従来のXY平行移動にも対応します。点合わせ方式とSCALED_COMPONENT_OFFSET/UNSCALED_COMPONENT_OFFSETは引き続き拒否します。変換値による座標オーバーフローも拒否します。F2Dot14拡大縮小と未対応オフセットフラグのテストを追加しました。今回の変更後のビルド・テストPASSは未確認です。
