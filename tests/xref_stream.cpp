@@ -19,8 +19,8 @@ int main(){
  if(out.size()!=1||out[0].object!=5)return 9; // failed calls preserve output
  const uint8_t unsupported[]={3,0,0,0};
  if(decode_xref_stream_entries(unsupported,sizeof(unsupported),{1,2,1},{0,1},out))return 10;
- const uint8_t excessive_generation[]={1,0,0,255,255};
+ const uint8_t excessive_generation[]={1,0,0,1,0,0};
  if(decode_xref_stream_entries(excessive_generation,sizeof(excessive_generation),
-                               {1,2,2},{1,1},out))return 11;
+                               {1,2,3},{1,1},out))return 11;
  return 0;
 }
