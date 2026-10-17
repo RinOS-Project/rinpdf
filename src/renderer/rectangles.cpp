@@ -574,12 +574,10 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
         bool next_on=false;
         if(k+1<spans.size())next_on=spans[k+1].painted;
         else if(last+1<points.size()){
-         if(cursor.remaining>0)next_on=cursor.index%2==0;
-         else {
-          CubicDashCursor probe=cursor;
-          if(!cubic_dash_advance(dash_pattern,probe))return false;
-          next_on=probe.index%2==0;
-         }
+         CubicDashCursor probe=cursor;
+         if(probe.remaining<=0&&
+            !cubic_dash_advance(dash_pattern,probe))return false;
+         next_on=probe.index%2==0;
         }
         const bool at_start=j==0,at_end=j+1==steps;
         if(!segment(a,b,mat,false,
