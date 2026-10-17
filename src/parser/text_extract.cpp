@@ -47,6 +47,23 @@ bool actual_text(const std::string& raw,std::string& out){
 // TJ amounts are in thousandths of an em. Where an Identity-H CID font
 // explicitly maps a two-byte code to U+0020 and supplies that CID's width,
 // use the documented space advance instead of a universal half-em guess.
+// Calculate advances only when explicit PDF widths are available.
+// The Unicode replacement string may have a different length than glyph codes.
+bool simple_text_advance(const std::string& bytes,const PageFont& font,
+ double font_size,double tc,double tw,double hz,double& advance){
+ if(font.subtype=="Type0"||font_size<=0||!std::isfinite(font_size))return false;
+ double units=0;
+ for(unsigned char code:bytes){
+  const auto it=font.simple_widths.find(code);
+  const double width=it!=font.simple_widths.end()?it->second:font.missing_width;
+  if(!std::isfinite(width)||width<0||
+     (it==font.simple_widths.end()&&width<=0))return false;
+  units+=width*font_size/1000.0+tc+(code==0x20?tw:0);
+  if(!std::isfinite(units)||std::abs(units)>1e12)return false;
+ }
+ advance=units*hz;
+ return std::isfinite(advance)&&std::abs(advance)<=1e12;
+}
 double tj_space_threshold(const PageFont& font){
  if(font.subtype!="Type0"){
   for(const auto& [key,sequence]:font.unicode_sequences){
@@ -145,6 +162,8 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
  double word_spacing=0;
  double text_leading=0;
  double pending_tj_adjustment=0;
+ double text_cursor=0;
+ bool text_cursor_known=true;
  bool text_run_emitted=false;
  double horizontal_scale=1;
  std::vector<double> operands;
@@ -284,6 +303,10 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
     for(const auto& run:runs){
      if(run.adjustment){
       net_adjustment+=run.displacement;
+      if(text_cursor_known){
+       text_cursor-=run.displacement*font_size*horizontal_scale/1000.0;
+       if(!std::isfinite(text_cursor)||std::abs(text_cursor)>1e12)return false;
+      }
       if(!std::isfinite(net_adjustment))return false;
       continue;
      }
@@ -291,6 +314,12 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
      std::string decoded;
      if(!decode_run(run.bytes,fonts.at(selected),decoded))return false;
      if(decoded.empty())continue;
+     double run_advance=0;
+     if(text_cursor_known&&simple_text_advance(run.bytes,active_font,
+         font_size,character_spacing,word_spacing,horizontal_scale,run_advance)){
+      text_cursor+=run_advance;
+      if(!std::isfinite(text_cursor)||std::abs(text_cursor)>1e12)return false;
+     }else text_cursor_known=false;
      if(emitted_run&&font_size>0&&horizontal_scale>0&&
         std::isfinite(gap_threshold)&&gap_threshold>0&&
         net_adjustment<=-gap_threshold&&
@@ -350,6 +379,7 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
   if(text&&(t.value=="Td"||t.value=="TD"||t.value=="Tm"||t.value=="T*")){
    pending_tj_adjustment=0;
    text_run_emitted=false;
+   text_cursor=0;text_cursor_known=true;
   }
   if(text&&(t.value=="Td"||t.value=="TD")){
    if(operands.size()!=2||have_pending)return false;
@@ -450,6 +480,12 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
         decoded.front()!=' '&&decoded.front()!='\n')output+=' ';
      if(decoded.size()>4*1024*1024-output.size())return false;
      output+=decoded;
+     double run_advance=0;
+     if(text_cursor_known&&simple_text_advance(pending,active_font,
+         font_size,character_spacing,word_spacing,horizontal_scale,run_advance)){
+      text_cursor+=run_advance;
+      if(!std::isfinite(text_cursor)||std::abs(text_cursor)>1e12)return false;
+     }else text_cursor_known=false;
      text_run_emitted=true;
      pending_tj_adjustment=0;
     }
