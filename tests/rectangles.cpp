@@ -745,5 +745,20 @@ int main(){
  for(size_t i=0;i<internal_miter_img.size();i+=4)
   if(internal_miter_img[i]<255){internal_ink=true;break;}
  if(!internal_ink)return 332;
+ // A painted dash crosses the authored junction of two cubic curves.
+ // Both non-round join styles must retain a drawable stroke.
+ const char joined_dashed_miter[]="[40 3] 0 d 0 G 2 w 0 j 3 5 m 5 12 9 12 12 7 c 15 2 19 3 21 8 c S";
+ const char joined_dashed_bevel[]="[40 3] 0 d 0 G 2 w 2 j 3 5 m 5 12 9 12 12 7 c 15 2 19 3 21 8 c S";
+ std::vector<unsigned char> joined_miter(32*32*4),joined_bevel(32*32*4);
+ if(!rinpdf::renderer::render_rectangles(
+   reinterpret_cast<const unsigned char*>(joined_dashed_miter),
+   sizeof(joined_dashed_miter)-1,32,32,joined_miter.data(),128))return 333;
+ if(!rinpdf::renderer::render_rectangles(
+   reinterpret_cast<const unsigned char*>(joined_dashed_bevel),
+   sizeof(joined_dashed_bevel)-1,32,32,joined_bevel.data(),128))return 334;
+ bool joined_ink=false;
+ for(size_t i=0;i<joined_miter.size();i+=4)
+  if(joined_miter[i]<255){joined_ink=true;break;}
+ if(!joined_ink)return 335;
  return 0;
 }
