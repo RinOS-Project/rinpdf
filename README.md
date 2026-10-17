@@ -666,3 +666,8 @@ PDF Catalog の `/Lang` 文字列を `read_page_fonts` で取得し、レンダ�
 `read_page_fonts` はページ辞書の `/Lang` が明示されている場合、Catalogの `/Lang` より優先してフォント言語を設定します。ページに指定がない場合はCatalogの値にフォールバックします。`Identity-V` の縦書き字形選択では、中国語の `zh-CN`・`zh-SG`・`zh-Hans*` を `hani` / `ZHS `、`zh-TW`・`zh-HK`・`zh-MO`・`zh-Hant*` を `hani` / `ZHT ` へ対応付けます。地域・Scriptの指定がない `zh` は推測による地域判定をしません。ページ側の言語優先をType0フォントのテストで確認します。
 
 制限: BCP 47タグの大文字小文字正規化、完全な地域サブタグ、Marked Content内の `/Lang`、言語別字形の実フォントでの照合は未対応です。今回の変更後のビルド・全テストPASSは未確認です。
+
+## Marked Content の言語スコープ（試験実装）
+描画器に `/Tag BMC`、`/Tag << /Lang (xx-YY) >> BDC`、`EMC` の入れ子処理を追加しました。`BDC` のインライン辞書にある `/Lang` が存在する場合、そのスコープ内の埋め込みTrueType `Identity-V` 描画に伝え、`EMC` で元の言語に復帰します。スコープ内で明示されなければページ／Catalogの `/Lang` を利用します。最大深さ64、Lang文字列64バイトまでとし、未終了・不正型を拒否します。図形描画を含む入れ子の回帰テストを追加しました。
+
+制限: `/Properties` リソースを名前参照する `BDC`、`MP` / `DP`、ActualText、一般的なMarked Contentプロパティ全般は未対応です。現在の `BMC` / `BDC` 処理はインライン辞書型またはタグだけの形式に限定します。今回の変更後のビルド・全テストPASSは未確認です。
