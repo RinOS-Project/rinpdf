@@ -71,6 +71,14 @@ Token Lexer::next(){
  bool integer=!word.empty();size_t start=(word[0]=='+'||word[0]=='-')?1:0;
  if(start==word.size())integer=false;
  for(size_t i=start;i<word.size();++i)if(word[i]<'0'||word[i]>'9')integer=false;
- return {integer?TokenKind::Integer:TokenKind::Keyword,word};
+ if(integer)return {TokenKind::Integer,word};
+ // PDF real tokens have an optional sign and a single decimal point.
+ bool real=true,point=false,digit=false;
+ for(size_t i=start;i<word.size();++i){
+  if(word[i]=='.'&&!point){point=true;continue;}
+  if(word[i]>='0'&&word[i]<='9'){digit=true;continue;}
+  real=false;break;
+ }
+ return {real&&point&&digit?TokenKind::Real:TokenKind::Keyword,word};
 }
 }
