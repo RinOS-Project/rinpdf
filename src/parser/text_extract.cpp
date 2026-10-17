@@ -129,6 +129,13 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
   if(t.kind==TokenKind::String||t.kind==TokenKind::HexString){
    pending=t.value;have_pending=true;continue;
   }
+  if(t.kind==TokenKind::ArrayOpen&&text){
+   std::vector<renderer::TextRun> runs;
+   if(!renderer::parse_text_array(lexer,runs)||!fonts.count(selected))return false;
+   if(!suppressed)for(const auto& run:runs)if(!run.adjustment&&
+      !decode_run(run.bytes,fonts.at(selected),output))return false;
+   continue;
+  }
   if(t.kind!=TokenKind::Keyword)continue;
   if(t.value=="BT"){text=true;continue;}
   if(t.value=="ET"){text=false;continue;}
@@ -142,11 +149,6 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
    if(!have_pending||!fonts.count(selected))return false;
    if(!suppressed&&!decode_run(pending,fonts.at(selected),output))return false;
    pending.clear();have_pending=false;
-  }else if(t.value=="["&&text){
-   std::vector<renderer::TextRun> runs;
-   if(!renderer::parse_text_array(lexer,runs)||!fonts.count(selected))return false;
-   if(!suppressed)for(const auto& run:runs)if(!run.adjustment&&
-      !decode_run(run.bytes,fonts.at(selected),output))return false;
   }
  }
  if(text||!actual_stack.empty()||have_pending)return false;
