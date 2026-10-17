@@ -4,6 +4,7 @@
 #include "cubic_dash.h"
 #include "text_show.h"
 #include "bitmap_glyph.h"
+#include "truetype_draw.h"
 #include "../parser/lexer.h"
 #include <algorithm>
 #include <charconv>
@@ -121,6 +122,28 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
   text_x=x;
   return true;
  };
+ // Restricted embedded TrueType rendering for explicitly WinAnsi encoded
+ // simple fonts. Unknown mappings and transformed text fail closed.
+ auto truetype_show=[&](const std::vector<TextRun>& runs)->bool{
+  const auto it=fonts.find(selected_font);
+  if(it==fonts.end()||it->second.subtype!="TrueType"||
+     it->second.encoding!="WinAnsiEncoding"||
+     it->second.embedded_truetype.empty()||
+     !pending_font.empty()||selected_font_size<=0||
+     text_a!=1||text_b!=0||text_c!=0||text_d!=1||
+     a!=1||bx!=0||cx!=0||d!=1||e!=0||f!=0||
+     horizontal_scale!=1||char_spacing!=0||word_spacing!=0||
+     clip_mask||clip.x0!=0||clip.y0!=0||clip.x1!=width||clip.y1!=height)
+   return false;
+  double next=0;
+  if(!render_embedded_truetype_runs(it->second.embedded_truetype,runs,
+       selected_font_size,text_x,text_y,width,height,rgba,stride,
+       box.x0,box.y1,sx,sy,
+       static_cast<uint8_t>(std::lround(red*255)),
+       static_cast<uint8_t>(std::lround(green*255)),
+       static_cast<uint8_t>(std::lround(blue*255)),next))return false;
+  text_x=next;return true;
+ };
  // Share PDF tokenization rules with the object parser. Whitespace inside
  // literal strings, nested parentheses and hex-string bytes stay atomic.
  parser::Lexer lex(contents,size);
@@ -156,6 +179,8 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
    double advance=0;
    if(selected->second.base_font=="RinPDF-Diagnostic")
     {if(!diagnostic_show(runs))return false;continue;}
+   if(!selected->second.embedded_truetype.empty())
+    {if(!truetype_show(runs))return false;continue;}
    if(!courier_text_advance(selected->second.base_font,runs,selected_font_size,
                             char_spacing,word_spacing,horizontal_scale,advance)||
       !advance_text_origin(advance,text_a,text_b,text_x,text_y))return false;
@@ -228,6 +253,11 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
    double advance=0;
    if(selected->second.base_font=="RinPDF-Diagnostic"){
     if(!diagnostic_show({{false,pending_text,0}}))return false;
+    pending_text.clear();has_pending_text=false;
+    continue;
+   }
+   if(!selected->second.embedded_truetype.empty()){
+    if(!truetype_show({{false,pending_text,0}}))return false;
     pending_text.clear();has_pending_text=false;
     continue;
    }
