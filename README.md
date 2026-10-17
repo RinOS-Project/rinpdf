@@ -495,3 +495,8 @@ PDFではパス構築後、ストローク演算子の前に破線設定 `d` を
 `resolve_compressed_object` を追加しました。Type 2エントリからType 1の `/ObjStm` コンテナーを参照し、`/N`、`/First`、ストリーム境界とフィルタ解除後のオブジェクト番号・インデックス一致を検証してValueを返します。正常例と不正インデックス・不正コンテナーを使う回帰テストを追加しました。
 
 **未統合:** ページツリーとContentのReaderはまだ `read_uncompressed_xref` を利用しており、Type 2を含むドキュメントを拒否します。Object Streamを含むPDF全体の表示は未対応です。変更後のビルド・16テストPASSは未確認です。
+
+## Compressed page dictionary resolution (experimental)
+`read_object_xref` はXRef Streamの通常オブジェクト（type 1）を通常のオフセット表へ変換し、圧縮オブジェクト（type 2）エントリを別表に保持します。`resolve_reference_value` をページツリーとページ内容・ページ境界のReaderへ接続し、`/ObjStm` 内のCatalog、Pages、Page辞書を参照解決できるようにしました。Content Streamそのものは通常の間接ストリームを引き続き利用します。圧縮Catalogを含む小規模PDFを組み立て、公開APIのページ数取得を検証するテストを追加しました。
+
+**制限:** `/Prev`、`/XRefStm`、暗号化、間接 `/Length` を持つ圧縮ストリームには未対応です。Object Streamの読み込みは現状参照ごとに行うため、キャッシュ・複雑なPDF・性能検証が必要です。変更後のテストPASSはまだ未確認です。
