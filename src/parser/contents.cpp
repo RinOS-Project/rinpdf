@@ -106,8 +106,28 @@ struct Reader {
   // A stream dictionary UseCMap may identify a parent even if the stream
   // does not contain an inline usecmap operator.
   if(use){
-   for(const auto& [key,value]:parent)result.emplace(key,value);
+   for(const auto& [key,value]:parent){
+    if(result.size()>=4096&&!result.count(key))return false;
+    result.emplace(key,value);
+   }
    if(ranges.empty())ranges=parent_spaces;
+   else if(!parent_spaces.empty()){
+    // A child's codespace must not change its inherited byte boundaries.
+    if(ranges.size()!=parent_spaces.size())return false;
+    for(size_t i=0;i<ranges.size();++i){
+     const auto& a=ranges[i];const auto& b=parent_spaces[i];
+     if(a.first.width!=b.first.width||a.first.code!=b.first.code||
+        a.second.width!=b.second.width||a.second.code!=b.second.code)
+      return false;
+    }
+   }
+   if(!ranges.empty())for(const auto& [key,value]:result){
+    bool covered=false;
+    for(const auto& range:ranges)
+     if(key.width==range.first.width&&key.code>=range.first.code&&
+        key.code<=range.second.code){covered=true;break;}
+    if(!covered)return false;
+   }
   }
   output=std::move(result);spaces=std::move(ranges);
   visiting.erase(size_t(ref.integer));
