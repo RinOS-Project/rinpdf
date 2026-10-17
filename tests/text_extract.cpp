@@ -36,5 +36,16 @@ int main(){
  std::string result;
  if(!extract_page_text(reinterpret_cast<const uint8_t*>(pdf.data()),pdf.size(),0,result))return 1;
  if(result!=std::string("\xe4\xb8\x96\xe6\x97\xa5\xe6\x9c\xac")+"ABB")return 2;
+ // Changing only the resource key keeps object offsets intact and must
+ // cause a clean failure rather than silently using an unresolved parent.
+ std::string missing_parent=pdf;
+ const std::string lookup="/CMap << /Parent 7 0 R >>";
+ const auto pos=missing_parent.find(lookup);
+ if(pos==std::string::npos)return 3;
+ missing_parent.replace(pos,lookup.size(),"/CMap << /Absent 7 0 R >>");
+ const std::string previous=result;
+ if(extract_page_text(reinterpret_cast<const uint8_t*>(missing_parent.data()),
+      missing_parent.size(),0,result))return 4;
+ if(result!=previous)return 5;
  return 0;
 }
