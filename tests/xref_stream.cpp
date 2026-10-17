@@ -2,6 +2,7 @@
 #include <vector>
 #include <cstdint>
 #include <string>
+#include "rinpdf/rinpdf.h"
 using namespace rinpdf::parser;
 int main(){
  std::vector<XrefStreamEntry> out{{99,1,4,0}};
@@ -50,5 +51,36 @@ int main(){
  wrong+="startxref\n999999\n%%EOF\n";
  if(read_xref_section(reinterpret_cast<const uint8_t*>(wrong.data()),
        wrong.size(),format,classic,out,trailer))return 17;
+ // End-to-end public page tree lookup using an uncompressed XRef stream.
+ std::string example="%PDF-1.5\n";
+ std::vector<size_t> offsets(5,0);
+ auto append_object=[&](unsigned id,const std::string& body){
+  offsets[id]=example.size();
+  example+=std::to_string(id)+" 0 obj\n"+body+"\nendobj\n";
+ };
+ append_object(1,"<< /Type /Catalog /Pages 2 0 R >>");
+ append_object(2,"<< /Type /Pages /Kids [3 0 R] /Count 1 >>");
+ append_object(3,"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 20 20] >>");
+ offsets[4]=example.size();
+ std::string binary;
+ auto entry=[&](unsigned type,size_t position,unsigned generation){
+  binary.push_back(static_cast<char>(type));
+  binary.push_back(static_cast<char>((position>>16)&255));
+  binary.push_back(static_cast<char>((position>>8)&255));
+  binary.push_back(static_cast<char>(position&255));
+  binary.push_back(static_cast<char>(generation));
+ };
+ entry(0,0,255);
+ for(unsigned id=1;id<5;++id)entry(1,offsets[id],0);
+ example+="4 0 obj\n<< /Type /XRef /Size 5 /Root 1 0 R /W [1 3 1] /Length 25 >>\nstream\n";
+ example+=binary;
+ example+="\nendstream\nendobj\nstartxref\n"+std::to_string(offsets[4])+"\n%%EOF\n";
+ rinpdf_document* document=nullptr;
+ if(rinpdf_document_open_memory(reinterpret_cast<const uint8_t*>(example.data()),
+                                example.size(),&document)!=RINPDF_OK)return 18;
+ size_t pages=0;
+ const auto page_status=rinpdf_document_page_count(document,&pages);
+ rinpdf_document_close(document);
+ if(page_status!=RINPDF_OK||pages!=1)return 19;
  return 0;
 }
