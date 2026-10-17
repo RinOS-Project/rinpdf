@@ -233,9 +233,7 @@ bool read_object_xref(const uint8_t* data,size_t size,
    }
   }else if(!read_xref_stream_at(data,size,current,section,dict))return false;
   if(dict.dictionary.count("Encrypt"))return false;
-  if(dict.dictionary.count("XRefStm")&&
-     (classic.empty()||dict.dictionary.at("XRefStm").kind!=Value::Kind::Integer))
-   return false;
+  if(classic.empty()&&dict.dictionary.count("XRefStm"))return false;
   if(depth==0)latest=dict;
   else for(const auto* key:{"Root","Info","ID"}){
    if(!latest.dictionary.count(key)){
