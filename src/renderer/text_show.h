@@ -16,6 +16,10 @@ bool courier_text_advance(const std::string& base_font,
  const std::vector<TextRun>& runs,double font_size,
  double char_spacing,double word_spacing,double horizontal_scale,
  double& advance);
+// Advance the PDF text matrix origin along its transformed text x-axis.
+// Preserves coordinates on failure.
+bool advance_text_origin(double horizontal_advance,double axis_x,double axis_y,
+ double& origin_x,double& origin_y);
 // Parse a PDF TJ array after its '[' token. Does not render glyphs.
 bool parse_text_array(parser::Lexer& lexer,std::vector<TextRun>& runs);
 }
