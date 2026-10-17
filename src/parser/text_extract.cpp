@@ -415,6 +415,7 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
    if(t.value=="TD")text_leading=-operands[1];
    // Td/TD operate in the current text-line coordinate system.
    const double dx=operands[0],dy=operands[1];
+   if(std::abs(dx)>1e12||std::abs(dy)>1e12)return false;
    text_line_x+=line_a*dx+line_c*dy;
    text_line_y+=line_b*dx+line_d*dy;
    if(!std::isfinite(text_line_x)||!std::isfinite(text_line_y))return false;
