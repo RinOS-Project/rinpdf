@@ -62,5 +62,22 @@ int main(){
  bool stretched_ink=false;
  for(size_t i=0;i<stretched.size();i+=4)if(stretched[i]<255){stretched_ink=true;break;}
  if(!stretched_ink)return 10;
+ // CTM translation, nontrivial text basis and shear must paint
+ // valid pixels using the same embedded outline.
+ std::vector<uint8_t> translated(64*64*4,255);
+ double moved=0;
+ if(!render_embedded_truetype_runs(f,{{false,"A",0}},16,8,8,
+       64,64,translated.data(),64*4,0,64,1,1,0,0,0,moved,
+       nullptr,0,0,64,64,{1,0.25,0.4,1,12,3,0,1,-1,0}))return 11;
+ bool transformed_ink=false;
+ for(size_t i=0;i<translated.size();i+=4)
+  if(translated[i]<255){transformed_ink=true;break;}
+ if(!transformed_ink)return 12;
+ // Reject non-finite matrices without changing the output position.
+ const double previous=moved;
+ if(render_embedded_truetype_runs(f,{{false,"A",0}},16,8,8,
+       64,64,translated.data(),64*4,0,64,1,1,0,0,0,moved,
+       nullptr,0,0,64,64,{1,0,0,1e300,0,0,1,0,0,1}))return 13;
+ if(moved!=previous)return 14;
  return 0;
 }
