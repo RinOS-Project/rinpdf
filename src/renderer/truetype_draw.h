@@ -1,5 +1,6 @@
 #pragma once
 #include "text_show.h"
+#include "../parser/cid_font.h"
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -26,5 +27,6 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& font,
  unsigned clip_x1=0,unsigned clip_y1=0,
  GlyphTransform transform={},
  const std::map<uint8_t,uint32_t>* differences=nullptr,
- const std::string& encoding="WinAnsiEncoding");
+ const std::string& encoding="WinAnsiEncoding",
+ const parser::CIDGlyphMap* cid_map=nullptr);
 }
