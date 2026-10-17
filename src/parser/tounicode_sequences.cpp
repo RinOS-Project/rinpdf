@@ -1,0 +1,101 @@
+#include "tounicode.h"
+#include "lexer.h"
+#include <utility>
+namespace rinpdf::parser {
+namespace {
+bool unicode_sequence(const std::string& bytes,std::u32string& result){
+ if(bytes.empty()||(bytes.size()&1)||bytes.size()>512)return false;
+ std::u32string decoded;
+ for(size_t i=0;i<bytes.size();i+=2){
+  uint32_t cp=(uint16_t(uint8_t(bytes[i]))<<8)|uint8_t(bytes[i+1]);
+  if(cp>=0xd800&&cp<=0xdbff){
+   if(i+3>=bytes.size())return false;
+   const uint32_t lo=(uint16_t(uint8_t(bytes[i+2]))<<8)|uint8_t(bytes[i+3]);
+   if(lo<0xdc00||lo>0xdfff)return false;
+   cp=0x10000+((cp-0xd800)<<10)+(lo-0xdc00);i+=2;
+  }else if(cp>=0xdc00&&cp<=0xdfff)return false;
+  decoded.push_back(static_cast<char32_t>(cp));
+ }
+ result=std::move(decoded);return true;
+}
+bool code(const Token& t,CMapKey& key){
+ if(t.kind!=TokenKind::HexString||(t.value.size()!=1&&t.value.size()!=2))
+  return false;
+ key.width=static_cast<uint8_t>(t.value.size());
+ key.code=uint8_t(t.value[0]);
+ if(key.width==2)key.code=(key.code<<8)|uint8_t(t.value[1]);
+ return true;
+}
+}
+bool parse_tounicode_sequences(const uint8_t* data,size_t size,
+ std::map<CMapKey,std::u32string>& result){
+ if(!data||!size||size>1024*1024)return false;
+ Lexer lexer(data,size);
+ std::map<CMapKey,std::u32string> mapped;
+ size_t total=0;
+ while(true){
+  Token t=lexer.next();
+  if(t.kind==TokenKind::End)break;
+  if(t.kind==TokenKind::Invalid)return false;
+  if(t.kind!=TokenKind::Integer)continue;
+  unsigned count=0;
+  if(t.value.empty()||t.value.size()>4)return false;
+  for(char c:t.value){
+   if(c<'0'||c>'9')return false;
+   count=count*10+unsigned(c-'0');
+  }
+  Token op=lexer.next();
+  if(op.kind!=TokenKind::Keyword)return false;
+  const bool chars=op.value=="beginbfchar";
+  const bool ranges=op.value=="beginbfrange";
+  if(!chars&&!ranges)continue;
+  if(!count||count>4096||total+count>4096)return false;
+  for(unsigned i=0;i<count;++i){
+   CMapKey first,last;
+   if(!code(lexer.next(),first))return false;
+   if(ranges){
+    if(!code(lexer.next(),last)||first.width!=last.width||
+       first.code>last.code)return false;
+   }else last=first;
+   const size_t span=size_t(last.code)-first.code+1;
+   if(total+span>4096)return false;
+   Token dest=lexer.next();
+   if(ranges&&dest.kind==TokenKind::ArrayOpen){
+    for(size_t j=0;j<span;++j){
+     Token entry=lexer.next();std::u32string sequence;
+     if(entry.kind!=TokenKind::HexString||
+        !unicode_sequence(entry.value,sequence)||
+        !mapped.emplace(CMapKey{first.width,uint16_t(first.code+j)},
+                        std::move(sequence)).second)return false;
+    }
+    if(lexer.next().kind!=TokenKind::ArrayClose)return false;
+   }else{
+    if(dest.kind!=TokenKind::HexString)return false;
+    for(size_t j=0;j<span;++j){
+     std::string bytes=dest.value;
+     if(ranges){
+      // Per PDF, increment the entire big-endian UTF-16BE destination.
+      uint32_t carry=static_cast<uint32_t>(j);
+      for(size_t k=bytes.size();k>0&&carry;--k){
+       const uint32_t n=uint8_t(bytes[k-1])+(carry&255);
+       bytes[k-1]=char(n&255);
+       carry=(carry>>8)+(n>>8);
+      }
+      if(carry)return false;
+     }
+     std::u32string sequence;
+     if(!unicode_sequence(bytes,sequence)||
+        !mapped.emplace(CMapKey{first.width,uint16_t(first.code+j)},
+                        std::move(sequence)).second)return false;
+    }
+   }
+   total+=span;
+  }
+  Token end=lexer.next();
+  if(end.kind!=TokenKind::Keyword||
+     end.value!=(chars?"endbfchar":"endbfrange"))return false;
+ }
+ if(mapped.empty())return false;
+ result=std::move(mapped);return true;
+}
+}
