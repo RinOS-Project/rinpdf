@@ -38,5 +38,17 @@ int main(){
  damaged.replace(damaged.find("/Length 12"),10,"/Length 11");
  if(read_xref_stream_at(reinterpret_cast<const uint8_t*>(damaged.data()),
         damaged.size(),offset,out,trailer))return 14;
+ // Dispatch based on the actual startxref offset (not PDF version).
+ pdf+="startxref\n"+std::to_string(offset)+"\n%%EOF\n";
+ XrefFormat format=XrefFormat::Classic;
+ std::vector<XrefEntry> classic;
+ if(!read_xref_section(reinterpret_cast<const uint8_t*>(pdf.data()),
+       pdf.size(),format,classic,out,trailer))return 15;
+ if(format!=XrefFormat::Stream||out.size()!=3||!classic.empty())return 16;
+ // The malformed pointer must not silently scan for another xref.
+ std::string wrong=pdf.substr(0,pdf.find("startxref"));
+ wrong+="startxref\n999999\n%%EOF\n";
+ if(read_xref_section(reinterpret_cast<const uint8_t*>(wrong.data()),
+       wrong.size(),format,classic,out,trailer))return 17;
  return 0;
 }
