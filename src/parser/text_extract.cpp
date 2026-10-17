@@ -47,6 +47,27 @@ bool actual_text(const std::string& raw,std::string& out){
 // TJ amounts are in thousandths of an em. Where an Identity-H CID font
 // explicitly maps a two-byte code to U+0020 and supplies that CID's width,
 // use the documented space advance instead of a universal half-em guess.
+// Identity-H uses two-byte CID codes and PDF descendant font widths.
+// Do not infer advances for other Type0 encodings or odd-length runs.
+bool cid_text_advance(const std::string& bytes,const PageFont& font,
+ double font_size,double tc,double hz,double& advance){
+ if(font.subtype!="Type0"||font.encoding!="Identity-H"||
+    bytes.size()%2||font_size<=0||!std::isfinite(font_size))return false;
+ double units=0;
+ for(size_t i=0;i<bytes.size();i+=2){
+  const uint16_t cid=(uint16_t(uint8_t(bytes[i]))<<8)|
+                     uint8_t(bytes[i+1]);
+  double width=0;
+  if(!cid_width(font.cid_widths,cid,width))return false;
+  // PDF Tw applies to single-byte 0x20, never two-byte Identity-H codes.
+  units+=width*font_size/1000.0+tc;
+  if(!std::isfinite(units)||std::abs(units)>1e12)return false;
+ }
+ advance=units*hz;
+ return std::isfinite(advance)&&std::abs(advance)<=1e12;
+}
+bool text_advance(const std::string& bytes,const PageFont& font,
+ double font_size,double tc,double tw,double hz,double& advance);
 // Calculate advances only when explicit PDF widths are available.
 // The Unicode replacement string may have a different length than glyph codes.
 bool simple_text_advance(const std::string& bytes,const PageFont& font,
@@ -63,6 +84,12 @@ bool simple_text_advance(const std::string& bytes,const PageFont& font,
  }
  advance=units*hz;
  return std::isfinite(advance)&&std::abs(advance)<=1e12;
+}
+bool text_advance(const std::string& bytes,const PageFont& font,
+ double font_size,double tc,double tw,double hz,double& advance){
+ if(font.subtype=="Type0")
+  return cid_text_advance(bytes,font,font_size,tc,hz,advance);
+ return simple_text_advance(bytes,font,font_size,tc,tw,hz,advance);
 }
 double tj_space_threshold(const PageFont& font){
  if(font.subtype!="Type0"){
@@ -315,7 +342,7 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
      if(!decode_run(run.bytes,fonts.at(selected),decoded))return false;
      if(decoded.empty())continue;
      double run_advance=0;
-     if(text_cursor_known&&simple_text_advance(run.bytes,active_font,
+     if(text_cursor_known&&text_advance(run.bytes,active_font,
          font_size,character_spacing,word_spacing,horizontal_scale,run_advance)){
       text_cursor+=run_advance;
       if(!std::isfinite(text_cursor)||std::abs(text_cursor)>1e12)return false;
@@ -483,7 +510,7 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
      if(decoded.size()>4*1024*1024-output.size())return false;
      output+=decoded;
      double run_advance=0;
-     if(text_cursor_known&&simple_text_advance(pending,active_font,
+     if(text_cursor_known&&text_advance(pending,active_font,
          font_size,character_spacing,word_spacing,horizontal_scale,run_advance)){
       text_cursor+=run_advance;
       if(!std::isfinite(text_cursor)||std::abs(text_cursor)>1e12)return false;
