@@ -44,3 +44,5 @@ test('rinpdf-sfnt-composite',executable('rinpdf-sfnt-composite','sfnt_composite.
 test('rinpdf-font-encoding',executable('rinpdf-font-encoding','font_encoding.cpp',dependencies:rinpdf_dep))
 
 test('rinpdf-tounicode',executable('rinpdf-tounicode','tounicode.cpp',dependencies:rinpdf_dep))
+
+test('rinpdf-cid-font',executable('rinpdf-cid-font','cid_font.cpp',dependencies:rinpdf_dep))
