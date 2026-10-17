@@ -83,7 +83,8 @@ bool read_xref_stream_at(const uint8_t* data,size_t size,size_t offset,
     (p+3<size&&!xref_space(data[p+3])))return false;
  p+=3;
  StreamRange stream;
- if(!locate_indirect_stream(data,size,\n     XrefEntry{static_cast<size_t>(object),offset,0,true},{},stream))return false;
+ if(!locate_indirect_stream(data,size,
+     XrefEntry{static_cast<size_t>(object),offset,0,true},{},stream))return false;
  const auto& dict=stream.dictionary.dictionary;
  auto type=dict.find("Type"),width=dict.find("W"),size_key=dict.find("Size");
  if(type==dict.end()||type->second.kind!=Value::Kind::Name||
