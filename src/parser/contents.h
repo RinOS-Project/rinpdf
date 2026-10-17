@@ -19,6 +19,9 @@ struct PageFont {
  CIDVerticalMetrics vertical_metrics;
  std::string language;
 };
+using PageProperties=std::map<std::string,std::string>;
+bool read_page_properties(const uint8_t* data,size_t size,size_t page_index,
+ PageProperties& properties);
 // Resolve effective inherited /Resources and supported font dictionary metadata.
 // Does not imply font rasterization or character encoding support.
 bool read_page_fonts(const uint8_t* data,size_t size,size_t page_index,
