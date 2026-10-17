@@ -18,7 +18,9 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
  const std::map<uint8_t,uint32_t>* differences,
  const std::string& encoding,
  const parser::CIDGlyphMap* cid_map,
- const parser::CIDWidths* cid_widths){
+ const parser::CIDWidths* cid_widths,
+ const parser::CIDVerticalMetrics* vertical_metrics,
+ double* next_y){
  if(!rgba||!width||!height||width>512||height>512||
     stride<size_t(width)*4||!std::isfinite(em)||em<=0||em>1000||
     !std::isfinite(start_x)||!std::isfinite(baseline)||
@@ -34,17 +36,19 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
     std::abs(matrix.word_spacing)>10000)return false;
  if(clip_x1==0&&clip_y1==0){clip_x1=width;clip_y1=height;}
  if(clip_x0>clip_x1||clip_y0>clip_y1||clip_x1>width||clip_y1>height)return false;
+ const bool vertical=encoding=="Identity-V";
+ if(vertical&&(!cid_map||!cid_widths||!vertical_metrics||!next_y))return false;
  SfntFont sfnt;
  if(!parse_sfnt(bytes.data(),bytes.size(),sfnt))return false;
  struct Paint {std::vector<std::vector<MaskPoint>> paths;};
  std::vector<Paint> paints;
  size_t glyph_count=0;
- double cursor=start_x;
+ double cursor=vertical?0:start_x;
  uint16_t units=0,advance=0;
  for(const auto& run:runs){
   if(run.adjustment){
    if(!std::isfinite(run.displacement)||std::abs(run.displacement)>1000000)return false;
-   cursor-=run.displacement*em*matrix.horizontal_scale/1000;
+   cursor-=run.displacement*em*(vertical?1:matrix.horizontal_scale)/1000;
   }else{
    if(cid_map&&(run.bytes.size()%2!=0))return false;
    for(size_t offset=0;offset<run.bytes.size();offset+=cid_map?2:1){
@@ -67,6 +71,13 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
     if(!sfnt_horizontal_metrics(sfnt,glyph_id,units,advance))return false;
     SimpleGlyph glyph;
     if(!sfnt_glyph_outline(sfnt,glyph_id,glyph))return false;
+    parser::CIDVerticalMetric vertical_metric;
+    if(vertical&&!parser::cid_vertical_metric(*vertical_metrics,
+       *cid_widths,cid,vertical_metric))return false;
+    const double origin_x=vertical?
+       start_x-vertical_metric.v1x*em/1000:cursor;
+    const double origin_y=vertical?
+       baseline+cursor-vertical_metric.v1y*em/1000:baseline;
     Paint paint;
     // Build in font-coordinate units, then apply the text basis and CTM
     // before mapping PDF user coordinates to device pixels.
@@ -74,8 +85,8 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
      return false;
     for(auto& contour:paint.paths)for(auto& point:contour){
      const double local_x=point.x*matrix.horizontal_scale,local_y=-point.y;
-     const double ux=cursor+matrix.ta*local_x+matrix.tc*local_y;
-     const double uy=baseline+matrix.tb*local_x+matrix.td*local_y;
+     const double ux=origin_x+matrix.ta*local_x+matrix.tc*local_y;
+     const double uy=origin_y+matrix.tb*local_x+matrix.td*local_y;
      const double px=matrix.a*ux+matrix.c*uy+matrix.e;
      const double py=matrix.b*ux+matrix.d*uy+matrix.f;
      const double device_x=(px-x0)*sx,device_y=(y1-py)*sy;
@@ -91,7 +102,8 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
      if(!parser::cid_width(*cid_widths,cid,width1000))return false;
      glyph_advance=width1000*em/1000;
     }
-    cursor+=(glyph_advance+matrix.character_spacing+
+    cursor+=vertical?(vertical_metric.w1y*em/1000-matrix.character_spacing):
+            (glyph_advance+matrix.character_spacing+
              (!cid_map&&ch==32?matrix.word_spacing:0))*matrix.horizontal_scale;
     if(!std::isfinite(cursor)||std::abs(cursor)>10000000)return false;
    }
@@ -120,7 +132,12 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
   pixel[2]=uint8_t((alpha*blue+(255-alpha)*pixel[2]+127)/255);
   pixel[3]=255;
  }
- next_x=cursor;
+ if(vertical){
+  const double y=baseline+cursor;
+  if(!std::isfinite(y)||std::abs(y)>10000000)return false;
+  *next_y=y;
+  next_x=start_x;
+ }else next_x=cursor;
  return true;
 }
 }
