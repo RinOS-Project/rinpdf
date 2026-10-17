@@ -715,5 +715,20 @@ int main(){
  if(!rinpdf::renderer::render_rectangles(
  reinterpret_cast<const unsigned char*>(analytic_bevel_seam),
  sizeof(analytic_bevel_seam)-1,32,32,analytic_bevel_pixels.data(),128))return 326;
+ // Fully painted closed cubic seam: exercise the dedicated
+ // no-caps path for both miter and bevel joins.
+ const char closed_full_miter[]="[100 1] 0 d 0 G 2 w 0 j 10 M 4 4 m 4 14 14 14 14 4 c h S";
+ const char closed_full_bevel[]="[100 1] 0 d 0 G 2 w 2 j 4 4 m 4 14 14 14 14 4 c h S";
+ std::vector<unsigned char> full_miter(32*32*4),full_bevel(32*32*4);
+ if(!rinpdf::renderer::render_rectangles(
+   reinterpret_cast<const unsigned char*>(closed_full_miter),
+   sizeof(closed_full_miter)-1,32,32,full_miter.data(),128))return 327;
+ if(!rinpdf::renderer::render_rectangles(
+   reinterpret_cast<const unsigned char*>(closed_full_bevel),
+   sizeof(closed_full_bevel)-1,32,32,full_bevel.data(),128))return 328;
+ bool full_has_ink=false;
+ for(size_t i=0;i<full_miter.size();i+=4)
+  if(full_miter[i]<255){full_has_ink=true;break;}
+ if(!full_has_ink)return 329;
  return 0;
 }
