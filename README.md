@@ -611,3 +611,8 @@ TrueTypeの文字コード変換に `font_byte_unicode` を接続し、`WinAnsiE
 `read_page_fonts` に `/Subtype /Type0` から `/DescendantFonts` の単一 `/CIDFontType2` を取得する経路を追加しました。CIDフォントの `/CIDToGIDMap /Identity` または直接ストリーム参照を解決し、Big Endianの2バイトCID→GID対応表として保持します。子フォントの `/FontDescriptor /FontFile2` もストリーム取得・SFNT検証します。内部関数 `cid_to_gid` は範囲外のCIDを拒否し、失敗時にGIDを書き換えません。`rinpdf-cid-font` と `rinpdf-type0-fonts` の2テストを追加しました。
 
 **未対応:** Type0の `Identity-H` 等を使った実際の文字表示、CIDコード分割、CID幅、CID→GIDによるグリフ描画、CMap継承、縦書きなど。解析したToUnicodeを描画用GIDの代わりに使用しません。変更後のビルドと全テストPASSは未確認です。
+
+## Type0 / Identity-H CID glyph rendering (experimental)
+`Identity-H` のType0フォントについて、Tj/TJの文字列を2バイトBEのCIDとして取り出し、`CIDToGIDMap` のIdentity／明示Big EndianマッピングでGIDへ変換し、埋め込み `FontFile2` のTrueTypeグリフ輪郭描画へ接続しました。奇数長の文字列・マップ範囲外CID・存在しないGIDは拒否します。`rinpdf-truetype-draw` に合成SFNTのCID描画と失敗時の位置維持を追加しました。
+
+**制限:** Type0描画は `Identity-H` のみで、`CIDFontType2` の埋め込みTrueTypeが必須です。CID幅の `/W`・`/DW`、縦書き、独自CMap、フォントファイルの未埋め込み・代替、一般的なCIDFontType0/CFFは未対応です。現在の送り幅はTrueType `hmtx` を使用します。今回の変更後のビルド・テストPASSは未確認です。
