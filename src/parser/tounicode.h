@@ -15,7 +15,8 @@ struct CMapKey {uint8_t width=0;uint32_t code=0;
 };
 // Preserves multi-codepoint destinations and bfrange array entries.
 bool parse_tounicode_sequences(const uint8_t* data,size_t size,
- std::map<CMapKey,std::u32string>& mapping);
+ std::map<CMapKey,std::u32string>& mapping,
+ std::vector<std::pair<CMapKey,CMapKey>>* codespaces=nullptr);
 bool parse_tounicode_cmap(const uint8_t* data,size_t size,
  std::map<CMapKey,uint32_t>& mapping);
 }
