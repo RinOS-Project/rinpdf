@@ -193,7 +193,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      const auto match=properties.find(next.value);
      if(match==properties.end())return false;
      marked_languages.push_back(active_marked_language);
-     if(!match->second.empty())active_marked_language=match->second;
+     if(!match->second.language.empty())active_marked_language=match->second.language;
      lex=look_op;continue;
     }
    }
