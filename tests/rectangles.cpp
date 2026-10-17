@@ -730,5 +730,20 @@ int main(){
  for(size_t i=0;i<full_miter.size();i+=4)
   if(full_miter[i]<255){full_has_ink=true;break;}
  if(!full_has_ink)return 329;
+ // Two cubic segments joined inside a fully painted closed contour.
+ // Both miter and bevel must accept original endpoint tangents.
+ const char internal_cubic_miter[]="[100 1] 0 d 0 G 2 w 0 j 10 M 3 3 m 3 12 9 12 12 8 c 14 4 9 2 3 3 c h S";
+ const char internal_cubic_bevel[]="[100 1] 0 d 0 G 2 w 2 j 3 3 m 3 12 9 12 12 8 c 14 4 9 2 3 3 c h S";
+ std::vector<unsigned char> internal_miter_img(32*32*4),internal_bevel_img(32*32*4);
+ if(!rinpdf::renderer::render_rectangles(
+   reinterpret_cast<const unsigned char*>(internal_cubic_miter),
+   sizeof(internal_cubic_miter)-1,32,32,internal_miter_img.data(),128))return 330;
+ if(!rinpdf::renderer::render_rectangles(
+   reinterpret_cast<const unsigned char*>(internal_cubic_bevel),
+   sizeof(internal_cubic_bevel)-1,32,32,internal_bevel_img.data(),128))return 331;
+ bool internal_ink=false;
+ for(size_t i=0;i<internal_miter_img.size();i+=4)
+  if(internal_miter_img[i]<255){internal_ink=true;break;}
+ if(!internal_ink)return 332;
  return 0;
 }
