@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cstring>
 #include <new>
+#include <map>
 #include <vector>
 struct rinpdf_document { std::vector<uint8_t> bytes; unsigned major,minor; };
 extern "C" rinpdf_status rinpdf_document_open_memory(const uint8_t *data,size_t size,rinpdf_document **out) {
@@ -50,11 +51,17 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
   if(!rinpdf::parser::read_page_contents(doc->bytes.data(),doc->bytes.size(),index,contents))return RINPDF_UNSUPPORTED;
   rinpdf::parser::MediaBox box{};
   if(!rinpdf::parser::read_page_box(doc->bytes.data(),doc->bytes.size(),index,box))return RINPDF_UNSUPPORTED;
+  std::map<std::string,rinpdf::parser::PageFont> page_fonts;
+  if(!rinpdf::parser::read_page_fonts(doc->bytes.data(),doc->bytes.size(),index,page_fonts))
+   return RINPDF_UNSUPPORTED;
+  rinpdf::renderer::FontResources fonts;
+  for(const auto& [name,resource]:page_fonts)
+   fonts.emplace(name,rinpdf::renderer::FontResource{resource.base_font,resource.subtype});
   const unsigned rotation=box.rotation;
   const unsigned source_width=(rotation==90||rotation==270)?height:width;
   const unsigned source_height=(rotation==90||rotation==270)?width:height;
   std::vector<uint8_t> temporary((size_t)width*height*4);
-  if(!rinpdf::renderer::render_rectangles_box(contents.data(),contents.size(),source_width,source_height,temporary.data(),(size_t)source_width*4,{box.x0,box.y0,box.x1,box.y1}))return RINPDF_UNSUPPORTED;
+  if(!rinpdf::renderer::render_rectangles_box_with_fonts(contents.data(),contents.size(),source_width,source_height,temporary.data(),(size_t)source_width*4,{box.x0,box.y0,box.x1,box.y1},fonts))return RINPDF_UNSUPPORTED;
   for(unsigned y=0;y<height;++y){
    for(unsigned x=0;x<width;++x){
     unsigned sx=x,sy=y;
