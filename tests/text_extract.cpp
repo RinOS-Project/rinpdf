@@ -110,6 +110,26 @@ int main(){
  if(extract_page_text(reinterpret_cast<const uint8_t*>(missing_tj.data()),
       missing_tj.size(),0,result))return 28;
  if(result!=previous)return 29;
+ // Reject nested BT and unmatched ET without exposing partial output.
+ // These replacements preserve the stream length and xref offsets.
+ const auto reject_boundary=[&](const std::string& from,
+      const std::string& to,int not_found,int accepted,int mutated){
+  if(from.size()!=to.size())return not_found;
+  std::string modified=pdf;
+  const auto at=modified.find(from);
+  if(at==std::string::npos)return not_found;
+  modified.replace(at,from.size(),to);
+  if(extract_page_text(reinterpret_cast<const uint8_t*>(modified.data()),
+       modified.size(),0,result))return accepted;
+  if(result!=previous)return mutated;
+  return 0;
+ };
+ if(const int error=reject_boundary("BDC BT /F1","BDC ET /F1",30,31,32))
+  return error;
+ if(const int error=reject_boundary("Tj ET EMC","Tj BT EMC",33,34,35))
+  return error;
+ if(const int error=reject_boundary("<41> Tj ET EMC","<41> Tj BT EMC",36,37,38))
+  return error;
  // The UTF-16BE ActualText payload must reject lone low surrogates.
  // Replace equal-length hex digits so all xref offsets remain valid.
  std::string unpaired_low=pdf;
