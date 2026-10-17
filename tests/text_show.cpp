@@ -1,5 +1,6 @@
 #include "../src/renderer/text_show.h"
 #include <cstdint>
+#include <cmath>
 #include <string>
 #include <vector>
 using namespace rinpdf;
@@ -21,5 +22,20 @@ int main(){
  parser::Lexer unterminated(reinterpret_cast<const uint8_t*>(unfinished.data()),unfinished.size());
  unterminated.next();
  if(renderer::parse_text_array(unterminated,runs))return 6;
+ double advance=0;
+ const std::vector<renderer::TextRun> courier_runs{
+  {false,"A B",0},{true,{},-120},{false,"C",0}
+ };
+ if(!renderer::courier_text_advance("Courier",courier_runs,10,1,2,1,advance))
+  return 7;
+ // Four printable glyphs: 4*(6+1), one space adds 2;
+ // TJ -120 moves forward by 1.2.
+ if(std::abs(advance-31.2)>0.000001)return 8;
+ if(renderer::courier_text_advance("Helvetica",courier_runs,10,0,0,1,advance))
+  return 9;
+ const std::vector<renderer::TextRun> non_ascii{{false,std::string(1,'\\x01'),0}};
+ if(renderer::courier_text_advance("Courier",non_ascii,10,0,0,1,advance))
+  return 10;
+ if(std::abs(advance-31.2)>0.000001)return 11; // failure does not write
  return 0;
 }
