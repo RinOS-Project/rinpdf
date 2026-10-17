@@ -37,6 +37,18 @@ int main(){
  if(rinpdf::renderer::render_rectangles(
     reinterpret_cast<const unsigned char*>(missing_et),sizeof(missing_et)-1,
     8,8,pixels.data(),32))return 206;
+ const char compat_strings[]="BX (q Q [1 2] /Font) <4254> /F1 UnknownOperator EX 0 g 2 2 4 4 re f";
+ if(!rinpdf::renderer::render_rectangles(
+     reinterpret_cast<const unsigned char*>(compat_strings),sizeof(compat_strings)-1,
+     8,8,pixels.data(),32))return 207;
+ const char incomplete_literal[]="BX (unterminated";
+ if(rinpdf::renderer::render_rectangles(
+     reinterpret_cast<const unsigned char*>(incomplete_literal),sizeof(incomplete_literal)-1,
+     8,8,pixels.data(),32))return 208;
+ const char text_operators_in_string[]="(0 g 0 0 8 8 re f)";
+ if(rinpdf::renderer::render_rectangles(
+     reinterpret_cast<const unsigned char*>(text_operators_in_string),
+     sizeof(text_operators_in_string)-1,8,8,pixels.data(),32))return 209;
  const char unsupported[]="BT /F1 12 Tf ET";
  if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(unsupported),sizeof(unsupported)-1,8,8,pixels.data(),32))return 3;
  const char rgb[]="q 1 0 0 rg 1 1 2 2 re f Q 0 g 4 4 2 2 re f";
