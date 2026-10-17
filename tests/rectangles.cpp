@@ -9,6 +9,22 @@ int main(){
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(content),sizeof(content)-1,8,8,pixels.data(),8*4))return 1;
  auto pixel=[&](unsigned x,unsigned y){return pixels[(y*8+x)*4];};
  if(pixel(0,0)!=255||pixel(3,3)!=0||pixel(7,7)!=255)return 2;
+ const char flatness[]="q 10 i Q 0 g 2 2 4 4 re f";
+ if(!rinpdf::renderer::render_rectangles(
+     reinterpret_cast<const unsigned char*>(flatness),sizeof(flatness)-1,
+     8,8,pixels.data(),32))return 200;
+ const char bad_flatness[]="101 i";
+ if(rinpdf::renderer::render_rectangles(
+     reinterpret_cast<const unsigned char*>(bad_flatness),sizeof(bad_flatness)-1,
+     8,8,pixels.data(),32))return 201;
+ const char compatible[]="BX 42 FutureOperator EX 0 g 2 2 4 4 re f";
+ if(!rinpdf::renderer::render_rectangles(
+     reinterpret_cast<const unsigned char*>(compatible),sizeof(compatible)-1,
+     8,8,pixels.data(),32))return 202;
+ const char unclosed[]="BX 42 FutureOperator";
+ if(rinpdf::renderer::render_rectangles(
+     reinterpret_cast<const unsigned char*>(unclosed),sizeof(unclosed)-1,
+     8,8,pixels.data(),32))return 203;
  const char unsupported[]="BT /F1 12 Tf ET";
  if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(unsupported),sizeof(unsupported)-1,8,8,pixels.data(),32))return 3;
  const char rgb[]="q 1 0 0 rg 1 1 2 2 re f Q 0 g 4 4 2 2 re f";
