@@ -545,7 +545,7 @@ int main(){
  if(straight_curve_pixels!=explicit_straight_pixels)return 272;
  // The cubic must actually leave the endpoint chord; the old 15/-5
  // controls reversed within [3,7] and could rasterize like a straight line.
- const char overshoot_cubic[]="0 G 1 w 0 J 3 8 m 25 8 -15 8 7 8 c S";
+ const char overshoot_cubic[]="0 G 1 w 0 J 3 8 m 20 8 -10 8 7 8 c S";
  const char overshoot_chord[]="0 G 1 w 0 J 3 8 m 7 8 l S";
  std::vector<unsigned char> overshoot_curve_pixels(20*16*4),overshoot_chord_pixels(20*16*4);
  if(!rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(overshoot_cubic),sizeof(overshoot_cubic)-1,20,16,overshoot_curve_pixels.data(),80))return 73;
