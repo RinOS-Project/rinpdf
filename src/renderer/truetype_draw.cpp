@@ -21,8 +21,12 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
     runs.size()>4096||
     (clip_mask&&clip_mask->size()!=size_t(width)*height))return false;
  for(double v:{matrix.a,matrix.b,matrix.c,matrix.d,matrix.e,matrix.f,
-               matrix.ta,matrix.tb,matrix.tc,matrix.td})
+               matrix.ta,matrix.tb,matrix.tc,matrix.td,
+               matrix.character_spacing,matrix.word_spacing,matrix.horizontal_scale})
   if(!std::isfinite(v)||std::abs(v)>100000)return false;
+ if(matrix.horizontal_scale<0||matrix.horizontal_scale>10||
+    std::abs(matrix.character_spacing)>10000||
+    std::abs(matrix.word_spacing)>10000)return false;
  if(clip_x1==0&&clip_y1==0){clip_x1=width;clip_y1=height;}
  if(clip_x0>clip_x1||clip_y0>clip_y1||clip_x1>width||clip_y1>height)return false;
  SfntFont sfnt;
@@ -35,7 +39,7 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
  for(const auto& run:runs){
   if(run.adjustment){
    if(!std::isfinite(run.displacement)||std::abs(run.displacement)>1000000)return false;
-   cursor-=run.displacement*em/1000;
+   cursor-=run.displacement*em*matrix.horizontal_scale/1000;
   }else{
    for(unsigned char ch:run.bytes){
     if(ch<32||ch>126||++glyph_count>4096)return false;
@@ -50,7 +54,7 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
     if(!flatten_simple_glyph(glyph,em/units,0,0,0.15,paint.paths))
      return false;
     for(auto& contour:paint.paths)for(auto& point:contour){
-     const double local_x=point.x,local_y=-point.y;
+     const double local_x=point.x*matrix.horizontal_scale,local_y=-point.y;
      const double ux=cursor+matrix.ta*local_x+matrix.tc*local_y;
      const double uy=baseline+matrix.tb*local_x+matrix.td*local_y;
      const double px=matrix.a*ux+matrix.c*uy+matrix.e;
@@ -62,7 +66,8 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
      point={device_x,device_y};
     }
     paints.push_back(std::move(paint));
-    cursor+=double(advance)*em/units;
+    cursor+=(double(advance)*em/units+matrix.character_spacing+
+             (ch==32?matrix.word_spacing:0))*matrix.horizontal_scale;
     if(!std::isfinite(cursor)||std::abs(cursor)>10000000)return false;
    }
   }
