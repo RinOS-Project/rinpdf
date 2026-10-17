@@ -1,5 +1,6 @@
 #include "pages.h"
 #include "xref.h"
+#include "xref_stream.h"
 #include "object.h"
 #include "value.h"
 #include <algorithm>
@@ -49,11 +50,9 @@ struct Context {
  }
 };
 bool count_page_tree(const uint8_t *data,size_t size,size_t& count){
- count=0;std::vector<XrefEntry> entries;size_t trailer_offset=0;
- if(!read_classic_xref(data,size,entries,&trailer_offset))return false;
- Lexer trailer_lexer(data+trailer_offset,size-trailer_offset);
+ count=0;std::vector<XrefEntry> entries;
  Value trailer;
- if(!parse_value(trailer_lexer,trailer)||trailer.kind!=Value::Kind::Dictionary)return false;
+ if(!read_uncompressed_xref(data,size,entries,trailer))return false;
  if(field(trailer,"Prev")||field(trailer,"XRefStm")||field(trailer,"Encrypt"))return false;
  const Value* root_ref=field(trailer,"Root");
  if(!root_ref||root_ref->kind!=Value::Kind::Reference)return false;
