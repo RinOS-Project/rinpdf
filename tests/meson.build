@@ -26,3 +26,5 @@ test('rinpdf-compressed-pages',executable('rinpdf-compressed-pages','compressed_
 
 # Manually invoked against a nonempty local PDF corpus; no fixture-less PASS.
 executable('rinpdf-corpus','pdf_corpus.cpp',dependencies:rinpdf_dep)
+
+test('rinpdf-page-fonts',executable('rinpdf-page-fonts','page_fonts.cpp',dependencies:rinpdf_dep))
