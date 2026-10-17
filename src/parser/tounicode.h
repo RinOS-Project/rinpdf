@@ -2,6 +2,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <map>
+#include <string>
 namespace rinpdf::parser {
 // A deliberately bounded subset of ToUnicode CMap: one/two-byte source codes
 // and single Unicode scalar destinations, via beginbfchar/beginbfrange.
@@ -10,6 +11,9 @@ struct CMapKey {uint8_t width=0;uint16_t code=0;
   return width!=b.width?width<b.width:code<b.code;
  }
 };
+// Preserves multi-codepoint destinations and bfrange array entries.
+bool parse_tounicode_sequences(const uint8_t* data,size_t size,
+ std::map<CMapKey,std::u32string>& mapping);
 bool parse_tounicode_cmap(const uint8_t* data,size_t size,
  std::map<CMapKey,uint32_t>& mapping);
 }
