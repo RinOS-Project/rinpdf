@@ -34,10 +34,10 @@ bool find_startxref(const uint8_t* d,size_t n,size_t& offset){
  }
  return false;
 }
-bool read_classic_xref(const uint8_t *d,size_t n,std::vector<XrefEntry>& entries,size_t *trailer_offset){
- entries.clear();if(trailer_offset)*trailer_offset=0;if(!d||n<20)return false;
- size_t offset=0;
- if(!find_startxref(d,n,offset))return false;
+bool read_classic_xref_at(const uint8_t *d,size_t n,size_t offset,
+ std::vector<XrefEntry>& entries,size_t *trailer_offset){
+ entries.clear();if(trailer_offset)*trailer_offset=0;
+ if(!d||offset>=n)return false;
  size_t p=offset;
  if(!keyword(d,n,p,"xref"))return false;
  size_t total=0;
@@ -64,4 +64,12 @@ bool read_classic_xref(const uint8_t *d,size_t n,std::vector<XrefEntry>& entries
   }
  }
 }
+bool read_classic_xref(const uint8_t *d,size_t n,
+ std::vector<XrefEntry>& entries,size_t *trailer_offset){
+ entries.clear();if(trailer_offset)*trailer_offset=0;
+ size_t offset=0;
+ return find_startxref(d,n,offset)&&
+   read_classic_xref_at(d,n,offset,entries,trailer_offset);
+}
+
 }
