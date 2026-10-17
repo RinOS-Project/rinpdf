@@ -7,6 +7,7 @@
 #include "stream.h"
 #include "value.h"
 #include "font_encoding.h"
+#include "tounicode.h"
 #include "../renderer/sfnt.h"
 #include <algorithm>
 #include <map>
@@ -123,6 +124,14 @@ struct Reader {
                                  resource.embedded_truetype.size(),sfnt)){
          active.erase(id);return false;
         }
+       }
+      }
+      if(const Value* cmap=get(font,"ToUnicode")){
+       std::vector<uint8_t> decoded;
+       if(cmap->kind!=Value::Kind::Reference||
+          !stream(*cmap,decoded,1024*1024)||
+          !parse_tounicode_cmap(decoded.data(),decoded.size(),resource.to_unicode)){
+        active.erase(id);return false;
        }
       }
       output.emplace(key,std::move(resource));
