@@ -555,3 +555,6 @@ Courier系列の `Tj` / `TJ` に対して文字幅・字間調整から水平移
 `src/renderer/sfnt.cpp` にTrueType sfnt（0x00010000）とOpenType/CFF sfnt（OTTO）のテーブルディレクトリ検証、`maxp` のグリフ数取得、Unicode `cmap` format 4/12からの文字コード→グリフID検索を実装しました。テーブル範囲外参照や重複タグ、未対応マッピングは拒否します。合成sfntによるテーブル境界・format 12の回帰テスト `rinpdf-sfnt` を登録しました。
 
 **制限:** この内部APIはまだPDFの `/FontFile2`／`/FontFile3`、フォントリソース、レンダラーに接続していません。TrueType `glyf/loca` 輪郭抽出、CFF輪郭解析、ヒンティング、ラスタライズ、フォントメトリクスへの反映は未実装です。テストは計21件を想定しますが、変更後のビルド・PASSは未確認です。
+
+## TrueType loca/glyf outline decoder (experimental)
+`sfnt_simple_glyph` を追加し、`head.indexToLocFormat` から短形式・長形式の `loca` を読み取り、`glyf` にある単純グリフの輪郭端点、点フラグ（反復を含む）、X/Y座標差分を復元します。グリフ数、バッファ範囲、輪郭数・点数と座標範囲を検証し、空グリフは空の輪郭として扱います。複合グリフ、CFF、実際のアウトライン曲線生成とラスタライズ、埋め込みPDFフォントとの接続は未実装です。合成SFNTを使った回帰テストを追加しました。今回の変更後の21件のPASSは未確認です。
