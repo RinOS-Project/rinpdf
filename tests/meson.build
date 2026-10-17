@@ -23,3 +23,6 @@ test('rinpdf-xref-stream',executable('rinpdf-xref-stream','xref_stream.cpp',depe
 test('rinpdf-object-stream',executable('rinpdf-object-stream','object_stream.cpp',dependencies:rinpdf_dep))
 
 test('rinpdf-compressed-pages',executable('rinpdf-compressed-pages','compressed_pages.cpp',dependencies:rinpdf_dep))
+
+# Manually invoked against a nonempty local PDF corpus; no fixture-less PASS.
+executable('rinpdf-corpus','pdf_corpus.cpp',dependencies:rinpdf_dep)
