@@ -570,3 +570,6 @@ Courier系列の `Tj` / `TJ` に対して文字幅・字間調整から水平移
 
 ## 限定的な埋め込みTrueType文字描画（試験実装）
 埋め込みTrueTypeの `head.unitsPerEm`、`hhea.numberOfHMetrics`、`hmtx` から実際のグリフ送り幅を取得する `sfnt_horizontal_metrics` を追加しました。`/FontDescriptor` → `/FontFile2` で取得済みのSFNTから、Unicode cmap → 単純glyf輪郭 → 二次曲線平坦化 → 2×2カバレッジ合成を通して `Tj` / `TJ` をピクセルに描画する経路を追加しました。誤った文字割り当てを避けるため、現時点では `/Subtype /TrueType` と `/Encoding /WinAnsiEncoding` が明示され、印字可能ASCII、単純グリフ、変形・クリッピング・字間設定なし、最大512×512画素の描画に限定します。上記制限に当てはまらない文書は未対応として拒否します。合成TrueTypeのグリフ描画・送り幅を検証する `rinpdf-truetype-draw` を追加しました。**新規テストを含むビルド・全件PASSは未確認**です。CFF、複合グリフ、PDF固有Encoding/Differences、正確な一般フォント描画は今後の課題です。
+
+## TrueType複合グリフの一部対応（実験）
+`sfnt_glyph_outline` と `sfnt_composite.cpp` を追加しました。単純グリフは既存デコーダを利用し、複合グリフはXY座標オフセットだけを指定したコンポーネントを最大32個まで組み立てます。子グリフの輪郭端点と座標を再配置して既存のTrueTypeラスタライザーへ渡します。複合グリフの回帰テスト `rinpdf-sfnt-composite` を追加しました。**入れ子の複合グリフ、拡大縮小、回転、親子ポイント合わせ、各種オフセット補正は未対応として拒否します。** 今回の変更後の全テストPASSは未確認です。
