@@ -9,9 +9,9 @@ int main(){
   "/Span /P1 BDC BT /F1 12 Tf <41> Tj ET EMC "
   "/Span << /ActualText <FEFF65E5672C> >> BDC "
   "BT /F1 12 Tf <41> Tj ET EMC "
-  "BT /F1 12 Tf <41> Tj ET";
+  "BT /F1 12 Tf <41> Tj <42> Tj ET";
  std::string pdf="%PDF-1.5\n";
- size_t offsets[7]{};
+ size_t offsets[8]{};
  auto append=[&](unsigned id,const std::string& body){
   offsets[id]=pdf.size();
   pdf+=std::to_string(id)+" 0 obj\n"+body+"\nendobj\n";
@@ -22,17 +22,19 @@ int main(){
  append(4,"<< /Type /Font /Subtype /TrueType /BaseFont /Example /Encoding /WinAnsiEncoding /ToUnicode 6 0 R >>");
  append(5,"<< /Length "+std::to_string(content.size())+" >>\nstream\n"+content+"\nendstream");
  const std::string cmap="1 beginbfchar <41> <00410042> endbfchar";
- append(6,"<< /Length "+std::to_string(cmap.size())+" >>\nstream\n"+cmap+"\nendstream");
+ append(6,"<< /UseCMap 7 0 R /CMapName /Child /Length "+std::to_string(cmap.size())+" >>\nstream\n"+cmap+"\nendstream");
+ const std::string parent_cmap="1 beginbfchar <42> <0042> endbfchar";
+ append(7,"<< /CMapName /Parent /Length "+std::to_string(parent_cmap.size())+" >>\nstream\n"+parent_cmap+"\nendstream");
  const size_t xref=pdf.size();
- pdf+="xref\n0 7\n0000000000 65535 f \n";
- for(unsigned i=1;i<=6;++i){
+ pdf+="xref\n0 8\n0000000000 65535 f \n";
+ for(unsigned i=1;i<=7;++i){
   char row[32];std::snprintf(row,sizeof(row),"%010zu 00000 n \n",offsets[i]);
   pdf+=row;
  }
- pdf+="trailer\n<< /Root 1 0 R /Size 7 >>\nstartxref\n"+
+ pdf+="trailer\n<< /Root 1 0 R /Size 8 >>\nstartxref\n"+
       std::to_string(xref)+"\n%%EOF\n";
  std::string result;
  if(!extract_page_text(reinterpret_cast<const uint8_t*>(pdf.data()),pdf.size(),0,result))return 1;
- if(result!=std::string("\xe4\xb8\x96\xe6\x97\xa5\xe6\x9c\xac")+"AB")return 2;
+ if(result!=std::string("\xe4\xb8\x96\xe6\x97\xa5\xe6\x9c\xac")+"ABB")return 2;
  return 0;
 }
