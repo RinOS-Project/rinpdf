@@ -34,3 +34,5 @@ test('rinpdf-text-show',executable('rinpdf-text-show','text_show.cpp',dependenci
 test('rinpdf-sfnt',executable('rinpdf-sfnt','sfnt.cpp',dependencies:rinpdf_dep))
 
 test('rinpdf-glyph-outline',executable('rinpdf-glyph-outline','glyph_outline.cpp',dependencies:rinpdf_dep))
+
+test('rinpdf-sfnt-metrics',executable('rinpdf-sfnt-metrics','sfnt_metrics.cpp',dependencies:rinpdf_dep))
