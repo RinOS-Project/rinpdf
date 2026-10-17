@@ -30,3 +30,5 @@ executable('rinpdf-corpus','pdf_corpus.cpp',dependencies:rinpdf_dep)
 test('rinpdf-page-fonts',executable('rinpdf-page-fonts','page_fonts.cpp',dependencies:rinpdf_dep))
 
 test('rinpdf-text-show',executable('rinpdf-text-show','text_show.cpp',dependencies:rinpdf_dep))
+
+test('rinpdf-sfnt',executable('rinpdf-sfnt','sfnt.cpp',dependencies:rinpdf_dep))
