@@ -470,3 +470,8 @@ PDFではパス構築後、ストローク演算子の前に破線設定 `d` を
 `src/parser/xref_stream.cpp` に、フィルタ解除済みのXRef Streamバイト列を `/W` 幅と `/Index` 範囲からデコードする内部APIを追加しました。free (type 0)、通常オブジェクト (type 1)、object stream内の圧縮オブジェクト (type 2) を区別し、幅、件数、重複範囲、バイト数、generationの上限を検査します。失敗時に出力を変更しない構成です。独立テスト `rinpdf-xref-stream` をMesonへ登録しました。
 
 **未接続:** `startxref` で参照するXRef Stream辞書の解析、`/Filter` デコード、`/Prev`・`/XRefStm` 更新チェーン、trailer統合、object stream本体の解決、および公開document APIへの接続はまだ未実装です。一般のXRef Stream PDFを開けるようになったわけではありません。今回の新規テストのPASSは未確認です。
+
+## Direct-length XRef stream object reader (experimental)
+`read_xref_stream_at` は指定オフセットの間接オブジェクトヘッダー、`/Type /XRef`、`/Size`、`/W`、任意の `/Index` を解析し、既存の間接stream検証・FlateDecodeとエントリデコーダに接続します。直接 `/Length` を持つストリームを対象とした回帰テストを追加しました。
+
+**未完了:** `startxref` 自動検出からの呼び出し、通常document読み込み・ページツリーへの統合、間接 `/Length` の解決、`/Prev`、ハイブリッドXRef、Object Streamの実体解決は未実装です。今回の追加変更のビルドおよびテストPASSは未確認です。
