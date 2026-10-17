@@ -108,4 +108,95 @@ bool sfnt_glyph_id(const SfntFont& f,uint32_t code,uint16_t& glyph){
  }
  return false;
 }
+bool sfnt_simple_glyph(const SfntFont& font,uint16_t id,SimpleGlyph& outline){
+ if(!font.bytes||id>=font.glyph_count)return false;
+ const auto* head=table(font,0x68656164);
+ const auto* loca=table(font,0x6c6f6361);
+ const auto* glyf=table(font,0x676c7966);
+ if(!head||!loca||!glyf||head->length<54)return false;
+ uint16_t raw_format=0;
+ if(!u16(font.bytes,font.size,size_t(head->offset)+50,raw_format))return false;
+ const bool short_offsets=raw_format==0;
+ if(!short_offsets&&raw_format!=1)return false;
+ const size_t unit=short_offsets?2:4;
+ if(size_t(id)+1>SIZE_MAX/unit-1||
+    loca->length<(size_t(id)+2)*unit)return false;
+ auto location=[&](size_t index,uint32_t& out)->bool{
+  const size_t p=size_t(loca->offset)+index*unit;
+  if(short_offsets){uint16_t value=0;if(!u16(font.bytes,font.size,p,value))return false;out=uint32_t(value)*2;return true;}
+  return u32(font.bytes,font.size,p,out);
+ };
+ uint32_t begin=0,end=0;
+ if(!location(id,begin)||!location(size_t(id)+1,end)||
+    begin>end||end>glyf->length)return false;
+ SimpleGlyph parsed;
+ if(begin==end){outline=std::move(parsed);return true;}
+ const size_t base=size_t(glyf->offset)+begin,limit=size_t(glyf->offset)+end;
+ uint16_t contours_raw=0;
+ if(limit-base<10||!u16(font.bytes,font.size,base,contours_raw))return false;
+ const int16_t contours=int16_t(contours_raw);
+ if(contours<0||contours>1024)return false;
+ auto signed16=[&](size_t p,int16_t& val)->bool{
+  uint16_t raw=0;if(!u16(font.bytes,font.size,p,raw))return false;
+  val=int16_t(raw);return true;
+ };
+ if(!signed16(base+2,parsed.x_min)||!signed16(base+4,parsed.y_min)||
+    !signed16(base+6,parsed.x_max)||!signed16(base+8,parsed.y_max)||
+    parsed.x_min>parsed.x_max||parsed.y_min>parsed.y_max)return false;
+ size_t pos=base+10;
+ if(size_t(contours)>(limit-pos)/2)return false;
+ uint16_t previous=0;
+ for(int k=0;k<contours;++k){
+  uint16_t last=0;
+  if(!u16(font.bytes,font.size,pos,last)||
+     (k&&last<=previous)||last>=16384)return false;
+  parsed.contour_ends.push_back(last);
+  previous=last;pos+=2;
+ }
+ uint16_t instructions=0;
+ if(!u16(font.bytes,limit,pos,instructions))return false;
+ pos+=2;
+ if(instructions>limit-pos)return false;
+ pos+=instructions;
+ const size_t points=contours?size_t(previous)+1:0;
+ std::vector<uint8_t> flags;
+ flags.reserve(points);
+ while(flags.size()<points){
+  if(pos>=limit)return false;
+  const uint8_t flag=font.bytes[pos++];
+  size_t repetitions=1;
+  if(flag&0x08){if(pos>=limit)return false;repetitions+=font.bytes[pos++];}
+  if(repetitions>points-flags.size())return false;
+  flags.insert(flags.end(),repetitions,flag);
+ }
+ parsed.points.resize(points);
+ auto coordinates=[&](bool x_axis)->bool{
+  int32_t coordinate=0;
+  for(size_t i=0;i<points;++i){
+   const uint8_t flag=flags[i];
+   const bool is_short=flag&(x_axis?0x02:0x04);
+   const bool same=flag&(x_axis?0x10:0x20);
+   int32_t delta=0;
+   if(is_short){
+    if(pos>=limit)return false;
+    delta=font.bytes[pos++];
+    if(!same)delta=-delta;
+   }else if(!same){
+    int16_t signed_delta=0;
+    if(pos>limit||limit-pos<2||!signed16(pos,signed_delta))return false;
+    delta=signed_delta;pos+=2;
+   }
+   coordinate+=delta;
+   if(coordinate<-32768||coordinate>32767)return false;
+   if(x_axis)parsed.points[i].x=int16_t(coordinate);
+   else parsed.points[i].y=int16_t(coordinate);
+  }
+  return true;
+ };
+ for(size_t i=0;i<points;++i)parsed.points[i].on_curve=(flags[i]&1)!=0;
+ if(!coordinates(true)||!coordinates(false))return false;
+ outline=std::move(parsed);
+ return true;
+}
+
 }
