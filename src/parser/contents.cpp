@@ -243,7 +243,7 @@ struct Reader {
        std::vector<uint8_t> decoded;
        if(cmap->kind!=Value::Kind::Reference||
           !stream(*cmap,decoded,1024*1024)||
-          !parse_tounicode_cmap(decoded.data(),decoded.size(),resource.to_unicode)){
+          !parse_tounicode_sequences(decoded.data(),decoded.size(),resource.unicode_sequences)){
         active.erase(id);return false;
        }
       }
