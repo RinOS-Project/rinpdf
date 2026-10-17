@@ -52,7 +52,7 @@ bool count_page_tree(const uint8_t *data,size_t size,size_t& count){
  if(field(trailer,"Encrypt"))return false;
  const Value* root_ref=field(trailer,"Root");
  if(!root_ref||root_ref->kind!=Value::Kind::Reference)return false;
- Context ctx{data,size,entries,compressed};
+ Context ctx{data,size,entries,compressed,{ },0,{ }};
  Value root;
  if(!ctx.load(*root_ref,root))return false;
  const Value* type=field(root,"Type");
