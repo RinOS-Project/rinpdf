@@ -12,7 +12,7 @@ int main(){
  };
  append(1,"<< /Type /Catalog /Pages 2 0 R /Lang (ja-JP) >>");
  append(2,"<< /Type /Pages /Count 1 /Kids [3 0 R] /Resources << /Font << /F1 4 0 R >> >> >>");
- append(3,"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 20 20] >>");
+ append(3,"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 20 20] /Lang (zh-Hant) >>");
  append(4,"<< /Type /Font /Subtype /Type0 /BaseFont /Example /Encoding /Identity-H /DescendantFonts [5 0 R] >>");
  append(5,"<< /Type /Font /Subtype /CIDFontType2 /BaseFont /Example /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> /CIDToGIDMap /Identity >>");
  const size_t xref=pdf.size();
@@ -29,6 +29,6 @@ int main(){
  if(fonts.size()!=1||fonts.at("F1").subtype!="Type0"||
     fonts.at("F1").encoding!="Identity-H"||
     !fonts.at("F1").cid_map.identity||
-    fonts.at("F1").language!="ja-JP")return 2;
+    fonts.at("F1").language!="zh-Hant")return 2;
  return 0;
 }
