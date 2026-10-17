@@ -465,3 +465,8 @@ PDFではパス構築後、ストローク演算子の前に破線設定 `d` を
 閉じたパスを1つのpainted dashが覆う場合に、Miter/Bevelの内部頂点でも元のBezier制御点から解析的な入射・出射接線を求め、既存の `paint_corner` に渡すよう変更しました。曲線と直線の接続では曲線側だけを置き換え、他方は従来の線分方向を維持します。2本のBezierが連続する閉路の描画受理テストを追加しました。
 
 この変更は実線相当の閉路 Join に限定されます。複数の破線on区間が接続する内部 Join や、閉路継ぎ目をまたぐ正確な逆弧長破線配置、参照レンダラーによる画素比較は未完成です。ユーザー側の前回時点で14/14テストPASSが報告されていますが、この変更後のPASSは未確認です。
+
+## XRef Stream entry decoding (experimental)
+`src/parser/xref_stream.cpp` に、フィルタ解除済みのXRef Streamバイト列を `/W` 幅と `/Index` 範囲からデコードする内部APIを追加しました。free (type 0)、通常オブジェクト (type 1)、object stream内の圧縮オブジェクト (type 2) を区別し、幅、件数、重複範囲、バイト数、generationの上限を検査します。失敗時に出力を変更しない構成です。独立テスト `rinpdf-xref-stream` をMesonへ登録しました。
+
+**未接続:** `startxref` で参照するXRef Stream辞書の解析、`/Filter` デコード、`/Prev`・`/XRefStm` 更新チェーン、trailer統合、object stream本体の解決、および公開document APIへの接続はまだ未実装です。一般のXRef Stream PDFを開けるようになったわけではありません。今回の新規テストのPASSは未確認です。
