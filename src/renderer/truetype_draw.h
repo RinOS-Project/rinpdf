@@ -13,6 +13,7 @@ struct GlyphTransform {
  double a=1,b=0,c=0,d=1,e=0,f=0;
  // Text matrix linear basis (translation supplied as origin_x/baseline_y).
  double ta=1,tb=0,tc=0,td=1;
+ double character_spacing=0,word_spacing=0,horizontal_scale=1;
 };
 bool render_embedded_truetype_runs(const std::vector<uint8_t>& font,
  const std::vector<TextRun>& runs,double font_size,double origin_x,
