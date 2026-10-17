@@ -87,7 +87,11 @@ struct Reader {
          subtype->kind!=Value::Kind::Name||base->kind!=Value::Kind::Name){
        active.erase(id);return false;
       }
-      PageFont resource{base->text,subtype->text,{}};
+      PageFont resource{base->text,subtype->text,"",{}};
+      if(const Value* encoding=get(font,"Encoding")){
+       if(encoding->kind!=Value::Kind::Name){active.erase(id);return false;}
+       resource.encoding=encoding->text;
+      }
       if(const Value* descriptor=get(font,"FontDescriptor")){
        Value resolved_descriptor;
        if(descriptor->kind==Value::Kind::Reference){
