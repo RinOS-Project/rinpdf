@@ -139,6 +139,7 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
  bool new_line_pending=false;
  double font_size=0;
  double character_spacing=0;
+ double word_spacing=0;
  double horizontal_scale=1;
  std::vector<double> operands;
  double text_line_x=0,text_line_y=0;
@@ -256,8 +257,16 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
     const double space_units=tj_space_threshold(fonts.at(selected));
     // TJ offsets are in 1/1000 em; Tc uses unscaled text units.
     // Horizontal scaling multiplies both advances, so cancels unless 0.
+    // Tw only affects the encoded single-byte space (0x20), never CID
+    // glyphs in a composite font. Require a known Unicode mapping.
+    const auto& active_font=fonts.at(selected);
+    const auto mapped_space=active_font.unicode_sequences.find(CMapKey{1,0x20});
+    const bool word_space=active_font.subtype!="Type0"&&
+       mapped_space!=active_font.unicode_sequences.end()&&
+       mapped_space->second==U" ";
+    const double spacing=character_spacing+(word_space?word_spacing:0);
     const double gap_threshold=font_size>0?
-       space_units+1000.0*character_spacing/font_size:space_units;
+       space_units+1000.0*spacing/font_size:space_units;
     for(const auto& run:runs){
      if(run.adjustment){
       net_adjustment+=run.displacement;
@@ -295,12 +304,13 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
    operands.push_back(number);continue;
   }
   if(t.kind!=TokenKind::Keyword)continue;
-  if(text&&(t.value=="Tc"||t.value=="Tz")){
+  if(text&&(t.value=="Tc"||t.value=="Tw"||t.value=="Tz")){
    if(operands.size()!=1||have_pending)return false;
    const double v=operands.front();
-   if(t.value=="Tc"){
+   if(t.value=="Tc"||t.value=="Tw"){
     if(std::abs(v)>10000)return false;
-    character_spacing=v;
+    if(t.value=="Tc")character_spacing=v;
+    else word_spacing=v;
    }else{
     if(v<0||v>1000)return false;
     horizontal_scale=v/100.0;
