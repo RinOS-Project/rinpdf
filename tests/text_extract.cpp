@@ -130,6 +130,9 @@ int main(){
   return error;
  if(const int error=reject_boundary("<41> Tj ET EMC","<41> Tj BT EMC",36,37,38))
   return error;
+ // T* does not accept operands. Preserve the PDF stream byte count.
+ if(const int error=reject_boundary("T* <42> Tj","1 T*<42> Tj",
+      39,40,41))return error;
  // The UTF-16BE ActualText payload must reject lone low surrogates.
  // Replace equal-length hex digits so all xref offsets remain valid.
  std::string unpaired_low=pdf;
