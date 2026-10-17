@@ -631,3 +631,8 @@ PDF数値Lexerと値パーサーに符号付き小数値（`Value::Kind::Real`�
 CIDFontType2の `/DW2`（`[v1y w1y]`）と `/W2`（CID単位の `w1y v1x v1y` の列、またはCID範囲の三値指定）を解析し、Type0フォントリソースへ保存します。数値は整数と有限の小数に対応し、不正な範囲・三値不足・重複指定を拒否します。未指定CIDの既定 `v1x` は対応する横幅の1/2として取得時に計算します。`rinpdf-cid-font` に縦書きメトリクスの回帰テストを追加しました。
 
 **重要:** これは縦書きメトリクスの取得・保持までの実装です。`Identity-V` のグリフ原点・縦送りをラスタライザーへ適用する処理はまだありません。実PDFの縦書き描画に対応したとはみなせません。変更後のビルド・テストPASSは未確認です。
+
+## Identity-V embedded TrueType drawing (experimental)
+Type0/CIDFontType2の `Identity-V` を2バイトCIDとして解析し、`CIDToGIDMap` でグリフを選択した後、`/DW2`・`/W2` の `v1x`、`v1y` をグリフの原点に、`w1y` を縦方向の文字送りに適用する経路を追加しました。描画器の文字位置更新は縦書きではテキスト行列の縦方向基底を使い、横書きと区別します。合成TrueTypeによる縦書き画素・カーソル位置テストを追加しました。
+
+制限: Identity-V + 埋め込みCIDFontType2/TrueTypeに限定します。Unicode・OpenTypeの縦書き字形置換、独自CMap、CIDFontType0/CFF、実際の日本語縦書きPDFとの比較は未対応です。変更後のビルドと全テストPASSは未確認です。
