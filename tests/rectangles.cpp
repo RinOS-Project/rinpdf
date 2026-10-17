@@ -59,6 +59,17 @@ int main(){
  for(unsigned y=55;y<64;++y)for(unsigned x=0;x<20;++x)
   if(glyph_pixels[(y*64+x)*4]<255)has_ink=true;
  if(!has_ink)return 214;
+ const char multiline[]="BT /FD 8 Tf 1 0 0 1 1 26 Tm (H) Tj 10 TL T* (I) Tj ET";
+ std::vector<unsigned char> lines(64*64*4,255);
+ if(!rinpdf::renderer::render_rectangles_box_with_fonts(
+    reinterpret_cast<const unsigned char*>(multiline),sizeof(multiline)-1,
+    64,64,lines.data(),64*4,{0,0,64,64},diagnostic))return 216;
+ bool first_line=false,second_line=false;
+ for(unsigned y=31;y<40;++y)for(unsigned x=0;x<5;++x)
+  if(lines[(y*64+x)*4]<255)first_line=true;
+ for(unsigned y=41;y<50;++y)for(unsigned x=0;x<5;++x)
+  if(lines[(y*64+x)*4]<255)second_line=true;
+ if(!first_line||!second_line)return 217;
  const char unknown_glyph[]="BT /FD 8 Tf (Z) Tj ET";
  if(rinpdf::renderer::render_rectangles_box_with_fonts(
     reinterpret_cast<const unsigned char*>(unknown_glyph),sizeof(unknown_glyph)-1,
