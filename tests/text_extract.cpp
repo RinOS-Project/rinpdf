@@ -153,6 +153,10 @@ int main(){
  if(extract_page_text(reinterpret_cast<const uint8_t*>(missing_leading.data()),
       missing_leading.size(),0,result))return 45;
  if(result!=previous)return 46;
+ // Tf requires exactly a font name and size, not preceding numeric operands.
+ // Replace with the same byte count to keep /Length and xref valid.
+ if(const int error=reject_boundary("BT /F1 12 Tf","BT 1/F1 2 Tf",
+      47,48,49))return error;
  // The UTF-16BE ActualText payload must reject lone low surrogates.
  // Replace equal-length hex digits so all xref offsets remain valid.
  std::string unpaired_low=pdf;
