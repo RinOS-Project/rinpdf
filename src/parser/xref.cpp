@@ -19,17 +19,27 @@ static bool keyword(const uint8_t *d,size_t n,size_t &p,const char *s){
  if(p+len<n&&!white(d[p+len])&&d[p+len]!='<')return false;
  p+=len;return true;
 }
+bool find_startxref(const uint8_t* d,size_t n,size_t& offset){
+ if(!d||n<20)return false;
+ constexpr char marker[]="startxref";
+ constexpr size_t len=sizeof(marker)-1;
+ for(size_t p=n-len+1;p>0;){
+  --p;
+  if(std::memcmp(d+p,marker,len)!=0)continue;
+  if(p>0&&!white(d[p-1]))continue;
+  size_t value=0,pos=p+len;
+  if(!decimal(d,n,pos,value)||value>=n)return false;
+  offset=value;
+  return true;
+ }
+ return false;
+}
 bool read_classic_xref(const uint8_t *d,size_t n,std::vector<XrefEntry>& entries,size_t *trailer_offset){
  entries.clear();if(trailer_offset)*trailer_offset=0;if(!d||n<20)return false;
- const char marker[]="startxref";
- size_t start=n;
- for(size_t p=n-sizeof(marker)+1;p>0;){--p;
-  if(p+sizeof(marker)-1<=n&&std::memcmp(d+p,marker,sizeof(marker)-1)==0){start=p;break;}
- }
- if(start==n)return false;
- size_t p=start+sizeof(marker)-1,offset=0;
- if(!decimal(d,n,p,offset)||offset>=n)return false;
- p=offset;if(!keyword(d,n,p,"xref"))return false;
+ size_t offset=0;
+ if(!find_startxref(d,n,offset))return false;
+ size_t p=offset;
+ if(!keyword(d,n,p,"xref"))return false;
  size_t total=0;
  while(true){
   ws(d,n,p);
