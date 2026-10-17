@@ -15,6 +15,7 @@ struct PageFont {
  std::map<uint8_t,uint32_t> differences; // explicit PDF byte-to-Unicode overrides
  std::map<CMapKey,uint32_t> to_unicode; // parsed /ToUnicode metadata
  CIDGlyphMap cid_map; // only for Type0 / CIDFontType2
+ CIDWidths cid_widths;
 };
 // Resolve effective inherited /Resources and supported font dictionary metadata.
 // Does not imply font rasterization or character encoding support.
