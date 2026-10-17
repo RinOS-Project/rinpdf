@@ -639,3 +639,15 @@ Type0/CIDFontType2の `Identity-V` を2バイトCIDとして解析し、`CIDToGI
 
 ## GSUB Extension Substitution (experimental)
 縦書き `vert` / `vrt2` の GSUB Lookup Type 7（ExtensionSubst Format 1）を解析し、内部のLookup Type 1（SingleSubst）に接続します。32ビット拡張オフセットはサブテーブル先頭からの相対値として検証し、範囲外・不正形式を拒否します。拡張先が未対応のLookup Typeの場合は適用しません。`rinpdf-sfnt-gsub` に正常系、範囲外オフセット、未対応拡張先のケースを追加しました。変更後のビルド・全テストPASSは未確認です。
+
+## 実フォントでの GSUB 縦書き字形検証
+`rinpdf-gsub-font` は実際の OpenType/TrueType フォントにあるグリフIDを入力し、`vrt2` / `vert` の有効な単一置換後のグリフIDを表示する手動検証ツールです。追加の期待グリフIDを指定すれば、不一致を終了コード1で検出します。これはテスト用合成GSUBを使ったユニットテストと異なり、ユーザーが指定した実フォントのみを検査するもので、フォントをリポジトリへ同梱しません。
+
+```powershell
+git pull --ff-only origin main
+wsl sh scripts/verify-local.sh build-verify-new
+wsl ./build-verify-new/tests/rinpdf-gsub-font /usr/share/fonts/truetype/your-font.ttf 123
+wsl ./build-verify-new/tests/rinpdf-gsub-font /usr/share/fonts/truetype/your-font.ttf 123 456
+```
+
+注意: 数値はUnicodeではなくフォント固有の **グリフID** です。縦書き字形が存在しない場合や、現在のGSUB部分実装で選択対象にならない場合は `changed=no` と表示されます。Script/LangSysの言語別選択や全GSUB Lookup形式を網羅したものではありません。追加変更後の全テストPASSは未確認です。
