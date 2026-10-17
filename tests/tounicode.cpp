@@ -42,7 +42,7 @@ int main(){
     malformed.size(),sequences))return 11;
  if(sequences.size()!=5)return 12;
  const std::string long_codes=
-  "2 begincodespacerange <000000> <FFFFFF> <00000000> <FFFFFFFF> endcodespacerange "
+  "2 begincodespacerange <010000> <01FFFF> <10000000> <10FFFFFF> endcodespacerange "
   "2 beginbfchar <010203> <65E5> <10203040> <672C> endbfchar";
  if(!parse_tounicode_sequences(reinterpret_cast<const uint8_t*>(long_codes.data()),
      long_codes.size(),sequences))return 13;
@@ -63,5 +63,14 @@ int main(){
   "1 beginbfchar <8201> <0041> endbfchar";
  if(parse_tounicode_sequences(reinterpret_cast<const uint8_t*>(outside.data()),
      outside.size(),sequences,&ranges))return 18;
+ const std::string inherited=
+  "/Adobe-Identity-UCS usecmap 1 beginbfchar <41> <0041> endbfchar";
+ if(parse_tounicode_sequences(reinterpret_cast<const uint8_t*>(inherited.data()),
+    inherited.size(),sequences))return 19;
+ const std::string ambiguous=
+  "2 begincodespacerange <81> <81> <8100> <81FF> endcodespacerange "
+  "1 beginbfchar <81> <0041> endbfchar";
+ if(parse_tounicode_sequences(reinterpret_cast<const uint8_t*>(ambiguous.data()),
+    ambiguous.size(),sequences))return 20;
  return 0;
 }
