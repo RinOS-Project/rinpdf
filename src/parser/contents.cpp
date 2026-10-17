@@ -83,14 +83,21 @@ struct Reader {
        if(!object(value,dictionary)){active.erase(id);return false;}
       }else dictionary=value;
       if(dictionary.kind!=Value::Kind::Dictionary){active.erase(id);return false;}
-      std::string language;
+      PageProperty property;
       if(const Value* lang=get(dictionary,"Lang")){
        if(lang->kind!=Value::Kind::String||lang->text.size()>64){
         active.erase(id);return false;
        }
-       language=lang->text;
+       property.language=lang->text;
       }
-      output.emplace(key,std::move(language));
+      if(const Value* actual=get(dictionary,"ActualText")){
+       if(actual->kind!=Value::Kind::String||actual->text.size()>4*1024*1024){
+        active.erase(id);return false;
+       }
+       property.actual_text=actual->text;
+       property.has_actual_text=true;
+      }
+      output.emplace(key,std::move(property));
      }
     }
    }
