@@ -6,5 +6,6 @@ namespace rinpdf::renderer {
 // Bounded GSUB SingleSubst (lookup type 1), for 'vrt2'/'vert' features.
 // Returns true with unchanged glyph when no supported feature applies.
 bool sfnt_vertical_substitution(const SfntFont& font,uint16_t glyph,
- uint16_t& replacement);
+ uint16_t& replacement,
+ uint32_t script_tag=0,uint32_t language_tag=0);
 }
