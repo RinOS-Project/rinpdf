@@ -47,5 +47,32 @@ int main(){
  if(!cid_width(parsed,99,width)||width!=412.5)return 19;
  decimal.real=-0.1;
  if(parse_cid_widths(&decimal,&ranges,parsed))return 20;
+ Value default_vertical;default_vertical.kind=Value::Kind::Array;
+ Value neg;neg.kind=Value::Kind::Real;neg.real=-750.5;
+ default_vertical.array={integer(880),neg};
+ Value vertical_entries;vertical_entries.kind=Value::Kind::Array;
+ Value triples;triples.kind=Value::Kind::Array;
+ triples.array={neg,integer(250),integer(900)};
+ vertical_entries.array={integer(10),triples,
+                         integer(20),integer(21),integer(-800),
+                         integer(300),integer(880)};
+ CIDVerticalMetrics vertical;
+ if(!parse_cid_vertical_metrics(&default_vertical,&vertical_entries,vertical))
+  return 21;
+ CIDVerticalMetric measure;
+ if(!cid_vertical_metric(vertical,parsed,10,measure)||
+    measure.w1y!=-750.5||measure.v1x!=250||measure.v1y!=900)return 22;
+ if(!cid_vertical_metric(vertical,parsed,20,measure)||
+    measure.w1y!=-800||measure.v1x!=300)return 23;
+ if(!cid_vertical_metric(vertical,parsed,99,measure)||
+    measure.w1y!=-750.5||measure.v1x!=206.25||measure.v1y!=880)
+  return 24;
+ Value bad_vertical=vertical_entries;
+ bad_vertical.array.push_back(integer(20));
+ bad_vertical.array.push_back(triples);
+ if(parse_cid_vertical_metrics(&default_vertical,&bad_vertical,vertical))
+  return 25;
+ if(!cid_vertical_metric(vertical,parsed,10,measure)||measure.v1x!=250)
+  return 26;
  return 0;
 }
