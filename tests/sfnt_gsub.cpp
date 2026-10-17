@@ -54,6 +54,32 @@ int main(){
  w32(extended,60,8);
  w16(extended,58,7); // Nested extensions are not followed.
  if(!sfnt_vertical_substitution(extended_font,1,result)||result!=1)return 9;
+ // Add a Japanese LangSys that enables the feature while default does not.
+ std::vector<uint8_t> localized=d;
+ localized.resize(82,0);
+ w16(localized,20,1); // ScriptTable LangSysCount
+ w32(localized,22,0x4a414e20); // 'JAN '
+ w16(localized,26,10); // language table at script+10 (offset 28)
+ w16(localized,28,0);w16(localized,30,0xffff);
+ w16(localized,32,1);w16(localized,34,0);
+ // The expanded script overlaps the old FeatureList, so relocate tables.
+ // Construct an independent layout in the same font buffer.
+ std::vector<uint8_t> japanese(86,0);
+ w16(japanese,0,1);w16(japanese,4,10);
+ w16(japanese,6,40);w16(japanese,8,54);
+ w16(japanese,10,1);w32(japanese,12,0x68616e69);w16(japanese,16,8);
+ w16(japanese,18,0);w16(japanese,20,1);
+ w32(japanese,22,0x4a414e20);w16(japanese,26,10);
+ w16(japanese,28,0);w16(japanese,30,0xffff);
+ w16(japanese,32,1);w16(japanese,34,0);
+ w16(japanese,40,1);w32(japanese,42,0x76727432);
+ w16(japanese,46,8);w16(japanese,48,0);w16(japanese,50,1);w16(japanese,52,0);
+ for(unsigned i=0;i<26;++i)japanese[54+i]=d[44+i];
+ SfntFont jp{japanese.data(),japanese.size(),4,{{0x47535542,0,86}}};
+ if(!sfnt_vertical_substitution(jp,1,result,0x68616e69,0x4a414e20)||
+    result!=2)return 10;
+ if(!sfnt_vertical_substitution(jp,1,result,0x68616e69)||
+    result!=1)return 11;
  SfntFont no_gsub{d.data(),d.size(),4,{}};
  if(!sfnt_vertical_substitution(no_gsub,1,result)||result!=1)return 6;
  return 0;
