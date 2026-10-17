@@ -19,7 +19,7 @@ static bool number(const std::string& s,double& v){
 }
 static bool space(unsigned char c){return c==0||c==9||c==10||c==12||c==13||c==32;}
 struct Rect {double x,y,w,h;};
-bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,unsigned height,uint8_t *rgba,size_t stride,PageBox box){
+bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsigned width,unsigned height,uint8_t *rgba,size_t stride,PageBox box,const FontResources& fonts){
  if(!std::isfinite(box.x0)||!std::isfinite(box.y0)||!std::isfinite(box.x1)||!std::isfinite(box.y1)||box.x1<=box.x0||box.y1<=box.y0)return false;
  const double sx=(double)width/(box.x1-box.x0),sy=(double)height/(box.y1-box.y0);
  if(!std::isfinite(sx)||!std::isfinite(sy))return false;
@@ -36,6 +36,9 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
  double flatness=1;
  unsigned compatibility_depth=0;
  bool in_text=false;
+ std::string selected_font;
+ double selected_font_size=0;
+ std::string pending_font;
  double text_x=0,text_y=0,text_leading=0;
  double text_a=1,text_b=0,text_c=0,text_d=1;
  std::vector<double> dash_pattern;
@@ -81,13 +84,18 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
   const parser::Token token=lex.next();
   if(token.kind==parser::TokenKind::End)break;
   if(token.kind==parser::TokenKind::Invalid)return false;
-  if(token.kind==parser::TokenKind::String||
-     token.kind==parser::TokenKind::HexString||
-     token.kind==parser::TokenKind::Name){
-   // Until Tf/Tj/TJ are implemented, reject their operands rather than
-   // inadvertently treating embedded text as drawing operators.
+  if(token.kind==parser::TokenKind::Name){
+   if(in_text&&pending_font.empty()&&stack.empty()){
+    pending_font=token.value;
+    continue;
+   }
    if(compatibility_depth>0)continue;
    return false;
+  }
+  if(token.kind==parser::TokenKind::String||
+     token.kind==parser::TokenKind::HexString){
+   if(compatibility_depth>0)continue;
+   return false; // glyph painting remains unsupported
   }
   const std::string& word=token.value;
   double v=0;
@@ -128,10 +136,20 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
   }else if(word=="BT"){
    if(in_text||!stack.empty()||!path.empty()||!polygons.empty())return false;
    in_text=true;text_x=text_y=text_leading=0;
+   pending_font.clear();
    text_a=text_d=1;text_b=text_c=0;
   }else if(word=="ET"){
    if(!in_text||!stack.empty())return false;
    in_text=false;
+   pending_font.clear();
+  }else if(word=="Tf"){
+   if(!in_text||pending_font.empty()||stack.size()!=1||
+      stack[0]<=0||stack[0]>10000)return false;
+   const auto it=fonts.find(pending_font);
+   if(it==fonts.end()||it->second.base_font.empty()||
+      it->second.subtype.empty())return false;
+   selected_font=pending_font;selected_font_size=stack[0];
+   pending_font.clear();stack.clear();
   }else if(word=="TL"){
    if(!in_text||stack.size()!=1)return false;
    text_leading=stack[0];stack.clear();
@@ -149,7 +167,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    if(!in_text||stack.size()!=6)return false;
    text_a=stack[0];text_b=stack[1];text_c=stack[2];text_d=stack[3];
    text_x=stack[4];text_y=stack[5];stack.clear();
-  }else if(word=="Tf"||word=="Tj"||word=="TJ"||
+  }else if(word=="Tj"||word=="TJ"||
             word=="'"||word=="\\\"" ){
    // Font and glyph interpretation is not yet implemented.
    return false;
@@ -1144,7 +1162,10 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    stack.clear();
   }else return false; // Do not silently ignore unknown operators.
  }
- return !in_text&&compatibility_depth==0&&!reading_dash&&!dash_array_ready&&dash_values.empty()&&stack.empty()&&path.empty()&&polygons.empty()&&saved.empty()&&!pending_rect_clip&&!pending_path_clip;
+ return pending_font.empty()&&!in_text&&compatibility_depth==0&&!reading_dash&&!dash_array_ready&&dash_values.empty()&&stack.empty()&&path.empty()&&polygons.empty()&&saved.empty()&&!pending_rect_clip&&!pending_path_clip;
+}
+bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,unsigned height,uint8_t *rgba,size_t stride,PageBox box){
+ return render_rectangles_box_with_fonts(contents,size,width,height,rgba,stride,box,{});
 }
 bool render_rectangles(const uint8_t *contents,size_t size,unsigned width,unsigned height,uint8_t *rgba,size_t stride){
  return render_rectangles_box(contents,size,width,height,rgba,stride,{0,0,(double)width,(double)height});
