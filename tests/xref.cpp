@@ -1,4 +1,5 @@
 #include "../src/parser/xref.h"
+#include "../src/parser/xref_stream.h"
 #include "../src/parser/object.h"
 #include "rinpdf/rinpdf.h"
 #include <cstdio>
@@ -36,5 +37,49 @@ int main(){
  rinpdf_document_close(doc);
  const unsigned char bad[]="%PDF-1.4\nstartxref\n999999\n%%EOF\n";
  if(rinpdf::parser::read_classic_xref(bad,sizeof(bad)-1,entries))return 10;
+ // Two Classic xref revisions: the later definition wins.
+ std::string incremental="%PDF-1.4\n";
+ const size_t old_object=incremental.size();
+ incremental+="1 0 obj\n(Old)\nendobj\n";
+ const size_t old_xref=incremental.size();
+ auto offset10=[](size_t offset){
+  char text[32];std::snprintf(text,sizeof(text),"%010zu",offset);
+  return std::string(text);
+ };
+ incremental+="xref\n0 2\n0000000000 65535 f \n"+
+  offset10(old_object)+" 00000 n \ntrailer\n<< /Size 2 /Root 1 0 R >>\n"+
+  "startxref\n"+std::to_string(old_xref)+"\n%%EOF\n";
+ const size_t new_object=incremental.size();
+ incremental+="1 0 obj\n(New)\nendobj\n";
+ const size_t new_xref=incremental.size();
+ incremental+="xref\n1 1\n"+offset10(new_object)+
+  " 00000 n \ntrailer\n<< /Size 2 /Prev "+
+  std::to_string(old_xref)+" >>\nstartxref\n"+
+  std::to_string(new_xref)+"\n%%EOF\n";
+ std::vector<rinpdf::parser::XrefStreamEntry> compressed;
+ rinpdf::parser::Value latest;
+ if(!rinpdf::parser::read_object_xref(
+  reinterpret_cast<const uint8_t*>(incremental.data()),incremental.size(),
+  entries,compressed,latest))return 16;
+ if(entries.size()!=2||entries[1].offset!=new_object||
+    !entries[1].in_use||!latest.dictionary.count("Root"))return 17;
+ // A free entry in a newer revision must mask an older live entry.
+ const size_t free_xref=incremental.size();
+ incremental+="xref\n1 1\n0000000000 00001 f \ntrailer\n<< /Size 2 /Prev "+
+  std::to_string(new_xref)+" >>\nstartxref\n"+
+  std::to_string(free_xref)+"\n%%EOF\n";
+ if(!rinpdf::parser::read_object_xref(
+  reinterpret_cast<const uint8_t*>(incremental.data()),incremental.size(),
+  entries,compressed,latest))return 18;
+ if(entries.size()!=2||entries[1].in_use)return 19;
+ // Non-backward /Prev pointers must fail instead of creating a cycle.
+ const size_t bad_xref=incremental.size();
+ incremental+="xref\n1 1\n"+offset10(new_object)+
+  " 00000 n \ntrailer\n<< /Size 2 /Prev "+
+  std::to_string(bad_xref)+" >>\nstartxref\n"+
+  std::to_string(bad_xref)+"\n%%EOF\n";
+ if(rinpdf::parser::read_object_xref(
+  reinterpret_cast<const uint8_t*>(incremental.data()),incremental.size(),
+  entries,compressed,latest))return 20;
  return 0;
 }
