@@ -53,7 +53,7 @@ int main(){
  append(7,"<< /Length "+std::to_string(font.size())+" >>\nstream\n"+
        std::string(reinterpret_cast<const char*>(font.data()),font.size())+
        "\nendstream");
- append(8,"<< /Type /FontDescriptor /FontName /Example /FontFile2 7 0 R >>");
+ append(8,"<< /Type /FontDescriptor /FontName /Example /FontFile2 7 0 R /MissingWidth 900 >>");
  const size_t xref=pdf.size();
  pdf+="xref\n0 9\n0000000000 65535 f \n";
  for(unsigned id=1;id<=8;++id){
