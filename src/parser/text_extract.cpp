@@ -188,8 +188,24 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
     if(has_glyphs&&new_line_pending&&!output.empty()&&output.back()!='\n')
      output+='\n';
     if(has_glyphs)new_line_pending=false;
-    for(const auto& run:runs)if(!run.adjustment&&
-       !decode_run(run.bytes,fonts.at(selected),output))return false;
+    // TJ displacements are in thousandths of text-space units.
+    // A large negative displacement introduces a visible forward gap.
+    // Insert at most one ASCII space, only between nonempty decoded runs.
+    bool pending_gap=false;
+    for(const auto& run:runs){
+     if(run.adjustment){
+      if(run.displacement<=-500)pending_gap=true;
+      continue;
+     }
+     if(run.bytes.empty())continue;
+     if(pending_gap&&!output.empty()&&output.back()!=' '&&
+        output.back()!='\\n'){
+      if(output.size()>=4*1024*1024)return false;
+      output+=' ';
+     }
+     pending_gap=false;
+     if(!decode_run(run.bytes,fonts.at(selected),output))return false;
+    }
    }
    continue;
   }
