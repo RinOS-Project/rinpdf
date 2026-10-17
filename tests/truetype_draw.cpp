@@ -56,7 +56,7 @@ int main(){
  // Non-uniform scaling is valid even without a font transform.
  std::vector<uint8_t> stretched(64*64*4,255);
  double stretched_next=0;
- if(!render_embedded_truetype_runs(f,{{false,"A",0}},16,8,8,
+ if(!render_embedded_truetype_runs(f,{{false,"A",0}},16,8,40,
        64,64,stretched.data(),64*4,0,64,1,2,0,0,0,stretched_next))
    return 9;
  bool stretched_ink=false;
