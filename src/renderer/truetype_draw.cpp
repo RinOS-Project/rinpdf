@@ -76,6 +76,13 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
       script=0x68616e69;language=0x4a414e20; // hani / JAN
      }else if(pdf_language=="ko"||pdf_language.rfind("ko-",0)==0){
       script=0x68616e67;language=0x4b4f5220; // hang / KOR
+     }else if(pdf_language=="zh-CN"||pdf_language=="zh-SG"||
+              pdf_language.rfind("zh-Hans",0)==0){
+      script=0x68616e69;language=0x5a485320; // hani / ZHS
+     }else if(pdf_language=="zh-TW"||pdf_language=="zh-HK"||
+              pdf_language=="zh-MO"||
+              pdf_language.rfind("zh-Hant",0)==0){
+      script=0x68616e69;language=0x5a485420; // hani / ZHT
      }
      if(!sfnt_vertical_substitution(sfnt,glyph_id,glyph_id,
           script,language))return false;
