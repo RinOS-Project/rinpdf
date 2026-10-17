@@ -42,3 +42,5 @@ test('rinpdf-truetype-draw',executable('rinpdf-truetype-draw','truetype_draw.cpp
 test('rinpdf-sfnt-composite',executable('rinpdf-sfnt-composite','sfnt_composite.cpp',dependencies:rinpdf_dep))
 
 test('rinpdf-font-encoding',executable('rinpdf-font-encoding','font_encoding.cpp',dependencies:rinpdf_dep))
+
+test('rinpdf-tounicode',executable('rinpdf-tounicode','tounicode.cpp',dependencies:rinpdf_dep))
