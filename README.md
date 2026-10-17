@@ -523,3 +523,6 @@ Classic xrefトレーラーの `/XRefStm` が指す同一改訂内の補助XRef 
 
 ## Hybrid XRef public page reader integration
 `read_object_xref` が妥当性を検証済みの `/Prev` および `/XRefStm` を、`pages.cpp` と `contents.cpp` が二重に拒否していた問題を修正しました。圧縮Catalogを含む既存のXRef Stream PDFにClassic xrefと `/XRefStm` を追記したハイブリッドPDFをテスト内で生成し、公開 `rinpdf_document_page_count` がページ数1を返す回帰テストを追加しました。暗号化は引き続き拒否します。現時点で今回の変更後のテスト実行・PASSは未確認です。
+
+## 実PDF互換性コーパス（手動検証）
+`tests/pdf_corpus.cpp` に、実ファイルから `rinpdf_document_open_file`、ページ数取得、1ページ目の64×64描画を試し、期待結果と比較する専用CLIを追加しました。未対応描画時に呼び出し元RGBAバッファが変更されないことも検査します。合格件数ゼロや空のマニフェストは成功扱いしません。`tests/CORPUS.md` にTSV形式とWSL実行方法を記載しました。Mesonの自動単体テスト17件とは別で、PDF本体はリポジトリへ追加していません。画像の画素一致には別途参照レンダラー比較が必要です。今回のコンパイル・実PDF試験は未実行です。
