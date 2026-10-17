@@ -89,6 +89,7 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
  std::string pending;
  bool have_pending=false;
  bool new_line_pending=false;
+ double font_size=0;
  std::vector<double> operands;
  double text_line_x=0,text_line_y=0;
  double line_axis_x=1,line_axis_y=0;
@@ -167,7 +168,16 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
     if((amount.kind==TokenKind::Integer||amount.kind==TokenKind::Real||
         amount.kind==TokenKind::Keyword)&&tf.kind==TokenKind::Keyword&&
         tf.value=="Tf"&&fonts.count(t.value)){
-     selected=t.value;lexer=choose;continue;
+     const char* begin=amount.value.data();
+     const char* end=begin+amount.value.size();
+     if(begin!=end&&*begin=='+')++begin;
+     double parsed_size=0;
+     const auto parsed=std::from_chars(begin,end,parsed_size,
+                                      std::chars_format::fixed);
+     if(parsed.ec!=std::errc()||parsed.ptr!=end||
+        !std::isfinite(parsed_size)||parsed_size<=0||
+        parsed_size>10000)return false;
+     selected=t.value;font_size=parsed_size;lexer=choose;continue;
     }
    }
    continue;
@@ -188,24 +198,23 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
     if(has_glyphs&&new_line_pending&&!output.empty()&&output.back()!='\n')
      output+='\n';
     if(has_glyphs)new_line_pending=false;
-    // TJ displacements are in thousandths of text-space units.
-    // A large negative displacement introduces a visible forward gap.
-    // Insert at most one ASCII space, only between nonempty decoded runs.
-    bool pending_gap=false;
+    // Adjacent TJ adjustments combine: a later positive adjustment can
+    // cancel an earlier gap. Only infer a space if the net forward offset
+    // exceeds a conservative text-space threshold (0.5 em).
+    double net_adjustment=0;
     bool emitted_run=false;
     for(const auto& run:runs){
      if(run.adjustment){
-      // PDF TJ adjustment is in thousandths of the current font size.
-      // Keep this conservative heuristic local to actual adjacent runs.
-      if(run.displacement<=-500)pending_gap=true;
+      net_adjustment+=run.displacement;
+      if(!std::isfinite(net_adjustment))return false;
       continue;
      }
      if(run.bytes.empty())continue;
      std::string decoded;
      if(!decode_run(run.bytes,fonts.at(selected),decoded))return false;
      if(decoded.empty())continue;
-     if(emitted_run&&pending_gap&&!output.empty()&&
-        output.back()!=' '&&output.back()!='\n'&&
+     if(emitted_run&&font_size>0&&net_adjustment<=-500&&
+        !output.empty()&&output.back()!=' '&&output.back()!='\n'&&
         decoded.front()!=' '&&decoded.front()!='\n'){
       if(output.size()>=4*1024*1024)return false;
       output+=' ';
@@ -213,7 +222,7 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
      if(decoded.size()>4*1024*1024-output.size())return false;
      output+=decoded;
      emitted_run=true;
-     pending_gap=false;
+     net_adjustment=0;
     }
    }
    continue;
