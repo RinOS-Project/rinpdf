@@ -49,6 +49,20 @@ int main(){
  if(rinpdf::renderer::render_rectangles(
      reinterpret_cast<const unsigned char*>(text_operators_in_string),
      sizeof(text_operators_in_string)-1,8,8,pixels.data(),32))return 209;
+ const rinpdf::renderer::FontResources diagnostic{{"FD",{"RinPDF-Diagnostic","Type1"}}};
+ const char sample_glyphs[]="BT /FD 8 Tf 1 0 0 1 0 0 Tm (HI!) Tj ET";
+ std::vector<unsigned char> glyph_pixels(64*64*4,0);
+ if(!rinpdf::renderer::render_rectangles_box_with_fonts(
+    reinterpret_cast<const unsigned char*>(sample_glyphs),sizeof(sample_glyphs)-1,
+    64,64,glyph_pixels.data(),64*4,{0,0,64,64},diagnostic))return 213;
+ bool has_ink=false;
+ for(unsigned y=55;y<64;++y)for(unsigned x=0;x<20;++x)
+  if(glyph_pixels[(y*64+x)*4]<255)has_ink=true;
+ if(!has_ink)return 214;
+ const char unknown_glyph[]="BT /FD 8 Tf (Z) Tj ET";
+ if(rinpdf::renderer::render_rectangles_box_with_fonts(
+    reinterpret_cast<const unsigned char*>(unknown_glyph),sizeof(unknown_glyph)-1,
+    64,64,glyph_pixels.data(),64*4,{0,0,64,64},diagnostic))return 215;
  const char selected[]="BT /F1 12 Tf ET";
  const rinpdf::renderer::FontResources fonts{{"F1",{"Helvetica","Type1"}}};
  if(!rinpdf::renderer::render_rectangles_box_with_fonts(
