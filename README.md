@@ -550,3 +550,8 @@ Courier系列の `Tj` / `TJ` に対して文字幅・字間調整から水平移
 
 ## Diagnostic bitmap text rasterization (experimental)
 文字描画経路の最初の画素出力として、明示的な `/BaseFont /RinPDF-Diagnostic` を指定した場合に限り、内蔵の5×7診断用グリフ（`H`、`I`、`A`、`!`、空白）を `Tj` / `TJ` から描画する経路を追加しました。標準Courierのアウトライン・フォントメトリクスの代替ではなく、あくまで描画パイプラインの診断用です。対応外の文字、文字変形、字間設定、クリッピング等は未対応として拒否します。実際のフォントファイルからの輪郭取得や本格的なグリフラスタライズは今後必要です。画素が描かれることと未対応文字が拒否されることを確認する回帰テストを追加しました。今回の変更後のテストPASSは未確認です。
+
+## SFNT / Unicode cmap reader (experimental)
+`src/renderer/sfnt.cpp` にTrueType sfnt（0x00010000）とOpenType/CFF sfnt（OTTO）のテーブルディレクトリ検証、`maxp` のグリフ数取得、Unicode `cmap` format 4/12からの文字コード→グリフID検索を実装しました。テーブル範囲外参照や重複タグ、未対応マッピングは拒否します。合成sfntによるテーブル境界・format 12の回帰テスト `rinpdf-sfnt` を登録しました。
+
+**制限:** この内部APIはまだPDFの `/FontFile2`／`/FontFile3`、フォントリソース、レンダラーに接続していません。TrueType `glyf/loca` 輪郭抽出、CFF輪郭解析、ヒンティング、ラスタライズ、フォントメトリクスへの反映は未実装です。テストは計21件を想定しますが、変更後のビルド・PASSは未確認です。
