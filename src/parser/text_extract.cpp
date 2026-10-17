@@ -164,7 +164,8 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
   if(t.kind==TokenKind::String||t.kind==TokenKind::HexString){
    // A second literal before Tj means the first string was never consumed.
    // Do not silently lose it and claim successful text extraction.
-   if(have_pending||!text)return false;
+   if(!text)continue;
+   if(have_pending)return false;
    pending=t.value;have_pending=true;continue;
   }
   if(t.kind==TokenKind::ArrayOpen&&text){
