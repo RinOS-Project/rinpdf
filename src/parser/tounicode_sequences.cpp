@@ -29,7 +29,8 @@ bool code(const Token& t,CMapKey& key){
 }
 }
 bool parse_tounicode_sequences(const uint8_t* data,size_t size,
- std::map<CMapKey,std::u32string>& result){
+ std::map<CMapKey,std::u32string>& result,
+ std::vector<std::pair<CMapKey,CMapKey>>* output_codespaces){
  if(!data||!size||size>1024*1024)return false;
  Lexer lexer(data,size);
  std::map<CMapKey,std::u32string> mapped;
@@ -104,7 +105,7 @@ bool parse_tounicode_sequences(const uint8_t* data,size_t size,
      }
      std::u32string sequence;
      if(!unicode_sequence(bytes,sequence)||
-        !mapped.emplace(CMapKey{first.width,uint16_t(first.code+j)},
+        !mapped.emplace(CMapKey{first.width,uint32_t(first.code+j)},
                         std::move(sequence)).second)return false;
     }
    }
@@ -124,6 +125,8 @@ bool parse_tounicode_sequences(const uint8_t* data,size_t size,
    }
   if(!covered)return false;
  }
- result=std::move(mapped);return true;
+ result=std::move(mapped);
+ if(output_codespaces)*output_codespaces=std::move(codespaces);
+ return true;
 }
 }
