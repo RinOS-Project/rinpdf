@@ -849,5 +849,22 @@ int main(){
  for(size_t i=0;i<zero_dash_pixels.size();i+=4)
   if(zero_dash_pixels[i]<255){zero_dash_ink=true;break;}
  if(!zero_dash_ink)return 337;
+ // Inline marked-content language overrides may nest around drawing ops.
+ const char marked[]=
+  "/Span << /Lang (ja-JP) >> BDC "
+  "/P BMC 0 g 2 2 4 4 re f EMC "
+  "/Span << /Lang (zh-Hant) >> BDC 0 g 1 1 1 1 re f EMC "
+  "EMC";
+ if(!rinpdf::renderer::render_rectangles(
+    reinterpret_cast<const unsigned char*>(marked),sizeof(marked)-1,
+    8,8,pixels.data(),8*4))return 338;
+ const char unbalanced[]="/Span << /Lang (ja) >> BDC 0 g 2 2 4 4 re f";
+ if(rinpdf::renderer::render_rectangles(
+    reinterpret_cast<const unsigned char*>(unbalanced),sizeof(unbalanced)-1,
+    8,8,pixels.data(),8*4))return 339;
+ const char wrong_lang[]="/Span << /Lang 7 >> BDC EMC";
+ if(rinpdf::renderer::render_rectangles(
+    reinterpret_cast<const unsigned char*>(wrong_lang),sizeof(wrong_lang)-1,
+    8,8,pixels.data(),8*4))return 340;
  return 0;
 }
