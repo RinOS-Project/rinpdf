@@ -5,6 +5,7 @@
 #include "object_resolver.h"
 #include "value.h"
 #include <algorithm>
+#include <map>
 #include <set>
 #include <vector>
 namespace rinpdf::parser {
@@ -16,8 +17,9 @@ static bool named(const Value& v,const char* name){return v.kind==Value::Kind::N
 struct Context {
  const uint8_t *bytes;size_t length;const std::vector<XrefEntry>& xref;const std::vector<XrefStreamEntry>& compressed;
  std::set<size_t> active;size_t visited=0;
+ std::map<size_t,Value> compressed_cache;
  bool load(const Value& ref,Value& out){
-  return resolve_reference_value(bytes,length,xref,compressed,ref,out);
+  return resolve_reference_value(bytes,length,xref,compressed,ref,out,&compressed_cache);
  }
  bool walk(const Value& ref,size_t depth,size_t& count){
   if(depth>64||visited++>=100000||ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
