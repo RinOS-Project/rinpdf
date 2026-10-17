@@ -30,11 +30,22 @@ int main(){
  if(outline.points.size()!=1||outline.points[0].x!=5||
     outline.points[0].y!=7||outline.contour_ends.size()!=1)return 3;
  auto unsupported=bytes;
- w16(unsupported,172,0x000a); // adds WE_HAVE_A_SCALE
+ w16(unsupported,172,0x0802); // unsupported scaled-component-offset
  SfntFont broken;
  if(!parse_sfnt(unsupported.data(),unsupported.size(),broken))return 4;
  if(sfnt_glyph_outline(broken,2,outline))return 5;
  if(outline.points.size()!=1||outline.points[0].x!=5)return 6;
+ // F2Dot14 0.5x scale with an explicit two-byte scale value.
+ auto scaled=bytes;
+ scaled.resize(182,0);
+ w32(scaled,72,38); // glyf has two more scale bytes
+ w16(scaled,142,19); // loca[3] in two-byte units
+ w16(scaled,172,0x000a); // ARGS_ARE_XY_VALUES | WE_HAVE_A_SCALE
+ w16(scaled,178,0x2000); // 0.5 as signed 2.14
+ if(!parse_sfnt(scaled.data(),scaled.size(),broken))return 9;
+ if(!sfnt_glyph_outline(broken,2,outline))return 10;
+ if(outline.points.size()!=1||outline.points[0].x!=5||
+    outline.points[0].y!=7)return 11;
  auto self=bytes;w16(self,174,2);
  if(!parse_sfnt(self.data(),self.size(),broken))return 7;
  if(sfnt_glyph_outline(broken,2,outline))return 8;
