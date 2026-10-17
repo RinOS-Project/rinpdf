@@ -56,7 +56,7 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
    return RINPDF_UNSUPPORTED;
   rinpdf::renderer::FontResources fonts;
   for(const auto& [name,resource]:page_fonts)
-   fonts.emplace(name,rinpdf::renderer::FontResource{resource.base_font,resource.subtype,resource.encoding,resource.embedded_truetype,resource.differences});
+   fonts.emplace(name,rinpdf::renderer::FontResource{resource.base_font,resource.subtype,resource.encoding,resource.embedded_truetype,resource.differences,resource.cid_map});
   const unsigned rotation=box.rotation;
   const unsigned source_width=(rotation==90||rotation==270)?height:width;
   const unsigned source_height=(rotation==90||rotation==270)?width:height;
