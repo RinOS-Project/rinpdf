@@ -120,6 +120,9 @@ struct Reader {
        const Value* child_type=get(descendant,"Subtype");
        if(!child_type||child_type->kind!=Value::Kind::Name||
           child_type->text!="CIDFontType2"){active.erase(id);return false;}
+       if(!parse_cid_widths(get(descendant,"DW"),get(descendant,"W"),resource.cid_widths)){
+        active.erase(id);return false;
+       }
        const Value* map=get(descendant,"CIDToGIDMap");
        if(map){
         if(map->kind==Value::Kind::Name){
