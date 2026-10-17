@@ -21,3 +21,5 @@ test('rinpdf-cubic-dash',executable('rinpdf-cubic-dash','cubic_dash.cpp',depende
 test('rinpdf-xref-stream',executable('rinpdf-xref-stream','xref_stream.cpp',dependencies:rinpdf_dep))
 
 test('rinpdf-object-stream',executable('rinpdf-object-stream','object_stream.cpp',dependencies:rinpdf_dep))
+
+test('rinpdf-compressed-pages',executable('rinpdf-compressed-pages','compressed_pages.cpp',dependencies:rinpdf_dep))
