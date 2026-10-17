@@ -106,6 +106,51 @@ struct Reader {
         resource.encoding=base_encoding->text;
        }else{active.erase(id);return false;}
       }
+      // Type0 fonts select a descendant CIDFont; CIDToGIDMap is distinct
+      // from the ToUnicode extraction map and must not be confused with it.
+      if(resource.subtype=="Type0"){
+       const Value* descendants=get(font,"DescendantFonts");
+       if(!descendants||descendants->kind!=Value::Kind::Array||
+          descendants->array.size()!=1){active.erase(id);return false;}
+       const Value& reference=descendants->array.front();
+       Value descendant;
+       if(reference.kind==Value::Kind::Reference){
+        if(!object(reference,descendant)){active.erase(id);return false;}
+       }else descendant=reference;
+       const Value* child_type=get(descendant,"Subtype");
+       if(!child_type||child_type->kind!=Value::Kind::Name||
+          child_type->text!="CIDFontType2"){active.erase(id);return false;}
+       const Value* map=get(descendant,"CIDToGIDMap");
+       if(map){
+        if(map->kind==Value::Kind::Name){
+         if(map->text!="Identity"){active.erase(id);return false;}
+        }else if(map->kind==Value::Kind::Reference){
+         resource.cid_map.identity=false;
+         if(!stream(*map,resource.cid_map.bytes,131072)||
+            !cid_map_valid(resource.cid_map)){active.erase(id);return false;}
+        }else{active.erase(id);return false;}
+       }
+       // CIDFont's descriptor owns the embedded TrueType, not Type0's.
+       // Parse the descendant descriptor in the common path below.
+       if(const Value* child_descriptor=get(descendant,"FontDescriptor")){
+        Value desc;
+        if(child_descriptor->kind==Value::Kind::Reference){
+         if(!object(*child_descriptor,desc)){active.erase(id);return false;}
+        }else desc=*child_descriptor;
+        if(desc.kind!=Value::Kind::Dictionary){active.erase(id);return false;}
+        if(const Value* file=get(desc,"FontFile2")){
+         if(file->kind!=Value::Kind::Reference||
+            !stream(*file,resource.embedded_truetype,16*1024*1024)){
+          active.erase(id);return false;
+         }
+         renderer::SfntFont sfnt;
+         if(!renderer::parse_sfnt(resource.embedded_truetype.data(),
+                                  resource.embedded_truetype.size(),sfnt)){
+          active.erase(id);return false;
+         }
+        }
+       }
+      }
       if(const Value* descriptor=get(font,"FontDescriptor")){
        Value resolved_descriptor;
        if(descriptor->kind==Value::Kind::Reference){
