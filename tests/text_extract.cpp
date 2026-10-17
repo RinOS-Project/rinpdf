@@ -22,7 +22,7 @@ int main(){
  append(4,"<< /Type /Font /Subtype /TrueType /BaseFont /Example /Encoding /WinAnsiEncoding /ToUnicode 6 0 R >>");
  append(5,"<< /Length "+std::to_string(content.size())+" >>\nstream\n"+content+"\nendstream");
  const std::string cmap="1 beginbfchar <41> <00410042> endbfchar";
- append(6,"<< /UseCMap /Parent /Resources << /CMap << /Parent 7 0 R >> >> /CMapName /Child /Length "+std::to_string(cmap.size())+" >>\nstream\n"+cmap+"\nendstream");
+ append(6,"<< /UseCMap /Parent /CMapName /Child /Length "+std::to_string(cmap.size())+" >>\nstream\n"+cmap+"\nendstream");
  const std::string parent_cmap="1 beginbfchar <42> <0042> endbfchar";
  append(7,"<< /CMapName /Parent /Length "+std::to_string(parent_cmap.size())+" >>\nstream\n"+parent_cmap+"\nendstream");
  const size_t xref=pdf.size();
