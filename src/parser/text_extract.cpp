@@ -140,6 +140,8 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
  double font_size=0;
  double character_spacing=0;
  double word_spacing=0;
+ double pending_tj_adjustment=0;
+ bool text_run_emitted=false;
  double horizontal_scale=1;
  std::vector<double> operands;
  double text_line_x=0,text_line_y=0;
@@ -252,8 +254,8 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
     // Adjacent TJ adjustments combine: a later positive adjustment can
     // cancel an earlier gap. Only infer a space if the net forward offset
     // exceeds a conservative text-space threshold (0.5 em).
-    double net_adjustment=0;
-    bool emitted_run=false;
+    double net_adjustment=pending_tj_adjustment;
+    bool emitted_run=text_run_emitted;
     const double space_units=tj_space_threshold(fonts.at(selected));
     // TJ offsets are in 1/1000 em; Tc uses unscaled text units.
     // Horizontal scaling multiplies both advances, so cancels unless 0.
@@ -288,8 +290,10 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
      if(decoded.size()>4*1024*1024-output.size())return false;
      output+=decoded;
      emitted_run=true;
+     text_run_emitted=true;
      net_adjustment=0;
     }
+    pending_tj_adjustment=net_adjustment;
    }
    continue;
   }
@@ -316,6 +320,10 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
     horizontal_scale=v/100.0;
    }
    operands.clear();continue;
+  }
+  if(text&&(t.value=="Td"||t.value=="TD"||t.value=="Tm"||t.value=="T*")){
+   pending_tj_adjustment=0;
+   text_run_emitted=false;
   }
   if(text&&(t.value=="Td"||t.value=="TD")){
    if(operands.size()!=2||have_pending)return false;
@@ -349,12 +357,14 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
    operands.clear();continue;
   }
   if(t.value=="BT"){text=true;operands.clear();has_line_origin=false;
+   pending_tj_adjustment=0;text_run_emitted=false;
    text_line_x=0;text_line_y=0;line_axis_x=1;line_axis_y=0;continue;}
   if(t.value=="T*"&&text){
    if(!suppressed)new_line_pending=true;
    continue;
   }
-  if(t.value=="ET"){if(!operands.empty())return false;text=false;continue;}
+  if(t.value=="ET"){if(!operands.empty())return false;
+   text=false;pending_tj_adjustment=0;text_run_emitted=false;continue;}
   if(t.value=="EMC"){
    if(actual_stack.empty())return false;
    suppressed-=suppress_stack.back();
@@ -367,7 +377,21 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
     if(!pending.empty()&&new_line_pending&&!output.empty()&&
        output.back()!='\n')output+='\n';
     if(!pending.empty())new_line_pending=false;
-    if(!decode_run(pending,fonts.at(selected),output))return false;
+    std::string decoded;
+    if(!decode_run(pending,fonts.at(selected),decoded))return false;
+    if(!decoded.empty()){
+     const double threshold=tj_space_threshold(fonts.at(selected))+
+         1000.0*character_spacing/font_size;
+     if(text_run_emitted&&horizontal_scale>0&&
+        std::isfinite(threshold)&&threshold>0&&
+        pending_tj_adjustment<=-threshold&&!output.empty()&&
+        output.back()!=' '&&output.back()!='\n'&&
+        decoded.front()!=' '&&decoded.front()!='\n')output+=' ';
+     if(decoded.size()>4*1024*1024-output.size())return false;
+     output+=decoded;
+     text_run_emitted=true;
+     pending_tj_adjustment=0;
+    }
    }
    pending.clear();have_pending=false;
   }
