@@ -15,5 +15,26 @@ int main(){
  if(cid_map_valid(odd))return 7;
  CIDGlyphMap invalid_identity{true,{0,1}};
  if(cid_map_valid(invalid_identity))return 8;
+ auto integer=[](long long v){
+  Value x;x.kind=Value::Kind::Integer;x.integer=v;return x;
+ };
+ Value widths;widths.kind=Value::Kind::Array;
+ Value listed;listed.kind=Value::Kind::Array;
+ listed.array={integer(350),integer(425)};
+ widths.array={integer(10),listed,integer(20),integer(22),integer(600)};
+ CIDWidths parsed;
+ const Value default_width=integer(900);
+ if(!parse_cid_widths(&default_width,&widths,parsed))return 9;
+ double width=0;
+ if(!cid_width(parsed,10,width)||width!=350)return 10;
+ if(!cid_width(parsed,11,width)||width!=425)return 11;
+ if(!cid_width(parsed,21,width)||width!=600)return 12;
+ if(!cid_width(parsed,99,width)||width!=900)return 13;
+ Value invalid=widths;
+ invalid.array.push_back(integer(20));
+ invalid.array.push_back(integer(22));
+ invalid.array.push_back(integer(100));
+ if(parse_cid_widths(&default_width,&invalid,parsed))return 14;
+ if(!cid_width(parsed,21,width)||width!=600)return 15;
  return 0;
 }
