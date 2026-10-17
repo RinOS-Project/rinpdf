@@ -124,7 +124,7 @@ struct Reader {
         active.erase(id);return false;
        }
        if(!parse_cid_vertical_metrics(get(descendant,"DW2"),
-            get(descendant,"W2"),resource.cid_widths,resource.vertical_metrics)){
+            get(descendant,"W2"),resource.vertical_metrics)){
         active.erase(id);return false;
        }
        const Value* map=get(descendant,"CIDToGIDMap");
