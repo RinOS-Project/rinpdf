@@ -371,11 +371,11 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
    suppress_stack.pop_back();actual_stack.pop_back();
    continue;
   }
-  if(text&&(t.value=="Tj"||t.value=="'"||t.value=="\\\"")){
-   const bool quote=t.value=="'"||t.value=="\\\"";
+  if(text&&(t.value=="Tj"||t.value=="'"||t.value==std::string(1,char(34)))){
+   const bool quote=t.value=="'"||t.value==std::string(1,char(34));
    if(!have_pending||!fonts.count(selected))return false;
    if(quote){
-    if(t.value=="\\\""){
+    if(t.value==std::string(1,char(34))){
      if(operands.size()!=2||std::abs(operands[0])>10000||
         std::abs(operands[1])>10000)return false;
      word_spacing=operands[0];
