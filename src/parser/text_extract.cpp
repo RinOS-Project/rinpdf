@@ -86,6 +86,7 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
  std::vector<bool> suppress_stack;
  std::string pending;
  bool have_pending=false;
+ bool new_line_pending=false;
  unsigned suppressed=0;
  size_t tokens=0;
  while(true){
@@ -110,6 +111,8 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
       std::string replacement;
       if(!actual_text(it->second.text,replacement))return false;
       if(!suppressed){
+       if(new_line_pending&&!output.empty()&&output.back()!='\n')output+='\n';
+       new_line_pending=false;
        if(output.size()+replacement.size()>4*1024*1024)return false;
        output+=replacement;
       }
@@ -139,6 +142,8 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
       std::string replacement;
       if(!actual_text(property->second.actual_text,replacement))return false;
       if(!suppressed){
+       if(new_line_pending&&!output.empty()&&output.back()!='\n')output+='\n';
+       new_line_pending=false;
        if(output.size()+replacement.size()>4*1024*1024)return false;
        output+=replacement;
       }
@@ -171,12 +176,23 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
   if(t.kind==TokenKind::ArrayOpen&&text){
    std::vector<renderer::TextRun> runs;
    if(!renderer::parse_text_array(lexer,runs)||!fonts.count(selected))return false;
-   if(!suppressed)for(const auto& run:runs)if(!run.adjustment&&
-      !decode_run(run.bytes,fonts.at(selected),output))return false;
+   if(!suppressed){
+    bool has_glyphs=false;
+    for(const auto& run:runs)if(!run.adjustment&&!run.bytes.empty())has_glyphs=true;
+    if(has_glyphs&&new_line_pending&&!output.empty()&&output.back()!='\n')
+     output+='\n';
+    if(has_glyphs)new_line_pending=false;
+    for(const auto& run:runs)if(!run.adjustment&&
+       !decode_run(run.bytes,fonts.at(selected),output))return false;
+   }
    continue;
   }
   if(t.kind!=TokenKind::Keyword)continue;
   if(t.value=="BT"){text=true;continue;}
+  if(t.value=="T*"&&text){
+   if(!suppressed)new_line_pending=true;
+   continue;
+  }
   if(t.value=="ET"){text=false;continue;}
   if(t.value=="EMC"){
    if(actual_stack.empty())return false;
@@ -186,7 +202,12 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
   }
   if(t.value=="Tj"&&text){
    if(!have_pending||!fonts.count(selected))return false;
-   if(!suppressed&&!decode_run(pending,fonts.at(selected),output))return false;
+   if(!suppressed){
+    if(!pending.empty()&&new_line_pending&&!output.empty()&&
+       output.back()!='\n')output+='\n';
+    if(!pending.empty())new_line_pending=false;
+    if(!decode_run(pending,fonts.at(selected),output))return false;
+   }
    pending.clear();have_pending=false;
   }
  }
