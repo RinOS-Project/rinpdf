@@ -249,6 +249,9 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
    std::vector<renderer::TextRun> runs;
    if(have_pending||!operands.empty()||
       !renderer::parse_text_array(lexer,runs)||!fonts.count(selected))return false;
+   // An array alone is not a text-show operation: require its TJ operator.
+   const Token show_op=lexer.next();
+   if(show_op.kind!=TokenKind::Keyword||show_op.value!="TJ")return false;
    if(!suppressed){
     bool has_glyphs=false;
     for(const auto& run:runs)if(!run.adjustment&&!run.bytes.empty())has_glyphs=true;
