@@ -19,5 +19,15 @@ int main(){
  const char duplicate[]="<< /A 1 /A 2 >>";
  Lexer dup(reinterpret_cast<const unsigned char*>(duplicate),sizeof(duplicate)-1);
  if(parse_value(dup,root))return 8;
+ // Decimal operands retain their fractional part in PDF values.
+ const std::string decimal_text="[412.5 -.25 +.75 1.]";
+ Lexer decimals(reinterpret_cast<const uint8_t*>(decimal_text.data()),decimal_text.size());
+ Value fractional;
+ if(!parse_value(decimals,fractional)||fractional.kind!=Value::Kind::Array||
+    fractional.array.size()!=4)return 80;
+ const double values[]={412.5,-0.25,0.75,1.0};
+ for(size_t i=0;i<4;++i)
+  if(fractional.array[i].kind!=Value::Kind::Real||
+     fractional.array[i].real!=values[i])return 81;
  return 0;
 }
