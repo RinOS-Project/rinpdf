@@ -201,6 +201,36 @@ int main(){
  if(!extract_page_text(reinterpret_cast<const uint8_t*>(scaled_baseline.data()),
       scaled_baseline.size(),0,result))return 70;
  if(result!=previous)return 71;
+ // Rebuild the fixture with a longer invalid Td displacement, keeping
+ // /Length, xref offsets and startxref correct rather than editing bytes.
+ const auto large_td_content_pos=content.find("0 -16 Td");
+ if(large_td_content_pos==std::string::npos)return 72;
+ std::string large_td_content=content;
+ large_td_content.replace(large_td_content_pos,8,"1000000000001 0 Td");
+ std::string large_td_pdf="%PDF-1.5\n";
+ size_t large_offsets[8]{};
+ auto large_append=[&](unsigned id,const std::string& body){
+  large_offsets[id]=large_td_pdf.size();
+  large_td_pdf+=std::to_string(id)+" 0 obj\n"+body+"\nendobj\n";
+ };
+ large_append(1,"<< /Type /Catalog /Pages 2 0 R >>");
+ large_append(2,"<< /Type /Pages /Count 1 /Kids [3 0 R] /Resources << /Font << /F1 4 0 R >> /CMap << /Parent 7 0 R >> /Properties << /P1 << /ActualText <FEFF4E16> >> >> >> >>");
+ large_append(3,"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Contents 5 0 R >>");
+ large_append(4,"<< /Type /Font /Subtype /TrueType /BaseFont /Example /Encoding /WinAnsiEncoding /FirstChar 65 /LastChar 66 /Widths [600 500] /ToUnicode 6 0 R >>");
+ large_append(5,"<< /Length "+std::to_string(large_td_content.size())+" >>\nstream\n"+large_td_content+"\nendstream");
+ large_append(6,"<< /UseCMap /Parent /CMapName /Child /Length "+std::to_string(cmap.size())+" >>\nstream\n"+cmap+"\nendstream");
+ large_append(7,"<< /CMapName /Parent /Length "+std::to_string(parent_cmap.size())+" >>\nstream\n"+parent_cmap+"\nendstream");
+ const size_t large_xref=large_td_pdf.size();
+ large_td_pdf+="xref\n0 8\n0000000000 65535 f \n";
+ for(unsigned id=1;id<=7;++id){
+  char row[32];std::snprintf(row,sizeof(row),"%010zu 00000 n \n",large_offsets[id]);
+  large_td_pdf+=row;
+ }
+ large_td_pdf+="trailer\n<< /Root 1 0 R /Size 8 >>\nstartxref\n"+
+               std::to_string(large_xref)+"\n%%EOF\n";
+ if(extract_page_text(reinterpret_cast<const uint8_t*>(large_td_pdf.data()),
+      large_td_pdf.size(),0,result))return 73;
+ if(result!=previous)return 74;
  // The UTF-16BE ActualText payload must reject lone low surrogates.
  // Replace equal-length hex digits so all xref offsets remain valid.
  std::string unpaired_low=pdf;
