@@ -558,3 +558,6 @@ Courier系列の `Tj` / `TJ` に対して文字幅・字間調整から水平移
 
 ## TrueType loca/glyf outline decoder (experimental)
 `sfnt_simple_glyph` を追加し、`head.indexToLocFormat` から短形式・長形式の `loca` を読み取り、`glyf` にある単純グリフの輪郭端点、点フラグ（反復を含む）、X/Y座標差分を復元します。グリフ数、バッファ範囲、輪郭数・点数と座標範囲を検証し、空グリフは空の輪郭として扱います。複合グリフ、CFF、実際のアウトライン曲線生成とラスタライズ、埋め込みPDFフォントとの接続は未実装です。合成SFNTを使った回帰テストを追加しました。今回の変更後の21件のPASSは未確認です。
+
+## TrueType quadratic glyph path flattening (experimental)
+`src/renderer/glyph_outline.cpp` にTrueType単純輪郭のオンカーブ／オフカーブ点から二次ベジェ曲線を復元する処理を追加しました。連続するオフカーブ点の暗黙の中点、閉じた輪郭、許容誤差による分割と点数・深さ上限に対応します。得られたピクセル空間の経路を既存の `rasterize_path_coverage_2x` で塗りつぶし、実画素が生成される単体テストを追加しました。フォント単位へのスケーリング、グリフ配置、PDFの埋め込みフォント、複合グリフ、Tj/TJへの接続は未実装です。新しい22件目のテストを含むPASSは未確認です。
