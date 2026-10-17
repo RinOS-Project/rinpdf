@@ -22,11 +22,41 @@ Token Lexer::next(){
  }
  if(c=='('){
   std::string out;unsigned depth=1;
-  while(offset<size){unsigned char ch=data[offset++];
-   if(ch=='\\'){if(offset==size)return {TokenKind::Invalid,{}};unsigned char escaped=data[offset++];switch(escaped){case 'n':out+='\n';break;case 'r':out+='\r';break;case 't':out+='\t';break;case 'b':out+='\b';break;case 'f':out+='\f';break;case '\r':if(offset<size&&data[offset]=='\n')++offset;break;case '\n':break;default:out+=(char)escaped;}continue;}
+  while(offset<size){
+   unsigned char ch=data[offset++];
+   if(ch=='\\'){
+    if(offset==size)return {TokenKind::Invalid,{}};
+    unsigned char escaped=data[offset++];
+    switch(escaped){
+     case 'n':out+='\n';break;
+     case 'r':out+='\r';break;
+     case 't':out+='\t';break;
+     case 'b':out+='\b';break;
+     case 'f':out+='\f';break;
+     case '\r':
+      if(offset<size&&data[offset]=='\n')++offset;
+      break;
+     case '\n':break;
+     default:
+      if(escaped>='0'&&escaped<='7'){
+       unsigned value=escaped-'0';
+       for(unsigned i=1;i<3&&offset<size;++i){
+        const unsigned char digit=data[offset];
+        if(digit<'0'||digit>'7')break;
+        value=value*8+(digit-'0');++offset;
+       }
+       out+=static_cast<char>(value&255);
+      }else out+=static_cast<char>(escaped);
+    }
+    continue;
+   }
    if(ch=='('){if(++depth>64)return {TokenKind::Invalid,{}};out+='(';continue;}
    if(ch==')'){if(--depth==0)return {TokenKind::String,out};out+=')';continue;}
-   out+=(char)ch;
+   if(ch=='\r'){
+    if(offset<size&&data[offset]=='\n')++offset;
+    out+='\n';
+   }else out+=static_cast<char>(ch);
+   if(out.size()>16*1024*1024)return {TokenKind::Invalid,{}};
   }
   return {TokenKind::Invalid,{}};
  }
