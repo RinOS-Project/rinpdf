@@ -380,9 +380,15 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
     std::string decoded;
     if(!decode_run(pending,fonts.at(selected),decoded))return false;
     if(!decoded.empty()){
-     const double threshold=tj_space_threshold(fonts.at(selected))+
-         1000.0*character_spacing/font_size;
-     if(text_run_emitted&&horizontal_scale>0&&
+     const auto& active_font=fonts.at(selected);
+     const auto mapped_space=active_font.unicode_sequences.find(CMapKey{1,0x20});
+     const bool word_space=active_font.subtype!="Type0"&&
+        mapped_space!=active_font.unicode_sequences.end()&&
+        mapped_space->second==U" ";
+     const double threshold=font_size>0?
+        tj_space_threshold(active_font)+
+        1000.0*(character_spacing+(word_space?word_spacing:0))/font_size:0;
+     if(text_run_emitted&&font_size>0&&horizontal_scale>0&&
         std::isfinite(threshold)&&threshold>0&&
         pending_tj_adjustment<=-threshold&&!output.empty()&&
         output.back()!=' '&&output.back()!='\n'&&
