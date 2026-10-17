@@ -55,3 +55,4 @@ test('rinpdf-sfnt-gsub',executable('rinpdf-sfnt-gsub','sfnt_gsub.cpp',dependenci
 executable('rinpdf-gsub-font','gsub_font.cpp',dependencies:rinpdf_dep)
 
 test('rinpdf-text-extract',executable('rinpdf-text-extract','text_extract.cpp',dependencies:rinpdf_dep))
+test('rinpdf-text-extract-cid-space',executable('rinpdf-text-extract-cid-space','text_extract_cid_space.cpp',dependencies:rinpdf_dep))
