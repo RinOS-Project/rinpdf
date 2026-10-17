@@ -98,6 +98,18 @@ int main(){
  if(extract_page_text(reinterpret_cast<const uint8_t*>(stray_tj_array.data()),
       stray_tj_array.size(),0,result))return 25;
  if(result!=previous)return 26;
+ // A text array without a following TJ must not emit glyphs.
+ // The mutation has equal length, preserving stream lengths and xref.
+ std::string missing_tj=pdf;
+ const std::string original_array_end="] TJ 0 Tc";
+ const std::string invalid_array_end="] Tj 0 Tc";
+ static_assert(sizeof("] TJ 0 Tc")==sizeof("] Tj 0 Tc"));
+ const auto end_pos=missing_tj.find(original_array_end);
+ if(end_pos==std::string::npos)return 27;
+ missing_tj.replace(end_pos,original_array_end.size(),invalid_array_end);
+ if(extract_page_text(reinterpret_cast<const uint8_t*>(missing_tj.data()),
+      missing_tj.size(),0,result))return 28;
+ if(result!=previous)return 29;
  // The UTF-16BE ActualText payload must reject lone low surrogates.
  // Replace equal-length hex digits so all xref offsets remain valid.
  std::string unpaired_low=pdf;
