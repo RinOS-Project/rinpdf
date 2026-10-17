@@ -1,6 +1,7 @@
 #include "../src/parser/xref_stream.h"
 #include <vector>
 #include <cstdint>
+#include <string>
 using namespace rinpdf::parser;
 int main(){
  std::vector<XrefStreamEntry> out{{99,1,4,0}};
@@ -22,5 +23,20 @@ int main(){
  const uint8_t excessive_generation[]={1,0,0,1,0,0};
  if(decode_xref_stream_entries(excessive_generation,sizeof(excessive_generation),
                                {1,2,3},{1,1},out))return 11;
+ // Read an actual indirect XRef stream with a direct /Length.
+ std::string pdf="%PDF-1.5\n";
+ const size_t offset=pdf.size();
+ pdf+="5 0 obj\n<< /Type /XRef /Size 3 /W [1 2 1] /Length 12 >>\nstream\n";
+ pdf.append(reinterpret_cast<const char*>(sample),sizeof(sample));
+ pdf+="\nendstream\nendobj\n";
+ Value trailer;
+ if(!read_xref_stream_at(reinterpret_cast<const uint8_t*>(pdf.data()),
+        pdf.size(),offset,out,trailer))return 12;
+ if(out.size()!=3||out[2].type!=2||
+    trailer.dictionary.find("Size")==trailer.dictionary.end())return 13;
+ std::string damaged=pdf;
+ damaged.replace(damaged.find("/Length 12"),10,"/Length 11");
+ if(read_xref_stream_at(reinterpret_cast<const uint8_t*>(damaged.data()),
+        damaged.size(),offset,out,trailer))return 14;
  return 0;
 }
