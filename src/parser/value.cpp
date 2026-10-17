@@ -29,9 +29,11 @@ static bool parse(Lexer& l,Value& out,unsigned depth,size_t& budget){
  }
  case TokenKind::Real:{
   double number=0;
-  const auto parsed=std::from_chars(t.value.data(),
-      t.value.data()+t.value.size(),number,std::chars_format::fixed);
-  if(parsed.ec!=std::errc()||parsed.ptr!=t.value.data()+t.value.size()||
+  const char* begin=t.value.data();
+  const char* end=begin+t.value.size();
+  if(begin!=end&&*begin=='+')++begin;
+  const auto parsed=std::from_chars(begin,end,number,std::chars_format::fixed);
+  if(parsed.ec!=std::errc()||parsed.ptr!=end||
      !std::isfinite(number))return false;
   out.kind=Value::Kind::Real;out.real=number;return true;
  }
