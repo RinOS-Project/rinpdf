@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <map>
 namespace rinpdf::renderer {
 // Embedded TrueType glyph drawing with bounded PDF affine transforms.
 // ASCII code maps via Unicode cmap. The caller must guard PDF font Encoding,
@@ -23,5 +24,6 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& font,
  const std::vector<uint8_t>* clip_mask=nullptr,
  unsigned clip_x0=0,unsigned clip_y0=0,
  unsigned clip_x1=0,unsigned clip_y1=0,
- GlyphTransform transform={});
+ GlyphTransform transform={},
+ const std::map<uint8_t,uint32_t>* differences=nullptr);
 }
