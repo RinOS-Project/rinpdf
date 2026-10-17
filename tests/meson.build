@@ -19,3 +19,5 @@ test('rinpdf-cubic-arc',executable('rinpdf-cubic-arc','cubic_arc.cpp',dependenci
 test('rinpdf-cubic-dash',executable('rinpdf-cubic-dash','cubic_dash.cpp',dependencies:rinpdf_dep))
 
 test('rinpdf-xref-stream',executable('rinpdf-xref-stream','xref_stream.cpp',dependencies:rinpdf_dep))
+
+test('rinpdf-object-stream',executable('rinpdf-object-stream','object_stream.cpp',dependencies:rinpdf_dep))
