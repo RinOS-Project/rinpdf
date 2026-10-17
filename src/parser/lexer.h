@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <string>
 namespace rinpdf::parser {
-enum class TokenKind { End, Name, Integer, Keyword, DictOpen, DictClose, ArrayOpen, ArrayClose, String, HexString, Invalid };
+enum class TokenKind { End, Name, Integer, Real, Keyword, DictOpen, DictClose, ArrayOpen, ArrayClose, String, HexString, Invalid };
 struct Token { TokenKind kind=TokenKind::Invalid; std::string value; };
 class Lexer {
  public:
