@@ -16,6 +16,7 @@ struct PageFont {
  std::map<CMapKey,uint32_t> to_unicode; // parsed /ToUnicode metadata
  CIDGlyphMap cid_map; // only for Type0 / CIDFontType2
  CIDWidths cid_widths;
+ CIDVerticalMetrics vertical_metrics;
 };
 // Resolve effective inherited /Resources and supported font dictionary metadata.
 // Does not imply font rasterization or character encoding support.
