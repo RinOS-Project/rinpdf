@@ -376,7 +376,8 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
   }
   if(text&&(t.value=="Tj"||t.value=="'"||t.value==std::string(1,char(34)))){
    const bool quote=t.value=="'"||t.value==std::string(1,char(34));
-   if(!have_pending||!fonts.count(selected))return false;
+   if(!have_pending||!fonts.count(selected)||
+      (t.value=="Tj"&&!operands.empty()))return false;
    if(quote){
     if(t.value==std::string(1,char(34))){
      if(operands.size()!=2||std::abs(operands[0])>10000||
