@@ -183,4 +183,41 @@ bool read_uncompressed_xref(const uint8_t* data,size_t size,
  return true;
 }
 
+bool read_object_xref(const uint8_t* data,size_t size,
+ std::vector<XrefEntry>& ordinary,std::vector<XrefStreamEntry>& compressed,
+ Value& trailer){
+ XrefFormat format=XrefFormat::Classic;
+ std::vector<XrefEntry> classic;
+ std::vector<XrefStreamEntry> stream;
+ Value dict;
+ if(!read_xref_section(data,size,format,classic,stream,dict)||
+    dict.kind!=Value::Kind::Dictionary)return false;
+ if(dict.dictionary.count("Prev")||dict.dictionary.count("XRefStm")||
+    dict.dictionary.count("Encrypt"))return false;
+ if(format==XrefFormat::Classic){
+  ordinary=std::move(classic);
+  compressed.clear();
+  trailer=std::move(dict);
+  return true;
+ }
+ std::vector<XrefEntry> converted;
+ std::set<size_t> seen;
+ for(const auto& item:stream){
+  if(!seen.insert(item.object).second)return false;
+  if(item.type==0)continue;
+  if(item.type==2){
+   if(item.field1==0||item.field1>1000000||item.field2>100000)return false;
+   continue;
+  }
+  if(item.type!=1||item.field1>=size||item.field2>65535)return false;
+  converted.push_back({item.object,static_cast<size_t>(item.field1),
+                       static_cast<unsigned>(item.field2),true});
+ }
+ if(converted.empty())return false;
+ ordinary=std::move(converted);
+ compressed=std::move(stream);
+ trailer=std::move(dict);
+ return true;
+}
+
 }
