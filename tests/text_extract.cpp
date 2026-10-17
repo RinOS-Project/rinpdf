@@ -133,6 +133,26 @@ int main(){
  // T* does not accept operands. Preserve the PDF stream byte count.
  if(const int error=reject_boundary("T* <42> Tj","1 T*<42> Tj",
       39,40,41))return error;
+ // TL sets leading while leaving the existing text runs unchanged.
+ // Same-length PDF mutations preserve /Length and classic xref offsets.
+ std::string explicit_leading=pdf;
+ const std::string original_leading="0 Tw <42> '";
+ const std::string valid_leading="8 TL <42> '";
+ static_assert(sizeof("0 Tw <42> '")==sizeof("8 TL <42> '"));
+ const auto leading_pos=explicit_leading.find(original_leading);
+ if(leading_pos==std::string::npos)return 42;
+ explicit_leading.replace(leading_pos,original_leading.size(),valid_leading);
+ if(!extract_page_text(reinterpret_cast<const uint8_t*>(explicit_leading.data()),
+      explicit_leading.size(),0,result))return 43;
+ if(result!=previous)return 44;
+ // TL with no numeric operand must fail without publishing partial text.
+ std::string missing_leading=pdf;
+ const std::string invalid_leading="x TL <42> '";
+ static_assert(sizeof("0 Tw <42> '")==sizeof("x TL <42> '"));
+ missing_leading.replace(leading_pos,original_leading.size(),invalid_leading);
+ if(extract_page_text(reinterpret_cast<const uint8_t*>(missing_leading.data()),
+      missing_leading.size(),0,result))return 45;
+ if(result!=previous)return 46;
  // The UTF-16BE ActualText payload must reject lone low surrogates.
  // Replace equal-length hex digits so all xref offsets remain valid.
  std::string unpaired_low=pdf;
