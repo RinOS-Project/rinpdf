@@ -123,4 +123,31 @@ bool read_xref_stream_at(const uint8_t* data,size_t size,size_t offset,
  return true;
 }
 
+bool read_xref_section(const uint8_t* data,size_t size,
+ XrefFormat& format,std::vector<XrefEntry>& classic_entries,
+ std::vector<XrefStreamEntry>& stream_entries,Value& trailer){
+ size_t offset=0;
+ if(!find_startxref(data,size,offset))return false;
+ std::vector<XrefEntry> classic;
+ size_t trailer_offset=0;
+ if(read_classic_xref(data,size,classic,&trailer_offset)){
+  Lexer lexer(data+trailer_offset,size-trailer_offset);
+  Value dict;
+  if(!parse_value(lexer,dict)||dict.kind!=Value::Kind::Dictionary)return false;
+  format=XrefFormat::Classic;
+  classic_entries=std::move(classic);
+  stream_entries.clear();
+  trailer=std::move(dict);
+  return true;
+ }
+ std::vector<XrefStreamEntry> stream;
+ Value dict;
+ if(!read_xref_stream_at(data,size,offset,stream,dict))return false;
+ format=XrefFormat::Stream;
+ stream_entries=std::move(stream);
+ classic_entries.clear();
+ trailer=std::move(dict);
+ return true;
+}
+
 }
