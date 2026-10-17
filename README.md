@@ -636,3 +636,6 @@ CIDFontType2の `/DW2`（`[v1y w1y]`）と `/W2`（CID単位の `w1y v1x v1y` �
 Type0/CIDFontType2の `Identity-V` を2バイトCIDとして解析し、`CIDToGIDMap` でグリフを選択した後、`/DW2`・`/W2` の `v1x`、`v1y` をグリフの原点に、`w1y` を縦方向の文字送りに適用する経路を追加しました。描画器の文字位置更新は縦書きではテキスト行列の縦方向基底を使い、横書きと区別します。合成TrueTypeによる縦書き画素・カーソル位置テストを追加しました。
 
 制限: Identity-V + 埋め込みCIDFontType2/TrueTypeに限定します。Unicode・OpenTypeの縦書き字形置換、独自CMap、CIDFontType0/CFF、実際の日本語縦書きPDFとの比較は未対応です。変更後のビルドと全テストPASSは未確認です。
+
+## GSUB Extension Substitution (experimental)
+縦書き `vert` / `vrt2` の GSUB Lookup Type 7（ExtensionSubst Format 1）を解析し、内部のLookup Type 1（SingleSubst）に接続します。32ビット拡張オフセットはサブテーブル先頭からの相対値として検証し、範囲外・不正形式を拒否します。拡張先が未対応のLookup Typeの場合は適用しません。`rinpdf-sfnt-gsub` に正常系、範囲外オフセット、未対応拡張先のケースを追加しました。変更後のビルド・全テストPASSは未確認です。
