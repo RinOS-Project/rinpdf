@@ -32,5 +32,32 @@ int main(){
  if(font.glyph_count!=4)return 6; // failure preserves previous result
  corrupt=b;put16(corrupt,4,257);
  if(parse_sfnt(corrupt.data(),corrupt.size(),font))return 7;
+ // Minimal simple glyf triangle with short loca offsets.
+ std::vector<uint8_t> t(160,0);
+ put32(t,0,0x00010000);put16(t,4,4);
+ // Directory ends at 76; head=76, maxp=130, loca=136, glyf=142.
+ put32(t,12,0x68656164);put32(t,20,76);put32(t,24,54);
+ put32(t,28,0x6d617870);put32(t,36,130);put32(t,40,6);
+ put32(t,44,0x6c6f6361);put32(t,52,136);put32(t,56,6);
+ put32(t,60,0x676c7966);put32(t,68,142);put32(t,72,18);
+ put16(t,126,0); // indexToLocFormat short
+ put32(t,130,0x00010000);put16(t,134,2);
+ put16(t,136,0);put16(t,138,0);put16(t,140,9);
+ // Glyph 1: 1 contour, last point index 0, single point at (0,0).
+ put16(t,142,1);put16(t,144,0);put16(t,146,0);
+ put16(t,148,0);put16(t,150,0);
+ put16(t,152,0);put16(t,154,0);
+ t[156]=0x31; // on-curve, x/y coordinate same
+ SfntFont test_font;
+ if(!parse_sfnt(t.data(),t.size(),test_font))return 8;
+ SimpleGlyph shape;
+ if(!sfnt_simple_glyph(test_font,1,shape))return 9;
+ if(shape.contour_ends.size()!=1||shape.points.size()!=1||
+    !shape.points[0].on_curve||shape.points[0].x!=0||
+    shape.points[0].y!=0)return 10;
+ if(!sfnt_simple_glyph(test_font,0,shape)||!shape.points.empty())return 11;
+ auto damaged=t;put16(damaged,140,100);
+ if(!parse_sfnt(damaged.data(),damaged.size(),test_font))return 12;
+ if(sfnt_simple_glyph(test_font,1,shape))return 13;
  return 0;
 }
