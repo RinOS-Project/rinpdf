@@ -661,3 +661,8 @@ wsl ./build-verify-new/tests/rinpdf-gsub-font /usr/share/fonts/truetype/your-fon
 PDF Catalog の `/Lang` 文字列を `read_page_fonts` で取得し、レンダラーのフォントリソースを通じて `Identity-V` の GSUB 選択へ渡します。明示された `ja` / `ja-*` は `hani` + `JAN `、`ko` / `ko-*` は `hang` + `KOR ` にマッピングします。それ以外の言語はタグを推測せず従来の既定選択を維持します。Catalog言語の伝搬に関するType0フォントテストを追加しました。
 
 制限: 今回はCatalog `/Lang` のみが対象で、ページ単位の `/Lang` やMarked Contentの `/Lang`、BCP 47の完全解析、フォント別・グリフ別のスクリプト判定は未実装です。変更後のビルド・テストPASSは未確認です。
+
+## Page Lang priority and Chinese vertical GSUB locales (experimental)
+`read_page_fonts` はページ辞書の `/Lang` が明示されている場合、Catalogの `/Lang` より優先してフォント言語を設定します。ページに指定がない場合はCatalogの値にフォールバックします。`Identity-V` の縦書き字形選択では、中国語の `zh-CN`・`zh-SG`・`zh-Hans*` を `hani` / `ZHS `、`zh-TW`・`zh-HK`・`zh-MO`・`zh-Hant*` を `hani` / `ZHT ` へ対応付けます。地域・Scriptの指定がない `zh` は推測による地域判定をしません。ページ側の言語優先をType0フォントのテストで確認します。
+
+制限: BCP 47タグの大文字小文字正規化、完全な地域サブタグ、Marked Content内の `/Lang`、言語別字形の実フォントでの照合は未対応です。今回の変更後のビルド・全テストPASSは未確認です。
