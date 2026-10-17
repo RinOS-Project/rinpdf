@@ -192,19 +192,28 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
     // A large negative displacement introduces a visible forward gap.
     // Insert at most one ASCII space, only between nonempty decoded runs.
     bool pending_gap=false;
+    bool emitted_run=false;
     for(const auto& run:runs){
      if(run.adjustment){
+      // PDF TJ adjustment is in thousandths of the current font size.
+      // Keep this conservative heuristic local to actual adjacent runs.
       if(run.displacement<=-500)pending_gap=true;
       continue;
      }
      if(run.bytes.empty())continue;
-     if(pending_gap&&!output.empty()&&output.back()!=' '&&
-        output.back()!='\\n'){
+     std::string decoded;
+     if(!decode_run(run.bytes,fonts.at(selected),decoded))return false;
+     if(decoded.empty())continue;
+     if(emitted_run&&pending_gap&&!output.empty()&&
+        output.back()!=' '&&output.back()!='\n'&&
+        decoded.front()!=' '&&decoded.front()!='\n'){
       if(output.size()>=4*1024*1024)return false;
       output+=' ';
      }
+     if(decoded.size()>4*1024*1024-output.size())return false;
+     output+=decoded;
+     emitted_run=true;
      pending_gap=false;
-     if(!decode_run(run.bytes,fonts.at(selected),output))return false;
     }
    }
    continue;
