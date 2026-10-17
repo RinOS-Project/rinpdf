@@ -46,3 +46,5 @@ test('rinpdf-font-encoding',executable('rinpdf-font-encoding','font_encoding.cpp
 test('rinpdf-tounicode',executable('rinpdf-tounicode','tounicode.cpp',dependencies:rinpdf_dep))
 
 test('rinpdf-cid-font',executable('rinpdf-cid-font','cid_font.cpp',dependencies:rinpdf_dep))
+
+test('rinpdf-type0-fonts',executable('rinpdf-type0-fonts','type0_fonts.cpp',dependencies:rinpdf_dep))
