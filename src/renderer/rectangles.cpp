@@ -523,6 +523,36 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
         continue;
        }
        const bool run_starts_here=!continuing_on;
+       // A painted dash continuing across an authored line/cubic boundary
+       // needs a join rather than two capped stroke endpoints.
+       if(!run_starts_here&&k==0&&span.t0==0&&i>1){
+        const Point vertex=points[i-1];
+        Point previous=points[i-2],following=is_curve?
+          cubic_strokes[curve_index].p1:points[i];
+        Matrix incoming=matrices[i-1];
+        for(const auto& curve:cubic_strokes){
+         if(curve.endpoint==i-1){
+          Point tangent{};
+          if(cubic_endpoint_tangent(curve.p0,curve.p1,curve.p2,curve.p3,true,tangent))
+           previous={vertex.x-tangent.x,vertex.y-tangent.y};
+          break;
+         }
+        }
+        if(is_curve){
+         const auto& curve=cubic_strokes[curve_index];
+         Point tangent{};
+         if(cubic_endpoint_tangent(curve.p0,curve.p1,curve.p2,curve.p3,false,tangent))
+          following={vertex.x+tangent.x,vertex.y+tangent.y};
+        }
+        if(!std::isfinite(previous.x)||!std::isfinite(previous.y)||
+           !std::isfinite(following.x)||!std::isfinite(following.y))return false;
+        if(line_join==1){
+         if(!segment(vertex,vertex,mat,true))return false;
+        }else if(line_join==0||line_join==2){
+         if(dashed_joins.size()>=4096)return false;
+         dashed_joins.push_back({previous,vertex,following,incoming,mat});
+        }
+       }
        std::vector<Point> vertices;
        if(is_curve){
         const auto& curve=cubic_strokes[curve_index];
