@@ -416,12 +416,30 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
   }
   if(text&&(t.value=="Td"||t.value=="TD"||t.value=="Tm"||t.value=="T*")){
    pending_tj_adjustment=0;
-   text_run_emitted=false;
-   text_cursor=0;text_cursor_known=true;
   }
   if(text&&(t.value=="Td"||t.value=="TD")){
    if(operands.size()!=2||have_pending)return false;
+   // In an identity horizontal text matrix, a same-line Td can
+   // position the next glyph beyond the previous glyph's advance.
+   if(!suppressed&&operands[1]==0&&has_line_origin&&
+      text_run_emitted&&text_cursor_known&&font_size>0&&
+      line_a==1&&line_b==0&&line_c==0&&line_d==1&&
+      horizontal_scale>0&&!new_line_pending&&!output.empty()&&
+      output.back()!=' '&&output.back()!='\n'&&
+      operands[0]>text_cursor){
+    const auto font_it=fonts.find(selected);
+    if(font_it!=fonts.end()){
+     const double threshold=font_size*horizontal_scale*
+        tj_space_threshold(font_it->second)/1000.0;
+     if(std::isfinite(threshold)&&threshold>0&&
+        operands[0]-text_cursor>=threshold){
+      if(output.size()>=4*1024*1024)return false;
+      output+=' ';
+     }
+    }
+   }
    if(operands[1]!=0&&!suppressed)new_line_pending=true;
+   text_cursor=0;text_cursor_known=true;text_run_emitted=false;
    if(t.value=="TD")text_leading=-operands[1];
    // Td/TD operate in the current text-line coordinate system.
    const double dx=operands[0],dy=operands[1];
@@ -434,6 +452,7 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
   }
   if(text&&t.value=="Tm"){
    if(operands.size()!=6||have_pending)return false;
+   text_cursor=0;text_cursor_known=true;text_run_emitted=false;
    const double next_x=operands[4],next_y=operands[5];
    // Bound the complete matrix, including shear and translation, before
    // propagating it to Td/T*/quote line positions.
@@ -467,7 +486,7 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
   if(t.value=="T*"&&text){
    if(have_pending||!operands.empty())return false;
    // Move to the next line's origin, not the prior line's glyph cursor.
-   text_cursor=0;text_cursor_known=true;
+   text_cursor=0;text_cursor_known=true;text_run_emitted=false;
    text_line_x-=line_c*text_leading;
    text_line_y-=line_d*text_leading;
    if(!std::isfinite(text_line_x)||!std::isfinite(text_line_y))return false;
