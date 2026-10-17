@@ -4,6 +4,7 @@
 #include <vector>
 #include <map>
 #include <string>
+#include "tounicode.h"
 namespace rinpdf::parser {
 struct PageFont {
  std::string base_font;
@@ -11,6 +12,7 @@ struct PageFont {
  std::string encoding;
  std::vector<uint8_t> embedded_truetype; // decoded /FontFile2, if present
  std::map<uint8_t,uint32_t> differences; // explicit PDF byte-to-Unicode overrides
+ std::map<CMapKey,uint32_t> to_unicode; // parsed /ToUnicode metadata
 };
 // Resolve effective inherited /Resources and supported font dictionary metadata.
 // Does not imply font rasterization or character encoding support.
