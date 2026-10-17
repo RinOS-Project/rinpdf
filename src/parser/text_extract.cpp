@@ -316,13 +316,14 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
    operands.push_back(number);continue;
   }
   if(t.kind!=TokenKind::Keyword)continue;
-  if(text&&(t.value=="Tc"||t.value=="Tw"||t.value=="Tz")){
+  if(text&&(t.value=="Tc"||t.value=="Tw"||t.value=="Tz"||t.value=="TL")){
    if(operands.size()!=1||have_pending)return false;
    const double v=operands.front();
-   if(t.value=="Tc"||t.value=="Tw"){
+   if(t.value=="Tc"||t.value=="Tw"||t.value=="TL"){
     if(std::abs(v)>10000)return false;
     if(t.value=="Tc")character_spacing=v;
-    else word_spacing=v;
+    else if(t.value=="Tw")word_spacing=v;
+    else text_leading=v;
    }else{
     if(v<0||v>1000)return false;
     horizontal_scale=v/100.0;
