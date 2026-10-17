@@ -866,5 +866,15 @@ int main(){
  if(rinpdf::renderer::render_rectangles(
     reinterpret_cast<const unsigned char*>(wrong_lang),sizeof(wrong_lang)-1,
     8,8,pixels.data(),8*4))return 340;
+ const char named_properties[]="/Span /JP BDC 0 g 2 2 4 4 re f EMC";
+ const rinpdf::renderer::MarkedProperties property_names{{"JP","ja-JP"}};
+ if(!rinpdf::renderer::render_rectangles_box_with_fonts(
+   reinterpret_cast<const unsigned char*>(named_properties),
+   sizeof(named_properties)-1,8,8,pixels.data(),8*4,
+   {0,0,8,8},{},property_names))return 341;
+ if(rinpdf::renderer::render_rectangles_box_with_fonts(
+   reinterpret_cast<const unsigned char*>(named_properties),
+   sizeof(named_properties)-1,8,8,pixels.data(),8*4,
+   {0,0,8,8},{},{}))return 342;
  return 0;
 }
