@@ -54,29 +54,30 @@ static bool resolve(const SfntFont& font,uint16_t id,SimpleGlyph& out,
   if(!be16(font.bytes,end,pos,flags)||!be16(font.bytes,end,pos+2,component))
    return false;
   pos+=4;
-  // Support F2Dot14 scale matrices; point matching and ambiguous offsets
-  // are rejected rather than rendered with invented placement.
-  constexpr uint16_t ARG_WORDS=1,ARGS_XY=2,
+  constexpr uint16_t ARG_WORDS=1,ARGS_XY=2,ROUND_XY=4,
                      SCALE=8,MORE=32,XY_SCALE=64,TWO_BY_TWO=128,
                      INSTRUCTIONS=256,SCALED_OFFSET=2048,UNSCALED_OFFSET=4096;
-  if(!(flags&ARGS_XY)||(flags&(SCALED_OFFSET|UNSCALED_OFFSET))||
-     ((flags&SCALE)!=0)+((flags&XY_SCALE)!=0)+((flags&TWO_BY_TWO)!=0)>1)
+  if((flags&SCALED_OFFSET)&&(flags&UNSCALED_OFFSET))return false;
+  if(((flags&SCALE)!=0)+((flags&XY_SCALE)!=0)+((flags&TWO_BY_TWO)!=0)>1)
    return false;
-  int32_t dx=0,dy=0;
+  int32_t arg1=0,arg2=0;
   if(flags&ARG_WORDS){
    uint16_t x=0,y=0;
    if(end-pos<4||!be16(font.bytes,end,pos,x)||
       !be16(font.bytes,end,pos+2,y))return false;
-   dx=static_cast<int16_t>(x);dy=static_cast<int16_t>(y);pos+=4;
+   arg1=(flags&ARGS_XY)?static_cast<int16_t>(x):x;
+   arg2=(flags&ARGS_XY)?static_cast<int16_t>(y):y;
+   pos+=4;
   }else{
    if(end-pos<2)return false;
-   dx=static_cast<int8_t>(font.bytes[pos]);
-   dy=static_cast<int8_t>(font.bytes[pos+1]);pos+=2;
+   arg1=(flags&ARGS_XY)?static_cast<int8_t>(font.bytes[pos]):font.bytes[pos];
+   arg2=(flags&ARGS_XY)?static_cast<int8_t>(font.bytes[pos+1]):font.bytes[pos+1];
+   pos+=2;
   }
   double xx=1,xy=0,yx=0,yy=1;
   auto matrix_value=[&](double& value)->bool{
    uint16_t raw=0;
-   if(pos> end||end-pos<2||!be16(font.bytes,end,pos,raw))return false;
+   if(pos>end||end-pos<2||!be16(font.bytes,end,pos,raw))return false;
    value=double(static_cast<int16_t>(raw))/16384.0;pos+=2;
    return true;
   };
@@ -92,13 +93,29 @@ static bool resolve(const SfntFont& font,uint16_t id,SimpleGlyph& out,
   if(result.points.size()+child.points.size()>16384||
      result.contour_ends.size()+child.contour_ends.size()>1024)return false;
   const size_t previous=result.points.size();
+  double dx=0,dy=0;
+  if(flags&ARGS_XY){
+   dx=arg1;dy=arg2;
+   if(flags&SCALED_OFFSET){
+    const double x=xx*dx+xy*dy,y=yx*dx+yy*dy;
+    dx=x;dy=y;
+   }
+   // Default and UNSCALED_COMPONENT_OFFSET retain unscaled offsets.
+   if(flags&ROUND_XY){dx=std::round(dx);dy=std::round(dy);}
+  }else{
+   if(size_t(arg1)>=result.points.size()||
+      size_t(arg2)>=child.points.size())return false;
+   const auto& parent=result.points[size_t(arg1)];
+   const auto& match=child.points[size_t(arg2)];
+   dx=parent.x-(xx*match.x+xy*match.y);
+   dy=parent.y-(yx*match.x+yy*match.y);
+  }
   for(auto point:child.points){
    const double fx=xx*point.x+xy*point.y+dx;
    const double fy=yx*point.x+yy*point.y+dy;
-   if(!std::isfinite(fx)||!std::isfinite(fy)||std::abs(fx)>32767||
-      std::abs(fy)>32767)return false;
-   const int32_t x=static_cast<int32_t>(std::lround(fx));
-   const int32_t y=static_cast<int32_t>(std::lround(fy));
+   if(!std::isfinite(fx)||!std::isfinite(fy)||
+      fx<-32768||fx>32767||fy<-32768||fy>32767)return false;
+   const long x=std::lround(fx),y=std::lround(fy);
    if(x<-32768||x>32767||y<-32768||y>32767)return false;
    point.x=static_cast<int16_t>(x);point.y=static_cast<int16_t>(y);
    result.points.push_back(point);
