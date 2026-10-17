@@ -13,4 +13,11 @@ struct ObjectStreamItem {
 // This is a pure decoder, not yet connected to page reference resolution.
 bool decode_object_stream(const uint8_t* payload,size_t length,
  size_t count,size_t first,std::vector<ObjectStreamItem>& output);
+// Resolve a type-2 XRef entry through its type-1 /ObjStm container.
+// Caller supplies validated XRef stream entries; fails closed for
+// indirect /Length and unsupported compression filters.
+struct XrefStreamEntry;
+bool resolve_compressed_object(const uint8_t* data,size_t size,
+ const std::vector<XrefStreamEntry>& xref,size_t object,Value& output);
+
 }
