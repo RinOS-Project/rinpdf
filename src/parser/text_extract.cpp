@@ -36,6 +36,9 @@ bool actual_text(const std::string& raw,std::string& out){
    uint32_t tail=(uint16_t(uint8_t(raw[i+2]))<<8)|uint8_t(raw[i+3]);
    if(tail<0xdc00||tail>0xdfff)return false;
    cp=0x10000+((cp-0xd800)<<10)+(tail-0xdc00);i+=2;
+  }else if(cp>=0xdc00&&cp<=0xdfff){
+   // A low surrogate without a preceding high surrogate is invalid UTF-16.
+   return false;
   }
   if(!utf8_append(decoded,cp))return false;
  }
