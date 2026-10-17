@@ -19,11 +19,11 @@ bool unicode_sequence(const std::string& bytes,std::u32string& result){
  result=std::move(decoded);return true;
 }
 bool code(const Token& t,CMapKey& key){
- if(t.kind!=TokenKind::HexString||(t.value.size()!=1&&t.value.size()!=2))
+ if(t.kind!=TokenKind::HexString||t.value.empty()||t.value.size()>4)
   return false;
  key.width=static_cast<uint8_t>(t.value.size());
- key.code=uint8_t(t.value[0]);
- if(key.width==2)key.code=(key.code<<8)|uint8_t(t.value[1]);
+ key.code=0;
+ for(unsigned char ch:t.value)key.code=(key.code<<8)|ch;
  return true;
 }
 }
@@ -46,6 +46,17 @@ bool parse_tounicode_sequences(const uint8_t* data,size_t size,
   }
   Token op=lexer.next();
   if(op.kind!=TokenKind::Keyword)return false;
+  if(op.value=="begincodespacerange"){
+   if(!count||count>32)return false;
+   for(unsigned i=0;i<count;++i){
+    CMapKey lo,hi;
+    if(!code(lexer.next(),lo)||!code(lexer.next(),hi)||
+       lo.width!=hi.width||lo.code>hi.code)return false;
+   }
+   const Token end=lexer.next();
+   if(end.kind!=TokenKind::Keyword||end.value!="endcodespacerange")return false;
+   continue;
+  }
   const bool chars=op.value=="beginbfchar";
   const bool ranges=op.value=="beginbfrange";
   if(!chars&&!ranges)continue;
@@ -65,7 +76,7 @@ bool parse_tounicode_sequences(const uint8_t* data,size_t size,
      Token entry=lexer.next();std::u32string sequence;
      if(entry.kind!=TokenKind::HexString||
         !unicode_sequence(entry.value,sequence)||
-        !mapped.emplace(CMapKey{first.width,uint16_t(first.code+j)},
+        !mapped.emplace(CMapKey{first.width,uint32_t(first.code+j)},
                         std::move(sequence)).second)return false;
     }
     if(lexer.next().kind!=TokenKind::ArrayClose)return false;
