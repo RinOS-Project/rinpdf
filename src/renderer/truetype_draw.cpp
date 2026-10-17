@@ -16,7 +16,8 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
  unsigned clip_x0,unsigned clip_y0,unsigned clip_x1,unsigned clip_y1,
  GlyphTransform matrix,
  const std::map<uint8_t,uint32_t>* differences,
- const std::string& encoding){
+ const std::string& encoding,
+ const parser::CIDGlyphMap* cid_map){
  if(!rgba||!width||!height||width>512||height>512||
     stride<size_t(width)*4||!std::isfinite(em)||em<=0||em>1000||
     !std::isfinite(start_x)||!std::isfinite(baseline)||
@@ -44,15 +45,24 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
    if(!std::isfinite(run.displacement)||std::abs(run.displacement)>1000000)return false;
    cursor-=run.displacement*em*matrix.horizontal_scale/1000;
   }else{
-   for(unsigned char ch:run.bytes){
+   if(cid_map&&(run.bytes.size()%2!=0))return false;
+   for(size_t offset=0;offset<run.bytes.size();offset+=cid_map?2:1){
+    const unsigned char ch=static_cast<unsigned char>(run.bytes[offset]);
     if(++glyph_count>4096)return false;
-    uint32_t unicode=0;
-    static const std::map<uint8_t,uint32_t> no_overrides;
-    if(!parser::font_byte_unicode(encoding,ch,
-       differences?*differences:no_overrides,unicode))return false;
     uint16_t glyph_id=0;
-    if(!sfnt_glyph_id(sfnt,unicode,glyph_id)||
-       !sfnt_horizontal_metrics(sfnt,glyph_id,units,advance))return false;
+    if(cid_map){
+     const uint16_t cid=uint16_t((uint16_t(ch)<<8)|
+                           uint8_t(run.bytes[offset+1]));
+     if(!parser::cid_to_gid(*cid_map,cid,glyph_id)||
+        glyph_id>=sfnt.glyph_count)return false;
+    }else{
+     uint32_t unicode=0;
+     static const std::map<uint8_t,uint32_t> no_overrides;
+     if(!parser::font_byte_unicode(encoding,ch,
+        differences?*differences:no_overrides,unicode)||
+        !sfnt_glyph_id(sfnt,unicode,glyph_id))return false;
+    }
+    if(!sfnt_horizontal_metrics(sfnt,glyph_id,units,advance))return false;
     SimpleGlyph glyph;
     if(!sfnt_glyph_outline(sfnt,glyph_id,glyph))return false;
     Paint paint;
@@ -74,7 +84,7 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
     }
     paints.push_back(std::move(paint));
     cursor+=(double(advance)*em/units+matrix.character_spacing+
-             (ch==32?matrix.word_spacing:0))*matrix.horizontal_scale;
+             (!cid_map&&ch==32?matrix.word_spacing:0))*matrix.horizontal_scale;
     if(!std::isfinite(cursor)||std::abs(cursor)>10000000)return false;
    }
   }
