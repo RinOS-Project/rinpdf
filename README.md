@@ -676,3 +676,8 @@ PDF Catalog の `/Lang` 文字列を `read_page_fonts` で取得し、レンダ�
 ページに継承された `/Resources /Properties` 辞書を解決し、`/Span /JP BDC ... EMC` のような名前参照型Marked Contentを扱う処理を追加しました。プロパティ辞書自体および各項目の間接参照に対応し、`/Lang` が存在する場合はその言語を入れ子の描画スコープへ引き継ぎます。未定義プロパティ名や不正な辞書・言語値は拒否します。名前参照の描画テストを追加しました。
 
 制限: 現時点で名前付きプロパティから描画へ反映するのは `/Lang` のみです。`/ActualText`、`/MCID`、構造ツリー、その他のMarked Contentプロパティは未実装です。変更後のビルド・全テストPASSは未確認です。
+
+## Text extraction via ToUnicode and inline ActualText (experimental)
+`src/parser/text_extract.h` に `extract_page_text(pdf,size,page,utf8)` を追加しました。ページのコンテンツストリームから `Tf` で選択されたフォントの `/ToUnicode` を使用し、`Tj` と `TJ` の1・2バイトコードをUTF-8へ変換します。インラインの `/Span << /ActualText <FEFF...> >> BDC` ではUTF-16BEで指定された代替テキストを一度出力し、囲まれたテキスト演算子の通常の抽出を抑制します。最大64階層、出力4MiBの制限を設けています。`rinpdf-text-extract` の統合テストを追加しました。
+
+これは暫定の**内部API**です。ページリソースの名前付きProperties経由のActualText、Unicode未指定フォントのフォールバック、位置に応じた空白・改行、複数のUnicodeコードポイントへのToUnicode、PDFのすべてのテキスト演算子には未対応です。画像OCRも行いません。今回のビルド・テストPASSは未確認です。
