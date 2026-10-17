@@ -253,6 +253,37 @@ struct Reader {
         resource.encoding=base_encoding->text;
        }else{active.erase(id);return false;}
       }
+      if(resource.subtype!="Type0"){
+       const Value* first=get(font,"FirstChar");
+       const Value* last=get(font,"LastChar");
+       const Value* widths=get(font,"Widths");
+       if(first||last||widths){
+        if(!first||!last||!widths||
+           first->kind!=Value::Kind::Integer||
+           last->kind!=Value::Kind::Integer||
+           first->integer<0||last->integer>255||
+           first->integer>last->integer){active.erase(id);return false;}
+        Value width_array;
+        if(widths->kind==Value::Kind::Reference){
+         if(!object(*widths,width_array)){active.erase(id);return false;}
+        }else width_array=*widths;
+        if(width_array.kind!=Value::Kind::Array||
+           width_array.array.size()!=size_t(last->integer-first->integer+1)){
+         active.erase(id);return false;
+        }
+        for(size_t i=0;i<width_array.array.size();++i){
+         double width=0;
+         const Value& value=width_array.array[i];
+         if(value.kind==Value::Kind::Integer)width=double(value.integer);
+         else if(value.kind==Value::Kind::Real)width=value.real;
+         else{active.erase(id);return false;}
+         if(!std::isfinite(width)||width<0||width>100000){
+          active.erase(id);return false;
+         }
+         resource.simple_widths.emplace(uint8_t(first->integer+long long(i)),width);
+        }
+       }
+      }
       // Type0 fonts select a descendant CIDFont; CIDToGIDMap is distinct
       // from the ToUnicode extraction map and must not be confused with it.
       if(resource.subtype=="Type0"){
