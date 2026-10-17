@@ -56,6 +56,10 @@ int main(){
     !shape.points[0].on_curve||shape.points[0].x!=0||
     shape.points[0].y!=0)return 10;
  if(!sfnt_simple_glyph(test_font,0,shape)||!shape.points.empty())return 11;
+ // Unsupported glyph IDs must not modify the output.
+ SimpleGlyph unchanged=shape;
+ if(sfnt_glyph_outline(test_font,2,shape))return 14;
+ if(shape.points.size()!=unchanged.points.size())return 15;
  auto damaged=t;put16(damaged,140,100);
  if(!parse_sfnt(damaged.data(),damaged.size(),test_font))return 12;
  if(sfnt_simple_glyph(test_font,1,shape))return 13;
