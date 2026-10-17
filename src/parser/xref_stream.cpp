@@ -1,5 +1,6 @@
 #include "xref_stream.h"
 #include "stream.h"
+#include "stream_object.h"
 #include <cstring>
 #include <limits>
 #include <utility>
@@ -82,7 +83,7 @@ bool read_xref_stream_at(const uint8_t* data,size_t size,size_t offset,
     (p+3<size&&!xref_space(data[p+3])))return false;
  p+=3;
  StreamRange stream;
- if(!locate_stream(data+p,size-p,stream))return false;
+ if(!locate_indirect_stream(data,size,\n     XrefEntry{static_cast<size_t>(object),offset,0,true},{},stream))return false;
  const auto& dict=stream.dictionary.dictionary;
  auto type=dict.find("Type"),width=dict.find("W"),size_key=dict.find("Size");
  if(type==dict.end()||type->second.kind!=Value::Kind::Name||
@@ -113,7 +114,7 @@ bool read_xref_stream_at(const uint8_t* data,size_t size,size_t offset,
    if(index[i]>declared_size||index[i+1]>declared_size-index[i])return false;
  }
  std::vector<uint8_t> decoded;
- if(!decode_stream(data+p,size-p,stream,decoded,24*1000000))return false;
+ if(!decode_stream(data,size,stream,decoded,24*1000000))return false;
  std::vector<XrefStreamEntry> result;
  if(!decode_xref_stream_entries(decoded.data(),decoded.size(),widths,index,result))return false;
  entries=std::move(result);
