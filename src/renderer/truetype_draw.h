@@ -5,9 +5,9 @@
 #include <string>
 #include <vector>
 namespace rinpdf::renderer {
-// Minimal untransformed, unclipped glyph drawing for embedded TrueType.
+// Minimal untransformed glyph drawing for embedded TrueType with device clipping.
 // ASCII code maps via Unicode cmap. The caller must guard PDF font Encoding,
-// graphics transforms and clipping. Fails before painting on invalid glyphs.
+// unsupported graphics/text transforms. Fails before painting on invalid glyphs.
 bool render_embedded_truetype_runs(const std::vector<uint8_t>& font,
  const std::vector<TextRun>& runs,double font_size,double origin_x,
  double baseline_y,unsigned width,unsigned height,uint8_t* rgba,size_t stride,
