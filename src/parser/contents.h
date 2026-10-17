@@ -17,6 +17,7 @@ struct PageFont {
  CIDGlyphMap cid_map; // only for Type0 / CIDFontType2
  CIDWidths cid_widths;
  CIDVerticalMetrics vertical_metrics;
+ std::string language;
 };
 // Resolve effective inherited /Resources and supported font dictionary metadata.
 // Does not imply font rasterization or character encoding support.
