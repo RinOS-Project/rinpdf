@@ -46,10 +46,22 @@ bool decode_run(const std::string& bytes,const PageFont& font,std::string& out){
   const std::u32string* sequence=nullptr;
   for(unsigned width=1;width<=max_width&&i+width<=bytes.size();++width){
    code=(code<<8)|uint8_t(bytes[i+width-1]);
-   const auto it=font.unicode_sequences.find(CMapKey{uint8_t(width),code});
-   if(it!=font.unicode_sequences.end()){
+   bool is_code=false;
+   if(font.unicode_codespaces.empty()){
+    is_code=font.unicode_sequences.count(CMapKey{uint8_t(width),code})!=0;
+   }else{
+    for(const auto& range:font.unicode_codespaces){
+     if(range.first.width==width&&code>=range.first.code&&
+        code<=range.second.code){is_code=true;break;}
+    }
+   }
+   if(is_code){
+    // Codespaces determine boundaries, not whether a Unicode mapping exists.
+    // Do not reinterpret an unmapped code using a longer mapping.
     selected_width=width;
-    sequence=&it->second;
+    const auto it=font.unicode_sequences.find(CMapKey{uint8_t(width),code});
+    sequence=it==font.unicode_sequences.end()?nullptr:&it->second;
+    break;
    }
   }
   if(!sequence)return false;
