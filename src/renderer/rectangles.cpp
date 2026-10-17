@@ -43,6 +43,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
  double selected_font_size=0;
  std::string pending_font;
  double text_x=0,text_y=0,text_leading=0;
+ double line_x=0,line_y=0;
  double text_a=1,text_b=0,text_c=0,text_d=1;
  double char_spacing=0,word_spacing=0,horizontal_scale=1;
  std::string pending_text;bool has_pending_text=false;
@@ -226,6 +227,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
   }else if(word=="BT"){
    if(in_text||!stack.empty()||!path.empty()||!polygons.empty())return false;
    in_text=true;text_x=text_y=text_leading=0;
+   line_x=line_y=0;
    pending_font.clear();
    text_a=text_d=1;text_b=text_c=0;
   }else if(word=="ET"){
@@ -275,18 +277,25 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
    text_leading=stack[0];stack.clear();
   }else if(word=="Td"||word=="TD"){
    if(!in_text||stack.size()!=2)return false;
-   if(word=="TD")text_leading=-stack[1];
-   text_x+=stack[0];text_y+=stack[1];
-   if(!std::isfinite(text_x)||!std::isfinite(text_y))return false;
+   const double dx=stack[0],dy=stack[1];
+   const double nx=line_x+text_a*dx+text_c*dy;
+   const double ny=line_y+text_b*dx+text_d*dy;
+   if(!std::isfinite(nx)||!std::isfinite(ny)||
+      std::abs(nx)>10000000||std::abs(ny)>10000000)return false;
+   if(word=="TD")text_leading=-dy;
+   line_x=text_x=nx;line_y=text_y=ny;
    stack.clear();
   }else if(word=="T*"){
    if(!in_text||!stack.empty())return false;
-   text_y-=text_leading;
-   if(!std::isfinite(text_y))return false;
+   const double nx=line_x-text_c*text_leading;
+   const double ny=line_y-text_d*text_leading;
+   if(!std::isfinite(nx)||!std::isfinite(ny)||
+      std::abs(nx)>10000000||std::abs(ny)>10000000)return false;
+   line_x=text_x=nx;line_y=text_y=ny;
   }else if(word=="Tm"){
    if(!in_text||stack.size()!=6)return false;
    text_a=stack[0];text_b=stack[1];text_c=stack[2];text_d=stack[3];
-   text_x=stack[4];text_y=stack[5];stack.clear();
+   text_x=line_x=stack[4];text_y=line_y=stack[5];stack.clear();
   }else if(word=="TJ"||
             word=="'"||word=="\\\"" ){
    // Font and glyph interpretation is not yet implemented.
