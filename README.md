@@ -579,3 +579,6 @@ Courier系列の `Tj` / `TJ` に対して文字幅・字間調整から水平移
 
 ## TrueType Composite point matching / offset semantics (experimental)
 複合グリフに `ARGS_ARE_XY_VALUES` がない場合の親・子グリフ点番号による位置合わせを追加しました。子グリフの変形適用後に指定点が一致する移動量を計算します。`SCALED_COMPONENT_OFFSET` / `UNSCALED_COMPONENT_OFFSET` は同時指定を拒否し、スケール付きオフセットでは変形行列による移動量変換、非スケール付き・未指定では元のオフセットを用います。`ROUND_XY_TO_GRID` 指定時にはオフセットを丸めます。不正な点番号や衝突フラグは拒否し、テストにも追記しました。実フォントでの互換検証、変形行列の浮動小数点丸め検証、全テストPASSは未確認です。
+
+## Embedded TrueType clip coverage and anisotropic page scale (experimental)
+埋め込みTrueTypeの画素合成に矩形クリップと既存パスカバレッジマスクを渡す処理を追加しました。ラスタライズした文字のカバレッジにクリップの透過率を乗算し、クリップ外には書き込みません。また、ページの縦横スケールが異なる場合でも、グリフ輪郭を各方向へ別々に拡大できるようにしました。テストに完全に遮蔽された文字と縦横非等方スケールを追加しました。現時点で任意の文字行列（回転・せん断）、一般PDF文字エンコーディング、512px超のグリフ描画は未対応です。変更後のビルドと全テストPASSは未確認です。
