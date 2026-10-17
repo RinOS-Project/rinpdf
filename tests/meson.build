@@ -53,3 +53,5 @@ test('rinpdf-sfnt-gsub',executable('rinpdf-sfnt-gsub','sfnt_gsub.cpp',dependenci
 
 # Opt-in verification against user-supplied real SFNT fonts; never reports fixture-less PASS.
 executable('rinpdf-gsub-font','gsub_font.cpp',dependencies:rinpdf_dep)
+
+test('rinpdf-text-extract',executable('rinpdf-text-extract','text_extract.cpp',dependencies:rinpdf_dep))
