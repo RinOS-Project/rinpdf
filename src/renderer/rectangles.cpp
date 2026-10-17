@@ -149,7 +149,8 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
        {a,bx,cx,d,e,f,text_a,text_b,text_c,text_d,
         char_spacing,word_spacing,horizontal_scale},
        &it->second.differences,it->second.encoding,
-       it->second.subtype=="Type0"?&it->second.cid_map:nullptr))return false;
+       it->second.subtype=="Type0"?&it->second.cid_map:nullptr,
+       it->second.subtype=="Type0"?&it->second.cid_widths:nullptr))return false;
   const double advance=next-text_x;
   const double new_x=text_x+advance*text_a;
   const double new_y=text_y+advance*text_b;
