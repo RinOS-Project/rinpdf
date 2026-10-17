@@ -28,5 +28,6 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& font,
  GlyphTransform transform={},
  const std::map<uint8_t,uint32_t>* differences=nullptr,
  const std::string& encoding="WinAnsiEncoding",
- const parser::CIDGlyphMap* cid_map=nullptr);
+ const parser::CIDGlyphMap* cid_map=nullptr,
+ const parser::CIDWidths* cid_widths=nullptr);
 }
