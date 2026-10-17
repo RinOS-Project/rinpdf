@@ -49,7 +49,7 @@ bool count_page_tree(const uint8_t *data,size_t size,size_t& count){
  std::vector<XrefStreamEntry> compressed;
  Value trailer;
  if(!read_object_xref(data,size,entries,compressed,trailer))return false;
- if(field(trailer,"Prev")||field(trailer,"XRefStm")||field(trailer,"Encrypt"))return false;
+ if(field(trailer,"Encrypt"))return false;
  const Value* root_ref=field(trailer,"Root");
  if(!root_ref||root_ref->kind!=Value::Kind::Reference)return false;
  Context ctx{data,size,entries,compressed};
