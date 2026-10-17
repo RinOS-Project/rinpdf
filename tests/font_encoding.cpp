@@ -20,5 +20,18 @@ int main(){
  Lexer unknown_lexer(reinterpret_cast<const uint8_t*>(unknown.data()),unknown.size());
  if(!parse_value(unknown_lexer,bad))return 7;
  if(decode_font_differences(bad,mapping))return 8;
+ uint32_t unicode=0;
+ if(!font_byte_unicode("WinAnsiEncoding",0x80,{},unicode)||
+    unicode!=0x20ac)return 9;
+ if(font_byte_unicode("WinAnsiEncoding",0x81,{},unicode))return 10;
+ if(!font_byte_unicode("MacRomanEncoding",0x80,{},unicode)||
+    unicode!=0x00c4)return 11;
+ if(!font_byte_unicode("MacRomanEncoding",0xdb,{},unicode)||
+    unicode!=0x20ac)return 12;
+ if(!font_byte_unicode("StandardEncoding",39,{},unicode)||
+    unicode!=0x2019)return 13;
+ if(font_byte_unicode("StandardEncoding",0x80,{},unicode))return 14;
+ if(!font_byte_unicode("WinAnsiEncoding",65,{{65,0x00c1}},unicode)||
+    unicode!=0x00c1)return 15;
  return 0;
 }
