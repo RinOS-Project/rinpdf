@@ -535,3 +535,6 @@ LexerのPDFリテラル文字列に8進エスケープ（最大3桁、下位8bit
 
 ## Content-stream lexical alignment (experimental)
 描画器の空白区切りトークン化を既存のPDF Lexerへ切り替えました。これにより入れ子のリテラル文字列、16進文字列、名前オブジェクト、コメントが演算子と混同されなくなります。未対応の文字列・フォント名オペランドは通常の描画では明示的に拒否します。BX/EX互換セクション内の未知の名前・文字列は無視し、不正な文字列は拒否します。テキスト描画・Tf/Tj/TJの解釈は未実装です。今回の変更後のテストPASSは未確認です。
+
+## Font resource to Tf selection integration (experimental)
+`rinpdf_render_page` はページごとの継承済み `/Font` 辞書を取得し、描画器の `render_rectangles_box_with_fonts` に渡すようになりました。`BT /F1 12 Tf ET` のような構文でリソース名・正のフォントサイズを検証し、存在しないフォントや不正サイズは拒否します。従来の `render_rectangles_box` は空のフォント表で呼ぶ互換ラッパーとして維持しました。`Tj`、`TJ` の文字表示、グリフ描画は引き続き未対応です。追加テストを含む18件のビルド・PASSは今回まだ未確認です。
