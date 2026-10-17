@@ -10,6 +10,7 @@ struct PageFont {
  std::string subtype;
  std::string encoding;
  std::vector<uint8_t> embedded_truetype; // decoded /FontFile2, if present
+ std::map<uint8_t,uint32_t> differences; // explicit PDF byte-to-Unicode overrides
 };
 // Resolve effective inherited /Resources and supported font dictionary metadata.
 // Does not imply font rasterization or character encoding support.
