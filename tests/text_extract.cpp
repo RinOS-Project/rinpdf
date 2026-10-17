@@ -87,6 +87,17 @@ int main(){
  if(extract_page_text(reinterpret_cast<const uint8_t*>(stray_tj_operands.data()),
       stray_tj_operands.size(),0,result))return 22;
  if(result!=previous)return 23;
+ // TJ must not silently discard numeric operands preceding its array.
+ std::string stray_tj_array=pdf;
+ const std::string proper_tj="0 Tz [<42>";
+ const std::string invalid_tj="1 2  [<42>";
+ static_assert(sizeof("0 Tz [<42>")==sizeof("1 2  [<42>"));
+ const auto array_pos=stray_tj_array.find(proper_tj);
+ if(array_pos==std::string::npos)return 24;
+ stray_tj_array.replace(array_pos,proper_tj.size(),invalid_tj);
+ if(extract_page_text(reinterpret_cast<const uint8_t*>(stray_tj_array.data()),
+      stray_tj_array.size(),0,result))return 25;
+ if(result!=previous)return 26;
  // The UTF-16BE ActualText payload must reject lone low surrogates.
  // Replace equal-length hex digits so all xref offsets remain valid.
  std::string unpaired_low=pdf;
