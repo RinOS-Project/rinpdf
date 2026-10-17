@@ -4,9 +4,10 @@
 #include <vector>
 namespace rinpdf::parser {
 struct Value {
- enum class Kind { Null, Boolean, Integer, Name, String, Array, Dictionary, Reference, Invalid };
+ enum class Kind { Null, Boolean, Integer, Real, Name, String, Array, Dictionary, Reference, Invalid };
  Kind kind=Kind::Invalid;
  long long integer=0;
+ double real=0;
  bool boolean=false;
  unsigned generation=0;
  std::string text;
