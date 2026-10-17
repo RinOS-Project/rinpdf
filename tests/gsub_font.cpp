@@ -8,7 +8,7 @@
 #include <vector>
 #include <cerrno>
 int main(int argc,char** argv){
- if(argc<3){
+ if(argc<3||argc>4){
   std::fprintf(stderr,"usage: rinpdf-gsub-font FONT.ttf GLYPH_ID [EXPECTED_VERTICAL_ID]\n");
   return 2;
  }
