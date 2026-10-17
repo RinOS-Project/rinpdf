@@ -36,6 +36,24 @@ int main(){
  w16(d,62,2);
  w16(d,58,0xff);
  if(sfnt_vertical_substitution(f,1,result))return 5;
+ // ExtensionSubst (lookup 7) wraps SingleSubst (lookup 1).
+ std::vector<uint8_t> extended=d;
+ extended.resize(78,0);
+ w16(extended,48,7); // LookupType 7
+ w16(extended,56,1); // ExtensionSubstFormat
+ w16(extended,58,1); // ExtensionLookupType: SingleSubst
+ w32(extended,60,8); // Offset from ExtensionSubst
+ w16(extended,64,2);w16(extended,66,8);
+ w16(extended,68,1);w16(extended,70,2);
+ w16(extended,72,1);w16(extended,74,1);w16(extended,76,1);
+ SfntFont extended_font{extended.data(),extended.size(),4,
+  {{0x47535542,0,static_cast<uint32_t>(extended.size())}}};
+ if(!sfnt_vertical_substitution(extended_font,1,result)||result!=2)return 7;
+ w32(extended,60,0xffffffff);
+ if(sfnt_vertical_substitution(extended_font,1,result))return 8;
+ w32(extended,60,8);
+ w16(extended,58,7); // Nested extensions are not followed.
+ if(!sfnt_vertical_substitution(extended_font,1,result)||result!=1)return 9;
  SfntFont no_gsub{d.data(),d.size(),4,{}};
  if(!sfnt_vertical_substitution(no_gsub,1,result)||result!=1)return 6;
  return 0;
