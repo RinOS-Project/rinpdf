@@ -27,11 +27,13 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
  if((size_t)width*height>16777216)return false;
  for(unsigned y=0;y<height;++y)std::memset(rgba+(size_t)y*stride,255,(size_t)width*4);
  double red=0,green=0,blue=0;
- struct Color { double r,g,b,a,bx,cx,d,e,f,width,sr,sg,sb; int cap,join; double miter; std::vector<double> dash; double dash_phase; };
+ struct Color { double r,g,b,a,bx,cx,d,e,f,width,sr,sg,sb; int cap,join; double miter,flatness; std::vector<double> dash; double dash_phase; };
  double a=1,bx=0,cx=0,d=1,e=0,f=0;
  double line_width=1;
  int line_cap=0,line_join=0;
  double miter_limit=10;
+ double flatness=1;
+ unsigned compatibility_depth=0;
  std::vector<double> dash_pattern;
  double dash_phase=0;
  bool reading_dash=false;
@@ -86,14 +88,14 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
   if(dash_array_ready&&word!="d"&&!(number(word,v)))return false;
   if(word=="q"){
    if((pending_rect_clip||pending_path_clip)||!stack.empty()||saved.size()>=64)return false;
-   saved.push_back({red,green,blue,a,bx,cx,d,e,f,line_width,stroke_red,stroke_green,stroke_blue,line_cap,line_join,miter_limit,dash_pattern,dash_phase});
+   saved.push_back({red,green,blue,a,bx,cx,d,e,f,line_width,stroke_red,stroke_green,stroke_blue,line_cap,line_join,miter_limit,flatness,dash_pattern,dash_phase});
    clip_stack.push_back(clip);
    clip_mask_stack.push_back(clip_mask);
 
   }else if(word=="Q"){
    if((pending_rect_clip||pending_path_clip)||!stack.empty()||saved.empty())return false;
    auto color=saved.back();saved.pop_back();
-   red=color.r;green=color.g;blue=color.b;a=color.a;bx=color.bx;cx=color.cx;d=color.d;e=color.e;f=color.f;line_width=color.width;stroke_red=color.sr;stroke_green=color.sg;stroke_blue=color.sb;line_cap=color.cap;line_join=color.join;miter_limit=color.miter;dash_pattern=color.dash;dash_phase=color.dash_phase;
+   red=color.r;green=color.g;blue=color.b;a=color.a;bx=color.bx;cx=color.cx;d=color.d;e=color.e;f=color.f;line_width=color.width;stroke_red=color.sr;stroke_green=color.sg;stroke_blue=color.sb;line_cap=color.cap;line_join=color.join;miter_limit=color.miter;flatness=color.flatness;dash_pattern=color.dash;dash_phase=color.dash_phase;
    clip=clip_stack.back();clip_stack.pop_back();
    clip_mask=std::move(clip_mask_stack.back());clip_mask_stack.pop_back();
 
@@ -112,6 +114,17 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    if(!std::isfinite(total)||total>1000000||(!dash_values.empty()&&total<=0)||stack[0]<0)return false;
    dash_pattern=dash_values;dash_phase=total>0?std::fmod(stack[0],total*(dash_values.size()%2?2:1)):0;
    dash_values.clear();dash_array_ready=false;stack.clear();
+  }else if(word=="i"){
+   // The graphics-state flatness parameter is device dependent.
+   // Store and validate it, while retaining adaptive curve tessellation.
+   if(stack.size()!=1||stack[0]<0||stack[0]>100)return false;
+   flatness=stack[0];stack.clear();
+  }else if(word=="BX"){
+   if(!stack.empty()||compatibility_depth>=16)return false;
+   ++compatibility_depth;
+  }else if(word=="EX"){
+   if(!stack.empty()||compatibility_depth==0)return false;
+   --compatibility_depth;
   }else if(word=="w"){
    if(stack.size()!=1||stack[0]<0||stack[0]>1024)return false;
    line_width=stack[0];stack.clear();
@@ -1086,9 +1099,13 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
     pending_rect_clip=false;
    }
    path.clear();polygons.clear();polygon_matrices.clear();rect_matrices.clear();cubic_strokes.clear();
+  }else if(compatibility_depth>0){
+   // PDF compatibility sections may contain unrecognized operators.
+   // Drop their operand stack, but do not change rendering state.
+   stack.clear();
   }else return false; // Do not silently ignore unknown operators.
  }
- return !reading_dash&&!dash_array_ready&&dash_values.empty()&&stack.empty()&&path.empty()&&polygons.empty()&&saved.empty()&&!pending_rect_clip&&!pending_path_clip;
+ return compatibility_depth==0&&!reading_dash&&!dash_array_ready&&dash_values.empty()&&stack.empty()&&path.empty()&&polygons.empty()&&saved.empty()&&!pending_rect_clip&&!pending_path_clip;
 }
 bool render_rectangles(const uint8_t *contents,size_t size,unsigned width,unsigned height,uint8_t *rgba,size_t stride){
  return render_rectangles_box(contents,size,width,height,rgba,stride,{0,0,(double)width,(double)height});
