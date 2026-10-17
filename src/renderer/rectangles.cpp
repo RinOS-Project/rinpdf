@@ -153,7 +153,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
        it->second.subtype=="Type0"?&it->second.cid_map:nullptr,
        it->second.subtype=="Type0"?&it->second.cid_widths:nullptr,
        it->second.encoding=="Identity-V"?&it->second.vertical_metrics:nullptr,
-       &next_vertical))return false;
+       &next_vertical,it->second.language))return false;
   const bool vertical=it->second.encoding=="Identity-V";
   const double advance=vertical?next_vertical-text_y:next-text_x;
   const double new_x=text_x+advance*(vertical?text_c:text_a);
