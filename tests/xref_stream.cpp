@@ -110,5 +110,39 @@ int main(){
  if(normal_entries.size()!=2||normal_entries[0].object!=1||
     normal_entries[0].offset!=old_object||
     !mixed_trailer.dictionary.count("Root"))return 19;
+ // Same-revision hybrid: Classic table plus supplementary /XRefStm.
+ std::string hybrid="%PDF-1.5\\n";
+ const size_t catalog_pos=hybrid.size();
+ hybrid+="1 0 obj\\n<< /Type /Catalog >>\\nendobj\\n";
+ const size_t container_pos=hybrid.size();
+ hybrid+="4 0 obj\\n<< /Type /ObjStm /N 1 /First 4 /Length 6 >>\\nstream\\n";
+ hybrid+="3 0 42\\n\\nendstream\\nendobj\\n";
+ const size_t supplementary_pos=hybrid.size();
+ std::string compressed_entry(5,'\\0');
+ compressed_entry[0]=2;
+ compressed_entry[3]=4;
+ hybrid+="5 0 obj\\n<< /Type /XRef /Size 6 /Index [3 1] /W [1 3 1] /Length 5 >>\\nstream\\n";
+ hybrid+=compressed_entry;
+ hybrid+="\\nendstream\\nendobj\\n";
+ const size_t classic_pos=hybrid.size();
+ hybrid+="xref\\n0 2\\n0000000000 65535 f \\n"+width10(catalog_pos)+
+  " 00000 n \\n4 2\\n"+width10(container_pos)+" 00000 n \\n"+
+  width10(supplementary_pos)+" 00000 n \\n";
+ hybrid+="trailer\\n<< /Size 6 /Root 1 0 R /XRefStm "+
+  std::to_string(supplementary_pos)+" >>\\nstartxref\\n"+
+  std::to_string(classic_pos)+"\\n%%EOF\\n";
+ if(!read_object_xref(reinterpret_cast<const uint8_t*>(hybrid.data()),
+      hybrid.size(),normal_entries,stream_entries,mixed_trailer))return 20;
+ bool found_compressed=false;
+ for(const auto& item:stream_entries)
+  if(item.object==3&&item.type==2&&item.field1==4&&item.field2==0)
+   found_compressed=true;
+ if(!found_compressed||normal_entries.size()!=4)return 21;
+ // Reject an out-of-range supplementary stream pointer.
+ std::string bad_hybrid=hybrid;
+ const std::string pointer="/XRefStm "+std::to_string(supplementary_pos);
+ bad_hybrid.replace(bad_hybrid.find(pointer),pointer.size(),"/XRefStm 999999");
+ if(read_object_xref(reinterpret_cast<const uint8_t*>(bad_hybrid.data()),
+      bad_hybrid.size(),normal_entries,stream_entries,mixed_trailer))return 22;
  return 0;
 }
