@@ -36,7 +36,9 @@ struct Reader {
   auto it=std::find_if(xref.begin(),xref.end(),[&](const XrefEntry& e){
    return e.in_use&&e.object==(size_t)ref.integer&&e.generation==ref.generation;
   });
-  if(it==xref.end())return false;out=&*it;return true;
+  if(it==xref.end())return false;
+  out=&*it;
+  return true;
  }
  bool object(const Value& ref,Value& out) const {
   return resolve_reference_value(data,size,xref,compressed,ref,out,&compressed_cache);
@@ -132,7 +134,7 @@ bool read_page_contents(const uint8_t *data,size_t size,size_t index,std::vector
  if(!read_object_xref(data,size,xref,compressed,trailer))return false;
  if(get(trailer,"Encrypt"))return false;
  const Value *root=get(trailer,"Root");if(!root)return false;
- Reader reader{data,size,xref,compressed};Value catalog;
+ Reader reader{data,size,xref,compressed,{}};Value catalog;
  if(!reader.object(*root,catalog))return false;
  const Value *type=get(catalog,"Type"),*pages=get(catalog,"Pages");
  if(!type||type->kind!=Value::Kind::Name||type->text!="Catalog"||!pages)return false;
@@ -145,7 +147,7 @@ bool read_page_box(const uint8_t *data,size_t size,size_t index,MediaBox& box){
  if(!read_object_xref(data,size,xref,compressed,trailer))return false;
  if(get(trailer,"Encrypt"))return false;
  const Value *root=get(trailer,"Root");if(!root)return false;
- Reader reader{data,size,xref,compressed};Value catalog;
+ Reader reader{data,size,xref,compressed,{}};Value catalog;
  if(!reader.object(*root,catalog))return false;
  const Value *type=get(catalog,"Type"),*pages=get(catalog,"Pages");
  if(!type||type->kind!=Value::Kind::Name||type->text!="Catalog"||!pages)return false;
