@@ -25,5 +25,6 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& font,
  unsigned clip_x0=0,unsigned clip_y0=0,
  unsigned clip_x1=0,unsigned clip_y1=0,
  GlyphTransform transform={},
- const std::map<uint8_t,uint32_t>* differences=nullptr);
+ const std::map<uint8_t,uint32_t>* differences=nullptr,
+ const std::string& encoding="WinAnsiEncoding");
 }
