@@ -33,7 +33,8 @@ bool locate_indirect_stream(const uint8_t *data,size_t size,const XrefEntry& ent
  if(it==dict.dictionary.end())return false;
  size_t length=0;
  if(it->second.kind==Value::Kind::Integer){
-  if(it->second.integer<0)return false;length=(size_t)it->second.integer;
+  if(it->second.integer<0)return false;
+  length=(size_t)it->second.integer;
  }else if(it->second.kind==Value::Kind::Reference){
   const Value& ref=it->second;
   if(ref.integer<=0)return false;
