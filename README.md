@@ -541,3 +541,6 @@ LexerのPDFリテラル文字列に8進エスケープ（最大3桁、下位8bit
 
 ## TJ operand parser (experimental)
 `src/renderer/text_show.cpp` に、PDFの `TJ` 配列に含まれるリテラル文字列、16進文字列、数値による字間調整を検査・保持するパーサーを追加しました。最大4096要素、文字列データ合計1MiB、有限の数値に制限し、解析失敗時には出力を変更しません。描画器はテキスト中の `[` を新パーサーへ渡します。ただし、**グリフ描画・文字幅算出が未実装のため、TJのレンダリングは引き続き未対応を返します**。回帰テストを含めたビルド・テストPASSは未確認です。
+
+## Courier text advance (experimental)
+標準14フォントのCourier系列（Courier、Bold、Oblique、BoldOblique）に限り、印字可能ASCIIの単一バイト文字幅600/1000 emと `TJ` の数値調整、文字間隔・単語間隔・水平拡大率を組み合わせて水平移動量を計算する `courier_text_advance` を追加しました。Helvetica等の別フォントや未対応エンコーディングは誤った幅を返さず拒否します。これは内部APIで、**レンダラーのTj/TJによる文字描画にはまだ接続していません**。追加テストのPASSは未確認です。
