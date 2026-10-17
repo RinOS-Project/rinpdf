@@ -57,11 +57,13 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
   rinpdf::renderer::FontResources fonts;
   for(const auto& [name,resource]:page_fonts)
    fonts.emplace(name,rinpdf::renderer::FontResource{resource.base_font,resource.subtype,resource.encoding,resource.embedded_truetype,resource.differences,resource.cid_map,resource.cid_widths,resource.vertical_metrics,resource.language});
+  rinpdf::parser::PageProperties properties;
+  if(!rinpdf::parser::read_page_properties(doc->bytes.data(),doc->bytes.size(),index,properties))return RINPDF_UNSUPPORTED;
   const unsigned rotation=box.rotation;
   const unsigned source_width=(rotation==90||rotation==270)?height:width;
   const unsigned source_height=(rotation==90||rotation==270)?width:height;
   std::vector<uint8_t> temporary((size_t)width*height*4);
-  if(!rinpdf::renderer::render_rectangles_box_with_fonts(contents.data(),contents.size(),source_width,source_height,temporary.data(),(size_t)source_width*4,{box.x0,box.y0,box.x1,box.y1},fonts))return RINPDF_UNSUPPORTED;
+  if(!rinpdf::renderer::render_rectangles_box_with_fonts(contents.data(),contents.size(),source_width,source_height,temporary.data(),(size_t)source_width*4,{box.x0,box.y0,box.x1,box.y1},fonts,properties))return RINPDF_UNSUPPORTED;
   for(unsigned y=0;y<height;++y){
    for(unsigned x=0;x<width;++x){
     unsigned sx=x,sy=y;
