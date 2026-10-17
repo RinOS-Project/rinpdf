@@ -181,6 +181,12 @@ int main(){
       57,58,59))return error;
  if(const int error=reject_boundary("0 Tw <42> '","1.5Tr<42> '",
       60,61,62))return error;
+ // A standalone TJ or Tf has no valid operand sequence. These two-byte
+ // substitutions preserve the content length and classic xref positions.
+ if(const int error=reject_boundary("T* <42> Tj","TJ <42> Tj",
+      63,64,65))return error;
+ if(const int error=reject_boundary("T* <42> Tj","Tf <42> Tj",
+      66,67,68))return error;
  // The UTF-16BE ActualText payload must reject lone low surrogates.
  // Replace equal-length hex digits so all xref offsets remain valid.
  std::string unpaired_low=pdf;
