@@ -21,7 +21,8 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
  const parser::CIDGlyphMap* cid_map,
  const parser::CIDWidths* cid_widths,
  const parser::CIDVerticalMetrics* vertical_metrics,
- double* next_y){
+ double* next_y,
+ const std::string& pdf_language){
  if(!rgba||!width||!height||width>512||height>512||
     stride<size_t(width)*4||!std::isfinite(em)||em<=0||em>1000||
     !std::isfinite(start_x)||!std::isfinite(baseline)||
@@ -69,8 +70,16 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
         differences?*differences:no_overrides,unicode)||
         !sfnt_glyph_id(sfnt,unicode,glyph_id))return false;
     }
-    if(vertical&&
-       !sfnt_vertical_substitution(sfnt,glyph_id,glyph_id))return false;
+    if(vertical){
+     uint32_t script=0,language=0;
+     if(pdf_language=="ja"||pdf_language.rfind("ja-",0)==0){
+      script=0x68616e69;language=0x4a414e20; // hani / JAN
+     }else if(pdf_language=="ko"||pdf_language.rfind("ko-",0)==0){
+      script=0x68616e67;language=0x4b4f5220; // hang / KOR
+     }
+     if(!sfnt_vertical_substitution(sfnt,glyph_id,glyph_id,
+          script,language))return false;
+    }
     if(!sfnt_horizontal_metrics(sfnt,glyph_id,units,advance))return false;
     SimpleGlyph glyph;
     if(!sfnt_glyph_outline(sfnt,glyph_id,glyph))return false;
