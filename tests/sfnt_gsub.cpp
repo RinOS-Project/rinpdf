@@ -55,15 +55,6 @@ int main(){
  w16(extended,58,7); // Nested extensions are not followed.
  if(!sfnt_vertical_substitution(extended_font,1,result)||result!=1)return 9;
  // Add a Japanese LangSys that enables the feature while default does not.
- std::vector<uint8_t> localized=d;
- localized.resize(82,0);
- w16(localized,20,1); // ScriptTable LangSysCount
- w32(localized,22,0x4a414e20); // 'JAN '
- w16(localized,26,10); // language table at script+10 (offset 28)
- w16(localized,28,0);w16(localized,30,0xffff);
- w16(localized,32,1);w16(localized,34,0);
- // The expanded script overlaps the old FeatureList, so relocate tables.
- // Construct an independent layout in the same font buffer.
  std::vector<uint8_t> japanese(86,0);
  w16(japanese,0,1);w16(japanese,4,10);
  w16(japanese,6,40);w16(japanese,8,54);
