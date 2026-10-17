@@ -25,6 +25,18 @@ int main(){
  if(rinpdf::renderer::render_rectangles(
      reinterpret_cast<const unsigned char*>(unclosed),sizeof(unclosed)-1,
      8,8,pixels.data(),32))return 203;
+ const char text_state[]="BT 12 TL 10 20 Td 1 0 0 1 15 25 Tm T* ET";
+ if(!rinpdf::renderer::render_rectangles(
+    reinterpret_cast<const unsigned char*>(text_state),sizeof(text_state)-1,
+    8,8,pixels.data(),32))return 204;
+ const char nested_text[]="BT BT ET";
+ if(rinpdf::renderer::render_rectangles(
+    reinterpret_cast<const unsigned char*>(nested_text),sizeof(nested_text)-1,
+    8,8,pixels.data(),32))return 205;
+ const char missing_et[]="BT";
+ if(rinpdf::renderer::render_rectangles(
+    reinterpret_cast<const unsigned char*>(missing_et),sizeof(missing_et)-1,
+    8,8,pixels.data(),32))return 206;
  const char unsupported[]="BT /F1 12 Tf ET";
  if(rinpdf::renderer::render_rectangles(reinterpret_cast<const unsigned char*>(unsupported),sizeof(unsupported)-1,8,8,pixels.data(),32))return 3;
  const char rgb[]="q 1 0 0 rg 1 1 2 2 re f Q 0 g 4 4 2 2 re f";
