@@ -53,7 +53,7 @@ int main(){
     !page_properties.at("P1").has_actual_text)return 15;
  std::string result;
  if(!extract_page_text(reinterpret_cast<const uint8_t*>(pdf.data()),pdf.size(),0,result))return 1;
- if(result!=std::string("\xe4\xb8\x96\xe6\x97\xa5\xe6\x9c\xac")+"ABB\nB\nB\nB\nBB\nBB BBBBBBBBBB")return 2;
+ if(result!=std::string("\xe4\xb8\x96\xe6\x97\xa5\xe6\x9c\xac")+"ABB\nB\nB\nB\nBB\nBB BBBB BBBBBB")return 2;
  // Changing only the resource key keeps object offsets intact and must
  // cause a clean failure rather than silently using an unresolved parent.
  std::string missing_parent=pdf;
