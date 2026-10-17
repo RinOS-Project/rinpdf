@@ -32,4 +32,9 @@ bool read_xref_section(const uint8_t* data,size_t size,
  XrefFormat& format,std::vector<XrefEntry>& classic_entries,
  std::vector<XrefStreamEntry>& stream_entries,Value& trailer);
 
+// Resolve either xref representation to ordinary offsets. This restricted
+// path rejects compressed object references and update chains.
+bool read_uncompressed_xref(const uint8_t* data,size_t size,
+ std::vector<XrefEntry>& entries,Value& trailer);
+
 }
