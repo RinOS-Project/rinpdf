@@ -181,7 +181,6 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
    if(next.kind==parser::TokenKind::Keyword&&next.value=="BMC"){
     if(marked_languages.size()>=64||!stack.empty()||has_pending_text)return false;
     marked_languages.push_back(active_marked_language);
-    active_marked_language.clear();
     lex=look;continue;
    }
    if(next.kind==parser::TokenKind::DictOpen){
