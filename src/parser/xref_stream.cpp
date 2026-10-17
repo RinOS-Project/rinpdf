@@ -1,5 +1,6 @@
 #include "xref_stream.h"
 #include <limits>
+#include <utility>
 namespace rinpdf::parser {
 bool decode_xref_stream_entries(const uint8_t* data,size_t size,
  const std::vector<unsigned>& widths,const std::vector<uint64_t>& index,
