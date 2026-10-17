@@ -9,7 +9,7 @@ int main(){
   "/Span /P1 BDC BT /F1 12 Tf <41> Tj ET EMC "
   "/Span << /ActualText <FEFF65E5672C> >> BDC "
   "BT /F1 12 Tf <41> Tj ET EMC "
-  "BT /F1 12 Tf <41> Tj <42> Tj T* <42> Tj ET";
+  "BT /F1 12 Tf <41> Tj <42> Tj T* <42> Tj 0 -16 Td <42> Tj 1 0 0 1 0 30 Tm <42> Tj ET";
  std::string pdf="%PDF-1.5\n";
  size_t offsets[8]{};
  auto append=[&](unsigned id,const std::string& body){
@@ -50,7 +50,7 @@ int main(){
     !page_properties.at("P1").has_actual_text)return 15;
  std::string result;
  if(!extract_page_text(reinterpret_cast<const uint8_t*>(pdf.data()),pdf.size(),0,result))return 1;
- if(result!=std::string("\xe4\xb8\x96\xe6\x97\xa5\xe6\x9c\xac")+"ABB\nB")return 2;
+ if(result!=std::string("\xe4\xb8\x96\xe6\x97\xa5\xe6\x9c\xac")+"ABB\nB\nB\nB")return 2;
  // Changing only the resource key keeps object offsets intact and must
  // cause a clean failure rather than silently using an unresolved parent.
  std::string missing_parent=pdf;
