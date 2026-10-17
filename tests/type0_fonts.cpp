@@ -10,7 +10,7 @@ int main(){
   offsets[id]=pdf.size();
   pdf+=std::to_string(id)+" 0 obj\n"+body+"\nendobj\n";
  };
- append(1,"<< /Type /Catalog /Pages 2 0 R >>");
+ append(1,"<< /Type /Catalog /Pages 2 0 R /Lang (ja-JP) >>");
  append(2,"<< /Type /Pages /Count 1 /Kids [3 0 R] /Resources << /Font << /F1 4 0 R >> >> >>");
  append(3,"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 20 20] >>");
  append(4,"<< /Type /Font /Subtype /Type0 /BaseFont /Example /Encoding /Identity-H /DescendantFonts [5 0 R] >>");
@@ -28,6 +28,7 @@ int main(){
  if(!read_page_fonts(reinterpret_cast<const uint8_t*>(pdf.data()),pdf.size(),0,fonts))return 1;
  if(fonts.size()!=1||fonts.at("F1").subtype!="Type0"||
     fonts.at("F1").encoding!="Identity-H"||
-    !fonts.at("F1").cid_map.identity)return 2;
+    !fonts.at("F1").cid_map.identity||
+    fonts.at("F1").language!="ja-JP")return 2;
  return 0;
 }
