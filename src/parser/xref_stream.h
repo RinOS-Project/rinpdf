@@ -25,4 +25,11 @@ bool decode_xref_stream_entries(const uint8_t* data,size_t size,
 bool read_xref_stream_at(const uint8_t* data,size_t size,size_t offset,
  std::vector<XrefStreamEntry>& entries,Value& trailer);
 
+enum class XrefFormat { Classic, Stream };
+// Dispatch by the final startxref target. Classic entries keep their
+// existing resolver format; compressed stream entries remain separate.
+bool read_xref_section(const uint8_t* data,size_t size,
+ XrefFormat& format,std::vector<XrefEntry>& classic_entries,
+ std::vector<XrefStreamEntry>& stream_entries,Value& trailer);
+
 }
