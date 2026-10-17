@@ -651,3 +651,8 @@ wsl ./build-verify-new/tests/rinpdf-gsub-font /usr/share/fonts/truetype/your-fon
 ```
 
 注意: 数値はUnicodeではなくフォント固有の **グリフID** です。縦書き字形が存在しない場合や、現在のGSUB部分実装で選択対象にならない場合は `changed=no` と表示されます。Script/LangSysの言語別選択や全GSUB Lookup形式を網羅したものではありません。追加変更後の全テストPASSは未確認です。
+
+## GSUB explicit Script/LangSys selection (experimental)
+`sfnt_vertical_substitution` にオプションのOpenType script tag・language tagを追加し、対象ScriptTableの指定LangSysで列挙されるFeatureIndexのみを選択します。言語タグを指定せずDefaultLangSysも存在しない場合は、勝手に別言語の機能を有効化しません。指定言語が存在しなければそのスクリプトのDefaultLangSysにフォールバックします。日本語 `hani` / `JAN ` のLangSysによる選択と、未選択時に字形置換を行わない回帰テストを追加しました。従来の引数省略呼び出しも維持します。
+
+現段階ではフォントのメタデータを使った言語自動判定や、PDF文書からの明示的な言語指定の連携は未実装です。変更後のビルド・全テストPASSは未確認です。
