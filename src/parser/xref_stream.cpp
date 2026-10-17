@@ -3,6 +3,7 @@
 #include "stream_object.h"
 #include <cstring>
 #include <set>
+#include <map>
 #include <limits>
 #include <utility>
 namespace rinpdf::parser {
@@ -192,14 +193,57 @@ bool read_object_xref(const uint8_t* data,size_t size,
  Value dict;
  if(!read_xref_section(data,size,format,classic,stream,dict)||
     dict.kind!=Value::Kind::Dictionary)return false;
- if(dict.dictionary.count("Prev")||dict.dictionary.count("XRefStm")||
-    dict.dictionary.count("Encrypt"))return false;
+ if(dict.dictionary.count("XRefStm")||dict.dictionary.count("Encrypt"))return false;
  if(format==XrefFormat::Classic){
-  ordinary=std::move(classic);
-  compressed.clear();
-  trailer=std::move(dict);
-  return true;
+  std::map<size_t,XrefEntry> merged;
+  for(const auto& entry:classic)
+   if(!merged.emplace(entry.object,entry).second)return false;
+  size_t current=0;
+  if(!find_startxref(data,size,current))return false;
+  Value latest=std::move(dict);
+  Value section=latest;
+  std::set<size_t> visited{current};
+  for(unsigned depth=0;depth<32;++depth){
+   auto prev=section.dictionary.find("Prev");
+   if(prev==section.dictionary.end()){
+    ordinary.clear();ordinary.reserve(merged.size());
+    for(const auto& item:merged)ordinary.push_back(item.second);
+    compressed.clear();trailer=std::move(latest);
+    return true;
+   }
+   if(prev->second.kind!=Value::Kind::Integer||prev->second.integer<0||
+      static_cast<uint64_t>(prev->second.integer)>=current)return false;
+   const size_t offset=static_cast<size_t>(prev->second.integer);
+   if(!visited.insert(offset).second)return false;
+   std::vector<XrefEntry> older;
+   size_t trailer_pos=0;
+   if(!read_classic_xref_at(data,size,offset,older,&trailer_pos))return false;
+   Lexer lexer(data+trailer_pos,size-trailer_pos);
+   Value old_trailer;
+   if(!parse_value(lexer,old_trailer)||
+      old_trailer.kind!=Value::Kind::Dictionary||
+      old_trailer.dictionary.count("Encrypt")||
+      old_trailer.dictionary.count("XRefStm"))return false;
+   for(const auto& item:older){
+    if(item.object>1000000)return false;
+    // Only the newest entry for an object number is effective,
+    // including a free entry that masks a formerly live object.
+    merged.emplace(item.object,item);
+   }
+   if(merged.size()>1000000)return false;
+   for(const auto* key:{"Root","Info","ID"}){
+    if(!latest.dictionary.count(key)){
+     const auto found=old_trailer.dictionary.find(key);
+     if(found!=old_trailer.dictionary.end())
+      latest.dictionary.emplace(key,found->second);
+    }
+   }
+   current=offset;
+   section=std::move(old_trailer);
+  }
+  return false; // bounded revision chain
  }
+ if(dict.dictionary.count("Prev"))return false;
  std::vector<XrefEntry> converted;
  std::set<size_t> seen;
  for(const auto& item:stream){
