@@ -33,6 +33,21 @@ int main(){
  }
  pdf+="trailer\n<< /Root 1 0 R /Size 8 >>\nstartxref\n"+
       std::to_string(xref)+"\n%%EOF\n";
+ // Diagnose whether page streams, fonts/CMap, or named Properties fail.
+ std::vector<uint8_t> decoded_contents;
+ if(!read_page_contents(reinterpret_cast<const uint8_t*>(pdf.data()),
+      pdf.size(),0,decoded_contents))return 10;
+ std::map<std::string,PageFont> resolved_fonts;
+ if(!read_page_fonts(reinterpret_cast<const uint8_t*>(pdf.data()),
+      pdf.size(),0,resolved_fonts))return 11;
+ if(resolved_fonts.count("F1")!=1)return 12;
+ const auto& unicode=resolved_fonts.at("F1").unicode_sequences;
+ if(unicode.count({1,0x41})!=1||unicode.count({1,0x42})!=1)return 13;
+ PageProperties page_properties;
+ if(!read_page_properties(reinterpret_cast<const uint8_t*>(pdf.data()),
+      pdf.size(),0,page_properties))return 14;
+ if(page_properties.count("P1")!=1||
+    !page_properties.at("P1").has_actual_text)return 15;
  std::string result;
  if(!extract_page_text(reinterpret_cast<const uint8_t*>(pdf.data()),pdf.size(),0,result))return 1;
  if(result!=std::string("\xe4\xb8\x96\xe6\x97\xa5\xe6\x9c\xac")+"ABB")return 2;
