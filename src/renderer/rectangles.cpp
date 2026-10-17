@@ -98,6 +98,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
    return false; // glyph painting remains unsupported
   }
   const std::string& word=token.value;
+  if(!pending_font.empty()&&word!="Tf"&&token.kind!=parser::TokenKind::Integer&&token.kind!=parser::TokenKind::Keyword)return false;
   double v=0;
   if(number(word,v)){if(reading_dash){if(dash_values.size()>=32)return false;dash_values.push_back(v);}else{if(dash_array_ready&&stack.size()>=1)return false;if(stack.size()>=16)return false;stack.push_back(v);}continue;}
   if(word=="["){if(reading_dash||dash_array_ready||!stack.empty())return false;reading_dash=true;dash_values.clear();continue;}
