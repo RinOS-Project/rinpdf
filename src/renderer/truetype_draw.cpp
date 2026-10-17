@@ -34,7 +34,7 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
     if(!sfnt_glyph_id(sfnt,ch,glyph_id)||
        !sfnt_horizontal_metrics(sfnt,glyph_id,units,advance))return false;
     SimpleGlyph glyph;
-    if(!sfnt_simple_glyph(sfnt,glyph_id,glyph))return false;
+    if(!sfnt_glyph_outline(sfnt,glyph_id,glyph))return false;
     Paint paint;
     if(!flatten_simple_glyph(glyph,em*sx/units,
           (cursor-x0)*sx,(y1-baseline)*sy,0.2,paint.paths))return false;
