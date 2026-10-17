@@ -363,14 +363,15 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
    has_line_origin=true;
    operands.clear();continue;
   }
-  if(t.value=="BT"){text=true;operands.clear();has_line_origin=false;
+  if(t.value=="BT"){if(text||have_pending||!operands.empty())return false;
+   text=true;operands.clear();has_line_origin=false;
    pending_tj_adjustment=0;text_run_emitted=false;
    text_line_x=0;text_line_y=0;line_axis_x=1;line_axis_y=0;continue;}
   if(t.value=="T*"&&text){
    if(!suppressed)new_line_pending=true;
    continue;
   }
-  if(t.value=="ET"){if(!operands.empty())return false;
+  if(t.value=="ET"){if(!text||have_pending||!operands.empty())return false;
    text=false;pending_tj_adjustment=0;text_run_emitted=false;continue;}
   if(t.value=="EMC"){
    if(actual_stack.empty())return false;
