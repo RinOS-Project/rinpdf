@@ -34,6 +34,9 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
  double miter_limit=10;
  double flatness=1;
  unsigned compatibility_depth=0;
+ bool in_text=false;
+ double text_x=0,text_y=0,text_leading=0;
+ double text_a=1,text_b=0,text_c=0,text_d=1;
  std::vector<double> dash_pattern;
  double dash_phase=0;
  bool reading_dash=false;
@@ -114,6 +117,34 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    if(!std::isfinite(total)||total>1000000||(!dash_values.empty()&&total<=0)||stack[0]<0)return false;
    dash_pattern=dash_values;dash_phase=total>0?std::fmod(stack[0],total*(dash_values.size()%2?2:1)):0;
    dash_values.clear();dash_array_ready=false;stack.clear();
+  }else if(word=="BT"){
+   if(in_text||!stack.empty()||!path.empty()||!polygons.empty())return false;
+   in_text=true;text_x=text_y=text_leading=0;
+   text_a=text_d=1;text_b=text_c=0;
+  }else if(word=="ET"){
+   if(!in_text||!stack.empty())return false;
+   in_text=false;
+  }else if(word=="TL"){
+   if(!in_text||stack.size()!=1)return false;
+   text_leading=stack[0];stack.clear();
+  }else if(word=="Td"||word=="TD"){
+   if(!in_text||stack.size()!=2)return false;
+   if(word=="TD")text_leading=-stack[1];
+   text_x+=stack[0];text_y+=stack[1];
+   if(!std::isfinite(text_x)||!std::isfinite(text_y))return false;
+   stack.clear();
+  }else if(word=="T*"){
+   if(!in_text||!stack.empty())return false;
+   text_y-=text_leading;
+   if(!std::isfinite(text_y))return false;
+  }else if(word=="Tm"){
+   if(!in_text||stack.size()!=6)return false;
+   text_a=stack[0];text_b=stack[1];text_c=stack[2];text_d=stack[3];
+   text_x=stack[4];text_y=stack[5];stack.clear();
+  }else if(word=="Tf"||word=="Tj"||word=="TJ"||
+            word=="'"||word=="\\\"" ){
+   // Font and glyph interpretation is not yet implemented.
+   return false;
   }else if(word=="i"){
    // The graphics-state flatness parameter is device dependent.
    // Store and validate it, while retaining adaptive curve tessellation.
@@ -1105,7 +1136,7 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
    stack.clear();
   }else return false; // Do not silently ignore unknown operators.
  }
- return compatibility_depth==0&&!reading_dash&&!dash_array_ready&&dash_values.empty()&&stack.empty()&&path.empty()&&polygons.empty()&&saved.empty()&&!pending_rect_clip&&!pending_path_clip;
+ return !in_text&&compatibility_depth==0&&!reading_dash&&!dash_array_ready&&dash_values.empty()&&stack.empty()&&path.empty()&&polygons.empty()&&saved.empty()&&!pending_rect_clip&&!pending_path_clip;
 }
 bool render_rectangles(const uint8_t *contents,size_t size,unsigned width,unsigned height,uint8_t *rgba,size_t stride){
  return render_rectangles_box(contents,size,width,height,rgba,stride,{0,0,(double)width,(double)height});
