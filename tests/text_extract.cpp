@@ -157,6 +157,10 @@ int main(){
  // Replace with the same byte count to keep /Length and xref valid.
  if(const int error=reject_boundary("BT /F1 12 Tf","BT 1/F1 2 Tf",
       47,48,49))return error;
+ // An unknown Tf resource must not fall back to the previously selected font.
+ // Keep the PDF byte layout unchanged while replacing F1 with F9.
+ if(const int error=reject_boundary("/F1 12 Tf <41> Tj <42> Tj",
+      "/F9 12 Tf <41> Tj <42> Tj",50,51,52))return error;
  // The UTF-16BE ActualText payload must reject lone low surrogates.
  // Replace equal-length hex digits so all xref offsets remain valid.
  std::string unpaired_low=pdf;
