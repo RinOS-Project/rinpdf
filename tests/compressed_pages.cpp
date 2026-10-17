@@ -40,5 +40,24 @@ int main(){
  const auto result=rinpdf_document_page_count(doc,&count);
  rinpdf_document_close(doc);
  if(result!=RINPDF_OK||count!=1)return 2;
+ // Hybrid PDF: the appended Classic xref refers to the preceding
+ // XRef stream containing compressed Catalog object 1.
+ const size_t classic_position=pdf.size();
+ auto width10=[](size_t v){
+  std::string text=std::to_string(v);
+  return std::string(10-text.size(),'0')+text;
+ };
+ pdf+="xref\n0 1\n0000000000 65535 f \n2 4\n";
+ for(unsigned id=2;id<=5;++id)
+  pdf+=width10(offset[id])+" 00000 n \n";
+ pdf+="trailer\n<< /Size 6 /Root 1 0 R /XRefStm "+
+      std::to_string(offset[5])+" >>\nstartxref\n"+
+      std::to_string(classic_position)+"\n%%EOF\n";
+ if(rinpdf_document_open_memory(reinterpret_cast<const uint8_t*>(pdf.data()),
+       pdf.size(),&doc)!=RINPDF_OK)return 3;
+ count=0;
+ const auto hybrid_status=rinpdf_document_page_count(doc,&count);
+ rinpdf_document_close(doc);
+ if(hybrid_status!=RINPDF_OK||count!=1)return 4;
  return 0;
 }
