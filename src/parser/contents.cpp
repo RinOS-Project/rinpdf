@@ -323,6 +323,11 @@ bool read_page_fonts(const uint8_t* data,size_t size,size_t index,
  size_t current=0;std::set<size_t> active;
  if(!reader.walk_fonts(*pages,0,current,index,active,nullptr,result)||index>=current)
   return false;
+ // Catalog /Lang is the document-wide language fallback.
+ if(const Value* language=get(catalog,"Lang")){
+  if(language->kind!=Value::Kind::String||language->text.size()>64)return false;
+  for(auto& [name,font]:result)font.language=language->text;
+ }
  fonts=std::move(result);
  return true;
 }
