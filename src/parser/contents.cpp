@@ -49,6 +49,58 @@ struct Reader {
   if(!locate_indirect_stream(data,size,*e,xref,range))return false;
   return decode_stream(data,size,range,bytes,limit);
  }
+ bool walk_fonts(const Value& ref,size_t depth,size_t& current,size_t target,
+  std::set<size_t>& active,const Value* inherited,
+  std::map<std::string,PageFont>& output) const {
+  if(depth>64||ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
+  const size_t id=static_cast<size_t>(ref.integer);
+  if(!active.insert(id).second)return false;
+  Value node;
+  if(!object(ref,node)){active.erase(id);return false;}
+  Value owned_resources;
+  if(const Value* resources=get(node,"Resources")){
+   if(resources->kind==Value::Kind::Reference){
+    if(!object(*resources,owned_resources)){active.erase(id);return false;}
+   }else owned_resources=*resources;
+   if(owned_resources.kind!=Value::Kind::Dictionary){active.erase(id);return false;}
+   inherited=&owned_resources;
+  }
+  const Value* type=get(node,"Type");
+  if(!type||type->kind!=Value::Kind::Name){active.erase(id);return false;}
+  if(type->text=="Page"){
+   if(current==target&&inherited){
+    Value font_dictionary;
+    if(const Value* fonts=get(*inherited,"Font")){
+     if(fonts->kind==Value::Kind::Reference){
+      if(!object(*fonts,font_dictionary)){active.erase(id);return false;}
+     }else font_dictionary=*fonts;
+     if(font_dictionary.kind!=Value::Kind::Dictionary||
+        font_dictionary.dictionary.size()>4096){active.erase(id);return false;}
+     for(const auto& [key,entry]:font_dictionary.dictionary){
+      Value font;
+      if(entry.kind==Value::Kind::Reference){
+       if(!object(entry,font)){active.erase(id);return false;}
+      }else font=entry;
+      const Value* subtype=get(font,"Subtype"),*base=get(font,"BaseFont");
+      if(font.kind!=Value::Kind::Dictionary||!subtype||!base||
+         subtype->kind!=Value::Kind::Name||base->kind!=Value::Kind::Name){
+       active.erase(id);return false;
+      }
+      output.emplace(key,PageFont{base->text,subtype->text});
+     }
+    }
+   }
+   ++current;active.erase(id);return true;
+  }
+  if(type->text!="Pages"){active.erase(id);return false;}
+  const Value* kids=get(node,"Kids");
+  if(!kids||kids->kind!=Value::Kind::Array){active.erase(id);return false;}
+  for(const Value& child:kids->array)
+   if(!walk_fonts(child,depth+1,current,target,active,inherited,output)){
+    active.erase(id);return false;
+   }
+  active.erase(id);return true;
+ }
  bool walk_box(const Value& ref,size_t depth,size_t& current,size_t target,
                std::set<size_t>& active,const MediaBox* inherited,const MediaBox* inherited_crop,unsigned inherited_rotation,MediaBox& output) const {
   if(depth>64||ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
@@ -153,6 +205,26 @@ bool read_page_box(const uint8_t *data,size_t size,size_t index,MediaBox& box){
  if(!type||type->kind!=Value::Kind::Name||type->text!="Catalog"||!pages)return false;
  std::set<size_t> active;size_t current=0;
  return reader.walk_box(*pages,0,current,index,active,nullptr,nullptr,0,box)&&index<current;
+}
+
+bool read_page_fonts(const uint8_t* data,size_t size,size_t index,
+ std::map<std::string,PageFont>& fonts){
+ if(!data)return false;
+ std::vector<XrefEntry> xref;std::vector<XrefStreamEntry> compressed;Value trailer;
+ if(!read_object_xref(data,size,xref,compressed,trailer))return false;
+ const Value* root=get(trailer,"Root");
+ if(!root)return false;
+ Reader reader{data,size,xref,compressed,{}};
+ Value catalog;
+ if(!reader.object(*root,catalog))return false;
+ const Value* type=get(catalog,"Type"),*pages=get(catalog,"Pages");
+ if(!type||type->kind!=Value::Kind::Name||type->text!="Catalog"||!pages)return false;
+ std::map<std::string,PageFont> result;
+ size_t current=0;std::set<size_t> active;
+ if(!reader.walk_fonts(*pages,0,current,index,active,nullptr,result)||index>=current)
+  return false;
+ fonts=std::move(result);
+ return true;
 }
 
 }
