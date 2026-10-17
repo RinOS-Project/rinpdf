@@ -30,7 +30,7 @@ int main(){
  if(outline.points.size()!=1||outline.points[0].x!=5||
     outline.points[0].y!=7||outline.contour_ends.size()!=1)return 3;
  auto unsupported=bytes;
- w16(unsupported,172,0x0802); // unsupported scaled-component-offset
+ w16(unsupported,172,0x1802); // conflicting scaled/unscaled offset flags
  SfntFont broken;
  if(!parse_sfnt(unsupported.data(),unsupported.size(),broken))return 4;
  if(sfnt_glyph_outline(broken,2,outline))return 5;
@@ -46,6 +46,24 @@ int main(){
  if(!sfnt_glyph_outline(broken,2,outline))return 10;
  if(outline.points.size()!=1||outline.points[0].x!=5||
     outline.points[0].y!=7)return 11;
+ // Two components: second uses parent point 0 and child point 0.
+ auto matched=bytes;
+ matched.resize(188,0);
+ w32(matched,72,44); // longer glyf table
+ w16(matched,142,22); // glyph 2 occupies 26 bytes
+ w16(matched,172,0x0022); // MORE_COMPONENTS + XY byte arguments
+ w16(matched,178,0x0000); // second component: point-matching byte indices
+ w16(matched,180,1);      // glyph 1
+ matched[182]=0;matched[183]=0; // parent point 0, child point 0
+ if(!parse_sfnt(matched.data(),matched.size(),broken))return 12;
+ if(!sfnt_glyph_outline(broken,2,outline))return 13;
+ if(outline.points.size()!=2||outline.points[0].x!=5||
+    outline.points[1].x!=5||outline.points[1].y!=7)return 14;
+ auto bad_match=matched;
+ bad_match[182]=5; // parent point index out of range
+ if(!parse_sfnt(bad_match.data(),bad_match.size(),broken))return 15;
+ if(sfnt_glyph_outline(broken,2,outline))return 16;
+ if(outline.points.size()!=2)return 17;
  auto self=bytes;w16(self,174,2);
  if(!parse_sfnt(self.data(),self.size(),broken))return 7;
  if(sfnt_glyph_outline(broken,2,outline))return 8;
