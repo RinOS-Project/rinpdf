@@ -23,7 +23,8 @@ static bool number(const std::string& s,double& v){
 }
 static bool space(unsigned char c){return c==0||c==9||c==10||c==12||c==13||c==32;}
 struct Rect {double x,y,w,h;};
-bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsigned width,unsigned height,uint8_t *rgba,size_t stride,PageBox box,const FontResources& fonts){
+bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsigned width,unsigned height,uint8_t *rgba,size_t stride,PageBox box,const FontResources& fonts,
+ const MarkedProperties& properties){
  if(!std::isfinite(box.x0)||!std::isfinite(box.y0)||!std::isfinite(box.x1)||!std::isfinite(box.y1)||box.x1<=box.x0||box.y1<=box.y0)return false;
  const double sx=(double)width/(box.x1-box.x0),sy=(double)height/(box.y1-box.y0);
  if(!std::isfinite(sx)||!std::isfinite(sy))return false;
@@ -182,6 +183,19 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
     if(marked_languages.size()>=64||!stack.empty()||has_pending_text)return false;
     marked_languages.push_back(active_marked_language);
     lex=look;continue;
+   }
+   if(next.kind==parser::TokenKind::Name){
+    parser::Lexer look_op=look;
+    const auto op=look_op.next();
+    if(op.kind==parser::TokenKind::Keyword&&op.value=="BDC"){
+     if(marked_languages.size()>=64||!stack.empty()||has_pending_text)
+      return false;
+     const auto match=properties.find(next.value);
+     if(match==properties.end())return false;
+     marked_languages.push_back(active_marked_language);
+     if(!match->second.empty())active_marked_language=match->second;
+     lex=look_op;continue;
+    }
    }
    if(next.kind==parser::TokenKind::DictOpen){
     parser::Value properties;
