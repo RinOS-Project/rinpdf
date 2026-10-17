@@ -58,10 +58,15 @@ struct Reader {
   std::string& cmap_name,const Value* page_resources=nullptr) const {
   if(depth>=8||ref.kind!=Value::Kind::Reference||ref.integer<=0||
      !visiting.insert(size_t(ref.integer)).second)return false;
-  Value dictionary;
+  // Ordinary object resolution intentionally rejects stream objects.
+  // Resolve the indirect stream header to obtain its dictionary and data.
+  const XrefEntry* entry_ptr=nullptr;
+  if(!entry(ref,entry_ptr))return false;
+  StreamRange range;
+  if(!locate_indirect_stream(data,size,*entry_ptr,xref,range))return false;
+  Value dictionary=range.dictionary;
   std::vector<uint8_t> decoded;
-  if(!object(ref,dictionary)||dictionary.kind!=Value::Kind::Dictionary||
-     !stream(ref,decoded,1024*1024))return false;
+  if(!decode_stream(data,size,range,decoded,1024*1024))return false;
   if(const Value* name=get(dictionary,"CMapName")){
    if(name->kind!=Value::Kind::Name||name->text.size()>128)return false;
    cmap_name=name->text;
