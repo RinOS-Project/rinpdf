@@ -490,3 +490,8 @@ PDFではパス構築後、ストローク演算子の前に破線設定 `d` を
 `src/parser/object_stream.cpp` に、既にフィルタ解除された `/ObjStm` データを `/N` と `/First` に基づいて解析する内部処理を追加しました。オブジェクト番号・相対オフセットの組を検証し、重複番号、範囲外オフセット、不正な値、過大な個数を拒否します。失敗時は出力を変更しません。独立した `rinpdf-object-stream` テストを追加しました。
 
 **未接続:** XRef Stream type 2エントリから該当 `/ObjStm` を引く処理、間接ストリームのフィルタ解除とキャッシュ、圧縮オブジェクトの参照解決、ページツリーとの統合は今後の作業です。このコミットだけでは圧縮オブジェクトを含むPDFを開けません。新規テストのPASSは未確認です。
+
+## XRef type 2 /ObjStm resolution (experimental)
+`resolve_compressed_object` を追加しました。Type 2エントリからType 1の `/ObjStm` コンテナーを参照し、`/N`、`/First`、ストリーム境界とフィルタ解除後のオブジェクト番号・インデックス一致を検証してValueを返します。正常例と不正インデックス・不正コンテナーを使う回帰テストを追加しました。
+
+**未統合:** ページツリーとContentのReaderはまだ `read_uncompressed_xref` を利用しており、Type 2を含むドキュメントを拒否します。Object Streamを含むPDF全体の表示は未対応です。変更後のビルド・16テストPASSは未確認です。
