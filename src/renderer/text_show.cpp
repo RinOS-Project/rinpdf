@@ -28,4 +28,38 @@ bool parse_text_array(parser::Lexer& lexer,std::vector<TextRun>& runs){
  }
  return false;
 }
+bool courier_text_advance(const std::string& font,
+ const std::vector<TextRun>& runs,double size,
+ double char_spacing,double word_spacing,double horizontal_scale,
+ double& advance){
+ if(font!="Courier"&&font!="Courier-Bold"&&
+    font!="Courier-Oblique"&&font!="Courier-BoldOblique")return false;
+ if(!std::isfinite(size)||size<=0||size>10000||
+    !std::isfinite(char_spacing)||std::abs(char_spacing)>10000||
+    !std::isfinite(word_spacing)||std::abs(word_spacing)>10000||
+    !std::isfinite(horizontal_scale)||horizontal_scale<0||
+    horizontal_scale>10||runs.size()>4096)return false;
+ double total=0;
+ size_t count=0;
+ for(const auto& run:runs){
+  if(run.adjustment){
+   if(!std::isfinite(run.displacement)||
+      std::abs(run.displacement)>10000000)return false;
+   total-=run.displacement*size/1000;
+  }else{
+   if(run.bytes.size()>1048576-count)return false;
+   count+=run.bytes.size();
+   for(unsigned char c:run.bytes){
+    // This path supports printable ASCII in standard single-byte encoding.
+    if(c<32||c>126)return false;
+    total+=size*0.6+char_spacing+(c==32?word_spacing:0);
+   }
+  }
+  if(!std::isfinite(total)||std::abs(total)>1e12)return false;
+ }
+ const double result=total*horizontal_scale;
+ if(!std::isfinite(result)||std::abs(result)>1e12)return false;
+ advance=result;return true;
+}
+
 }
