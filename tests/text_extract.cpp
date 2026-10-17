@@ -231,6 +231,24 @@ int main(){
  if(extract_page_text(reinterpret_cast<const uint8_t*>(large_td_pdf.data()),
       large_td_pdf.size(),0,result))return 73;
  if(result!=previous)return 74;
+ // Same-line Td moves the next glyph beyond the previous glyph's
+ // advance; infer a space without introducing a newline.
+ std::string same_line_td=pdf;
+ const std::string old_td="0 -16 Td";
+ const std::string new_td="20  0 Td";
+ static_assert(sizeof("0 -16 Td")==sizeof("20  0 Td"));
+ const auto same_line_pos=same_line_td.find(old_td);
+ if(same_line_pos==std::string::npos)return 75;
+ same_line_td.replace(same_line_pos,old_td.size(),new_td);
+ std::string spaced_expected=previous;
+ const auto line_pos=spaced_expected.find("ABB\nB\nB\nB");
+ if(line_pos==std::string::npos)return 76;
+ spaced_expected.replace(line_pos,std::string("ABB\nB\nB\nB").size(),
+                         "ABB\nB B\nB");
+ if(!extract_page_text(reinterpret_cast<const uint8_t*>(same_line_td.data()),
+      same_line_td.size(),0,result))return 77;
+ if(result!=spaced_expected)return 78;
+ result=previous;
  // The UTF-16BE ActualText payload must reject lone low surrogates.
  // Replace equal-length hex digits so all xref offsets remain valid.
  std::string unpaired_low=pdf;
