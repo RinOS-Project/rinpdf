@@ -4,9 +4,9 @@
 #include <map>
 #include <string>
 namespace rinpdf::parser {
-// A deliberately bounded subset of ToUnicode CMap: one/two-byte source codes
+// A deliberately bounded subset of ToUnicode CMap: one-to-four-byte source codes
 // and single Unicode scalar destinations, via beginbfchar/beginbfrange.
-struct CMapKey {uint8_t width=0;uint16_t code=0;
+struct CMapKey {uint8_t width=0;uint32_t code=0;
  bool operator<(const CMapKey& b) const {
   return width!=b.width?width<b.width:code<b.code;
  }
