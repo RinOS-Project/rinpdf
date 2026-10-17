@@ -90,7 +90,8 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
  bool have_pending=false;
  bool new_line_pending=false;
  std::vector<double> operands;
- double text_line_y=0;
+ double text_line_x=0,text_line_y=0;
+ double line_axis_x=1,line_axis_y=0;
  bool has_line_origin=false;
  unsigned suppressed=0;
  size_t tokens=0;
@@ -206,21 +207,36 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
   if(text&&(t.value=="Td"||t.value=="TD")){
    if(operands.size()!=2||have_pending)return false;
    if(operands[1]!=0&&!suppressed)new_line_pending=true;
-   text_line_y+=operands[1];
-   if(!std::isfinite(text_line_y))return false;
+   // Td/TD operate in the current text-line coordinate system.
+   const double dx=operands[0],dy=operands[1];
+   text_line_x+=line_axis_x*dx-line_axis_y*dy;
+   text_line_y+=line_axis_y*dx+line_axis_x*dy;
+   if(!std::isfinite(text_line_x)||!std::isfinite(text_line_y))return false;
    has_line_origin=true;
    operands.clear();continue;
   }
   if(text&&t.value=="Tm"){
    if(operands.size()!=6||have_pending)return false;
-   const double next_y=operands[5];
-   if(has_line_origin&&std::abs(next_y-text_line_y)>0.001&&!suppressed)
+   const double next_x=operands[4],next_y=operands[5];
+   const double old_length=std::hypot(line_axis_x,line_axis_y);
+   const double next_length=std::hypot(operands[0],operands[1]);
+   if(next_length<=1e-12||!std::isfinite(next_length)||
+      old_length<=1e-12||!std::isfinite(old_length))return false;
+   // A new Tm can also describe text along a rotated baseline.
+   // Compare displacement normal to the prior baseline, not the page Y axis.
+   const double displacement_normal=
+      -(next_x-text_line_x)*line_axis_y/old_length+
+       (next_y-text_line_y)*line_axis_x/old_length;
+   if(has_line_origin&&std::abs(displacement_normal)>0.001&&!suppressed)
     new_line_pending=true;
-   text_line_y=next_y;
+   text_line_x=next_x;text_line_y=next_y;
+   line_axis_x=operands[0]/next_length;
+   line_axis_y=operands[1]/next_length;
    has_line_origin=true;
    operands.clear();continue;
   }
-  if(t.value=="BT"){text=true;operands.clear();has_line_origin=false;continue;}
+  if(t.value=="BT"){text=true;operands.clear();has_line_origin=false;
+   text_line_x=0;text_line_y=0;line_axis_x=1;line_axis_y=0;continue;}
   if(t.value=="T*"&&text){
    if(!suppressed)new_line_pending=true;
    continue;
