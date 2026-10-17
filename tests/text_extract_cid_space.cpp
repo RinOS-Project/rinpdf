@@ -1,5 +1,6 @@
 #include "../src/parser/text_extract.h"
 #include <cstdio>
+#include <map>
 #include <string>
 using namespace rinpdf::parser;
 int main(){
@@ -27,6 +28,15 @@ int main(){
  }
  pdf+="trailer\n<< /Root 1 0 R /Size 8 >>\nstartxref\n"+
        std::to_string(xref)+"\n%%EOF\n";
+ // Verify explicit and default descendant CID widths used by the
+ // Identity-H glyph advance path.
+ std::map<std::string,PageFont> fonts;
+ if(!read_page_fonts(reinterpret_cast<const uint8_t*>(pdf.data()),
+      pdf.size(),0,fonts)||fonts.count("F1")!=1)return 3;
+ double space_width=0,letter_width=0;
+ if(!cid_width(fonts.at("F1").cid_widths,32,space_width)||
+    !cid_width(fonts.at("F1").cid_widths,65,letter_width)||
+    space_width!=250||letter_width!=1000)return 4;
  std::string extracted;
  if(!extract_page_text(reinterpret_cast<const uint8_t*>(pdf.data()),
      pdf.size(),0,extracted))return 1;
