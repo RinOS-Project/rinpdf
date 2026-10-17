@@ -2,6 +2,7 @@
 #include "path_mask.h"
 #include "cubic_arc.h"
 #include "cubic_dash.h"
+#include "../parser/lexer.h"
 #include <algorithm>
 #include <charconv>
 #include <cmath>
@@ -73,15 +74,22 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
   return shapes;
  };
 
- size_t pos=0;
- while(pos<size){
-  while(pos<size&&space(contents[pos]))++pos;
-  if(pos==size)break;
-  if(contents[pos]=='%'){while(pos<size&&contents[pos]!='\n'&&contents[pos]!='\r')++pos;continue;}
-  size_t begin=pos;
-  if(contents[pos]=='['||contents[pos]==']')++pos;
-  else while(pos<size&&!space(contents[pos])&&contents[pos]!='['&&contents[pos]!=']')++pos;
-  std::string word(reinterpret_cast<const char*>(contents+begin),pos-begin);
+ // Share PDF tokenization rules with the object parser. Whitespace inside
+ // literal strings, nested parentheses and hex-string bytes stay atomic.
+ parser::Lexer lex(contents,size);
+ while(true){
+  const parser::Token token=lex.next();
+  if(token.kind==parser::TokenKind::End)break;
+  if(token.kind==parser::TokenKind::Invalid)return false;
+  if(token.kind==parser::TokenKind::String||
+     token.kind==parser::TokenKind::HexString||
+     token.kind==parser::TokenKind::Name){
+   // Until Tf/Tj/TJ are implemented, reject their operands rather than
+   // inadvertently treating embedded text as drawing operators.
+   if(compatibility_depth>0)continue;
+   return false;
+  }
+  const std::string& word=token.value;
   double v=0;
   if(number(word,v)){if(reading_dash){if(dash_values.size()>=32)return false;dash_values.push_back(v);}else{if(dash_array_ready&&stack.size()>=1)return false;if(stack.size()>=16)return false;stack.push_back(v);}continue;}
   if(word=="["){if(reading_dash||dash_array_ready||!stack.empty())return false;reading_dash=true;dash_values.clear();continue;}
