@@ -371,8 +371,22 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
    suppress_stack.pop_back();actual_stack.pop_back();
    continue;
   }
-  if(t.value=="Tj"&&text){
+  if(text&&(t.value=="Tj"||t.value=="'"||t.value=="\\\"")){
+   const bool quote=t.value=="'"||t.value=="\\\"";
    if(!have_pending||!fonts.count(selected))return false;
+   if(quote){
+    if(t.value=="\\\""){
+     if(operands.size()!=2||std::abs(operands[0])>10000||
+        std::abs(operands[1])>10000)return false;
+     word_spacing=operands[0];
+     character_spacing=operands[1];
+     operands.clear();
+    }else if(!operands.empty())return false;
+    // Quote operators include T*: the new text line is a new gap context.
+    pending_tj_adjustment=0;
+    text_run_emitted=false;
+    if(!suppressed)new_line_pending=true;
+   }
    if(!suppressed){
     if(!pending.empty()&&new_line_pending&&!output.empty()&&
        output.back()!='\n')output+='\n';
