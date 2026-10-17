@@ -918,9 +918,32 @@ bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,un
       const auto& poly=polygons[k];
       const bool closed=poly.size()>3&&poly.front().x==poly.back().x&&poly.front().y==poly.back().y;
       for(size_t i=closed?0:1;i+1<poly.size();++i){
-       const Point prev=i==0?poly[poly.size()-2]:poly[i-1];
+       Point prev=i==0?poly[poly.size()-2]:poly[i-1];
+       Point next=poly[i+1];
        const Matrix ma=polygon_matrices[k][i==0?poly.size()-1:i],mb=polygon_matrices[k][i+1];
-       if(!paint_corner(prev,poly[i],poly[i+1],ma,mb))return false;
+       // A fully painted closed contour uses the same analytic seam
+       // tangents as the partial dashed-seam path. Do not substitute
+       // a cubic tangent if the incoming edge is a separate close line.
+       if(i==0&&k==0&&polygons.size()==1&&!cubic_strokes.empty()){
+        const Point p=poly.front();
+        if(cubic_strokes.front().start==0){
+         Point tangent{};
+         const auto& curve=cubic_strokes.front();
+         if(cubic_endpoint_tangent(curve.p0,curve.p1,curve.p2,curve.p3,false,tangent)){
+          next={p.x+tangent.x,p.y+tangent.y};
+          if(!std::isfinite(next.x)||!std::isfinite(next.y))return false;
+         }
+        }
+        if(cubic_strokes.back().endpoint==poly.size()-1){
+         Point tangent{};
+         const auto& curve=cubic_strokes.back();
+         if(cubic_endpoint_tangent(curve.p0,curve.p1,curve.p2,curve.p3,true,tangent)){
+          prev={p.x-tangent.x,p.y-tangent.y};
+          if(!std::isfinite(prev.x)||!std::isfinite(prev.y))return false;
+         }
+        }
+       }
+       if(!paint_corner(prev,poly[i],next,ma,mb))return false;
       }
      }
     }
