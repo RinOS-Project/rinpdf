@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 namespace rinpdf::renderer {
-struct FontResource { std::string base_font,subtype,encoding; std::vector<uint8_t> embedded_truetype; };
+struct FontResource { std::string base_font,subtype,encoding; std::vector<uint8_t> embedded_truetype; std::map<uint8_t,uint32_t> differences; };
 using FontResources=std::map<std::string,FontResource>;
 struct PageBox { double x0=0,y0=0,x1=0,y1=0; };
 bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsigned width,unsigned height,uint8_t *rgba,size_t stride,PageBox box,const FontResources& fonts);
