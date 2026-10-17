@@ -53,5 +53,15 @@ int main(){
   "1 beginbfchar <41> <0041> endbfchar";
  if(parse_tounicode_sequences(reinterpret_cast<const uint8_t*>(bad_space.data()),
      bad_space.size(),sequences))return 15;
+ std::vector<std::pair<CMapKey,CMapKey>> ranges;
+ if(!parse_tounicode_sequences(reinterpret_cast<const uint8_t*>(long_codes.data()),
+     long_codes.size(),sequences,&ranges))return 16;
+ if(ranges.size()!=2||ranges[0].first.width!=3||
+    ranges[1].first.width!=4)return 17;
+ const std::string outside=
+  "1 begincodespacerange <8100> <81FF> endcodespacerange "
+  "1 beginbfchar <8201> <0041> endbfchar";
+ if(parse_tounicode_sequences(reinterpret_cast<const uint8_t*>(outside.data()),
+     outside.size(),sequences,&ranges))return 18;
  return 0;
 }
