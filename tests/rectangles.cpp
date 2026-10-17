@@ -720,9 +720,9 @@ int main(){
  reinterpret_cast<const unsigned char*>(curved_dash_after),
  sizeof(curved_dash_after)-1,32,32,exact_after.data(),128))return 308;
  if(exact_before!=exact_after)return 309;
- bool has_ink=false;
- for(size_t i=0;i<exact_before.size();i+=4)if(exact_before[i]<255){has_ink=true;break;}
- if(!has_ink)return 310;
+ bool exact_has_ink=false;
+ for(size_t i=0;i<exact_before.size();i+=4)if(exact_before[i]<255){exact_has_ink=true;break;}
+ if(!exact_has_ink)return 310;
  // Mixed path must preserve dash phase across both lines and cubics.
  const char mixed_path[]="[2 1] 0 d 0 G 1 w 0 J 1 8 m 5 8 l 7 12 11 12 13 8 c 15 8 l S";
  std::vector<unsigned char> mixed_pixels(32*32*4);
