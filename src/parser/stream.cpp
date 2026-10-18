@@ -139,6 +139,66 @@ static bool decode_run_length(const uint8_t* input,size_t length,
  }
  return false;
 }
+static bool decode_lzw(const uint8_t* input,size_t length,
+ std::vector<uint8_t>& output,size_t limit,unsigned early_change){
+ if(early_change>1)return false;
+ output.clear();
+ struct Entry {int prefix=-1;uint8_t suffix=0;};
+ Entry table[4096]{};
+ for(int i=0;i<256;++i)table[i]={-1,uint8_t(i)};
+ unsigned next=258,bits=9;
+ int previous=-1;
+ size_t bitpos=0;
+ uint8_t word[4096],reverse[4096];
+ size_t previous_length=0;
+ auto read_code=[&](unsigned& code)->bool{
+  if(bitpos>length*8||size_t(bits)>length*8-bitpos)return false;
+  code=0;
+  for(unsigned k=0;k<bits;++k){
+   const size_t bit=bitpos++;
+   code=(code<<1)|((input[bit/8]>>(7-(bit%8)))&1);
+  }
+  return true;
+ };
+ auto expand=[&](unsigned code,size_t& count)->bool{
+  count=0;
+  unsigned hops=0;
+  while(code>=256){
+   if(code>=next||code<258||++hops>4096||count>=4096)return false;
+   reverse[count++]=table[code].suffix;
+   code=unsigned(table[code].prefix);
+  }
+  if(count>=4096)return false;
+  reverse[count++]=uint8_t(code);
+  for(size_t i=0;i<count;++i)word[i]=reverse[count-i-1];
+  return true;
+ };
+ while(true){
+  unsigned code=0;
+  if(!read_code(code))return false;
+  if(code==257)return true;
+  if(code==256){
+   next=258;bits=9;previous=-1;previous_length=0;
+   continue;
+  }
+  size_t count=0;
+  if(code<next){
+   if(!expand(code,count))return false;
+  }else if(code==next&&previous>=0){
+   if(previous_length>=4096)return false;
+   if(!expand(unsigned(previous),count)||count>=4096)return false;
+   word[count++]=word[0];
+  }else return false;
+  if(count>limit-output.size())return false;
+  output.insert(output.end(),word,word+count);
+  if(previous>=0&&next<4096){
+   table[next++]={previous,word[0]};
+   if(bits<12&&next+early_change==(1u<<bits))++bits;
+  }
+  previous=int(code);
+  previous_length=count;
+ }
+}
 bool decode_stream(const uint8_t *data,size_t size,const StreamRange& range,std::vector<uint8_t>& output,size_t max_output){
  output.clear();
  if(!data||range.offset>size||range.length>size-range.offset||
@@ -168,6 +228,19 @@ bool decode_stream(const uint8_t *data,size_t size,const StreamRange& range,std:
                            data+range.offset+range.length);
  if(stage.size()>max_output&&filters.size()==0)return false;
  for(const std::string& name:filters){
+  unsigned early_change=1;
+  if(name=="LZWDecode"||name=="LZW"){
+   if(parms!=range.dictionary.dictionary.end()){
+    if(parms->second.kind!=Value::Kind::Dictionary)return false;
+    const auto it=parms->second.dictionary.find("EarlyChange");
+    if(it!=parms->second.dictionary.end()){
+     if(it->second.kind!=Value::Kind::Integer||
+        (it->second.integer!=0&&it->second.integer!=1))return false;
+     early_change=unsigned(it->second.integer);
+    }
+    if(parms->second.dictionary.count("Predictor"))return false;
+   }
+  }
   std::vector<uint8_t> decoded;
   const bool ok=name=="FlateDecode"||name=="Fl"?
     flate_decode(stage.data(),stage.size(),decoded,max_output):
@@ -176,7 +249,9 @@ bool decode_stream(const uint8_t *data,size_t size,const StreamRange& range,std:
     (name=="ASCII85Decode"||name=="A85")?
     decode_ascii85(stage.data(),stage.size(),decoded,max_output):
     (name=="RunLengthDecode"||name=="RL")?
-    decode_run_length(stage.data(),stage.size(),decoded,max_output):false;
+    decode_run_length(stage.data(),stage.size(),decoded,max_output):
+    (name=="LZWDecode"||name=="LZW")?
+    decode_lzw(stage.data(),stage.size(),decoded,max_output,early_change):false;
   if(!ok){output.clear();return false;}
   stage=std::move(decoded);
  }
