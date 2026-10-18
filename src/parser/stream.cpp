@@ -2,6 +2,8 @@
 #include "flate.h"
 #include <cstring>
 #include <utility>
+#include <algorithm>
+#include <string>
 namespace rinpdf::parser {
 static bool space(unsigned char c){return c==0||c==9||c==10||c==12||c==13||c==32;}
 static bool keyword(const uint8_t *data,size_t size,size_t pos,const char *word,size_t len){
@@ -37,16 +39,120 @@ bool locate_stream(const uint8_t *data,size_t size,StreamRange& out){
  out.dictionary=std::move(dict);out.offset=pos;out.length=(size_t)amount;
  return true;
 }
+static int hex_digit(unsigned char c){
+ if(c>='0'&&c<='9')return c-'0';
+ if(c>='a'&&c<='f')return c-'a'+10;
+ if(c>='A'&&c<='F')return c-'A'+10;
+ return -1;
+}
+static bool decode_hex(const uint8_t* input,size_t length,
+ std::vector<uint8_t>& output,size_t limit){
+ output.clear();
+ int nibble=-1;
+ bool terminated=false;
+ for(size_t i=0;i<length;++i){
+  const unsigned char c=input[i];
+  if(terminated){if(!space(c))return false;continue;}
+  if(space(c))continue;
+  if(c=='>'){
+   terminated=true;
+   if(nibble>=0){
+    if(output.size()>=limit)return false;
+    output.push_back(uint8_t(nibble<<4));
+    nibble=-1;
+   }
+   continue;
+  }
+  const int digit=hex_digit(c);
+  if(digit<0)return false;
+  if(nibble<0)nibble=digit;
+  else{
+   if(output.size()>=limit)return false;
+   output.push_back(uint8_t((nibble<<4)|digit));
+   nibble=-1;
+  }
+ }
+ return terminated;
+}
+static bool decode_ascii85(const uint8_t* input,size_t length,
+ std::vector<uint8_t>& output,size_t limit){
+ output.clear();
+ uint64_t accumulator=0;
+ unsigned digits=0;
+ bool terminated=false;
+ for(size_t i=0;i<length;++i){
+  const unsigned char c=input[i];
+  if(terminated){if(!space(c))return false;continue;}
+  if(space(c))continue;
+  if(c=='~'){
+   if(i+1>=length||input[i+1]!='>')return false;
+   ++i;terminated=true;
+   if(digits==1)return false;
+   if(digits){
+    const unsigned count=digits;
+    while(digits++<5)accumulator=accumulator*85+84;
+    if(accumulator>0xffffffffULL)return false;
+    if(output.size()>limit-(count-1))return false;
+    for(unsigned j=0;j<count-1;++j)
+     output.push_back(uint8_t(accumulator>>(24-8*j)));
+   }
+   continue;
+  }
+  if(c=='z'){
+   if(digits||output.size()>limit||limit-output.size()<4)return false;
+   output.insert(output.end(),4,0);continue;
+  }
+  if(c<'!'||c>'u')return false;
+  accumulator=accumulator*85+(c-'!');
+  if(++digits==5){
+   if(accumulator>0xffffffffULL||output.size()>limit||
+      limit-output.size()<4)return false;
+   for(int shift=24;shift>=0;shift-=8)
+    output.push_back(uint8_t(accumulator>>shift));
+   accumulator=0;digits=0;
+  }
+ }
+ return terminated;
+}
 bool decode_stream(const uint8_t *data,size_t size,const StreamRange& range,std::vector<uint8_t>& output,size_t max_output){
  output.clear();
- if(!data||range.offset>size||range.length>size-range.offset||max_output==0)return false;
- auto filter=range.dictionary.dictionary.find("Filter");
+ if(!data||range.offset>size||range.length>size-range.offset||
+    max_output==0)return false;
+ const auto filter=range.dictionary.dictionary.find("Filter");
  if(filter==range.dictionary.dictionary.end()){
   if(range.length>max_output)return false;
   output.assign(data+range.offset,data+range.offset+range.length);
   return true;
  }
- if(filter->second.kind!=Value::Kind::Name||filter->second.text!="FlateDecode")return false;
- return flate_decode(data+range.offset,range.length,output,max_output);
+ std::vector<std::string> filters;
+ const Value& value=filter->second;
+ if(value.kind==Value::Kind::Name)filters.push_back(value.text);
+ else if(value.kind==Value::Kind::Array){
+  if(value.array.empty()||value.array.size()>8)return false;
+  for(const Value& item:value.array){
+   if(item.kind!=Value::Kind::Name)return false;
+   filters.push_back(item.text);
+  }
+ }else return false;
+ // DecodeParms is meaningful for image predictors and other specialized
+ // filters. Do not silently discard parameters for arbitrary chains.
+ const auto parms=range.dictionary.dictionary.find("DecodeParms");
+ if(parms!=range.dictionary.dictionary.end()&&filters.size()>1)
+  return false;
+ std::vector<uint8_t> stage(data+range.offset,
+                           data+range.offset+range.length);
+ if(stage.size()>max_output&&filters.size()==0)return false;
+ for(const std::string& name:filters){
+  std::vector<uint8_t> decoded;
+  const bool ok=name=="FlateDecode"||name=="Fl"?
+    flate_decode(stage.data(),stage.size(),decoded,max_output):
+    (name=="ASCIIHexDecode"||name=="AHx")?
+    decode_hex(stage.data(),stage.size(),decoded,max_output):
+    (name=="ASCII85Decode"||name=="A85")?
+    decode_ascii85(stage.data(),stage.size(),decoded,max_output):false;
+  if(!ok){output.clear();return false;}
+  stage=std::move(decoded);
+ }
+ output=std::move(stage);return true;
 }
 }
