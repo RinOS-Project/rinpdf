@@ -1,5 +1,8 @@
 #pragma once
 #include <array>
+#include <cstddef>
+#include <cstdint>
+#include <vector>
 
 namespace rinpdf::parser {
 
@@ -16,5 +19,23 @@ struct ExponentialFunction {
 bool evaluate_exponential_function(const ExponentialFunction& function,
                                    double input,unsigned outputs,
                                    double* result) noexcept;
+
+// Parsed one-input sampled PDF FunctionType 0. Raw samples use PDF
+// MSB-first packed representation, without per-sample byte alignment.
+struct SampledFunction {
+ size_t count=0;
+ unsigned bits=0;
+ unsigned outputs=0;
+ double domain[2]{0,1};
+ double encode[2]{};
+ std::array<double,8> decode{};
+ std::array<double,8> range{};
+};
+
+// Evaluates a previously decoded sampled function by linear interpolation.
+// The caller owns and retains the decoded stream bytes.
+bool evaluate_sampled_function(const SampledFunction& function,
+                               const std::vector<uint8_t>& samples,
+                               double input,double* result) noexcept;
 
 } // namespace rinpdf::parser
