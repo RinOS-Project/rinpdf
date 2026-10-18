@@ -134,6 +134,18 @@ double tj_space_threshold(const PageFont& font){
  }
  return 500;
 }
+// Shared spacing threshold for both Tj and TJ text-show paths.
+double text_gap_threshold(const PageFont& font,double font_size,
+ double character_spacing,double word_spacing){
+ const auto mapped=font.unicode_sequences.find(CMapKey{1,0x20});
+ const bool single_byte_space=font.subtype!="Type0"&&
+   mapped!=font.unicode_sequences.end()&&mapped->second==U" ";
+ const double spacing=character_spacing+
+   (single_byte_space?word_spacing:0);
+ return font_size>0?
+   tj_space_threshold(font)+1000.0*spacing/font_size:
+   tj_space_threshold(font);
+}
 // Shared geometric spacing check for Td/TD and Tm. The previous glyph
 // advance and both text origins are expressed in the same text matrix.
 bool has_position_gap(double old_x,double old_y,double next_x,double next_y,
@@ -348,19 +360,9 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
     // exceeds a conservative text-space threshold (0.5 em).
     double net_adjustment=pending_tj_adjustment;
     bool emitted_run=text_run_emitted;
-    const double space_units=tj_space_threshold(fonts.at(selected));
-    // TJ offsets are in 1/1000 em; Tc uses unscaled text units.
-    // Horizontal scaling multiplies both advances, so cancels unless 0.
-    // Tw only affects the encoded single-byte space (0x20), never CID
-    // glyphs in a composite font. Require a known Unicode mapping.
     const auto& active_font=fonts.at(selected);
-    const auto mapped_space=active_font.unicode_sequences.find(CMapKey{1,0x20});
-    const bool word_space=active_font.subtype!="Type0"&&
-       mapped_space!=active_font.unicode_sequences.end()&&
-       mapped_space->second==U" ";
-    const double spacing=character_spacing+(word_space?word_spacing:0);
-    const double gap_threshold=font_size>0?
-       space_units+1000.0*spacing/font_size:space_units;
+    const double gap_threshold=text_gap_threshold(active_font,font_size,
+                                                  character_spacing,word_spacing);
     // Compare physical advances when a font width and text cursor are
     // available; retain the PDF-unit fallback for unsupported metrics.
     const double physical_space=font_size*horizontal_scale*
@@ -646,13 +648,8 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
     if(!decode_run(pending,fonts.at(selected),decoded))return false;
     if(!decoded.empty()){
      const auto& active_font=fonts.at(selected);
-     const auto mapped_space=active_font.unicode_sequences.find(CMapKey{1,0x20});
-     const bool word_space=active_font.subtype!="Type0"&&
-        mapped_space!=active_font.unicode_sequences.end()&&
-        mapped_space->second==U" ";
-     const double threshold=font_size>0?
-        tj_space_threshold(active_font)+
-        1000.0*(character_spacing+(word_space?word_spacing:0))/font_size:0;
+     const double threshold=text_gap_threshold(active_font,font_size,
+                                               character_spacing,word_spacing);
      if(text_run_emitted&&font_size>0&&horizontal_scale>0&&
         std::isfinite(threshold)&&threshold>0&&
         pending_tj_adjustment<=-threshold&&!output.empty()&&
