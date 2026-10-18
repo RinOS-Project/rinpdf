@@ -103,9 +103,9 @@ bool map_stitching_input(const std::vector<double>& bounds,
 }
 
 static bool parse_calculator_number(const std::string& token,double& value,uint8_t& kind) {
-    const bool numeric_start=inst?inst->kind==0:
-      token[0]=='+'||token[0]=='-'||token[0]=='.'||
-      (token[0]>='0'&&token[0]<='9');
+    if(token.empty())return false;
+    const bool numeric_start=token[0]=='+'||token[0]=='-'||
+      token[0]=='.'||(token[0]>='0'&&token[0]<='9');
     if(!numeric_start)return false;
      const char* first=token.data();
      const char* last=first+token.size();
