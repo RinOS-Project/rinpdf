@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <vector>
 #include <string>
+#include <map>
 
 namespace rinpdf::parser {
 
@@ -49,7 +50,8 @@ bool map_stitching_input(const std::vector<double>& bounds,
 // Execute a pre-tokenized, bounded PDF Type 4 calculator program.
 bool evaluate_calculator_tokens(const std::vector<std::string>& tokens,
                                 double input,unsigned outputs,
-                                double* result);
+                                double* result,
+                                const std::map<std::string,std::pair<double,uint8_t>>* constants=nullptr);
 
 // Lex a decoded PDF Type 4 calculator stream into a validated token program.
 // Output is replaced only on success.
@@ -59,6 +61,8 @@ bool tokenize_calculator_function(const std::vector<uint8_t>& program,
 // An immutable, tokenized Type 4 calculator program, reusable per document.
 struct CalculatorProgram {
  std::vector<std::string> tokens;
+ // Parsed numeric constants keyed by their literal text, reused in branches.
+ std::map<std::string,std::pair<double,uint8_t>> numeric_constants;
 };
 // Compile without changing the destination on failure.
 bool compile_calculator_function(const std::vector<uint8_t>& source,
