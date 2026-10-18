@@ -726,6 +726,20 @@ static bool pdf_function_limits(unsigned outputs,double d0,double d1,
  return true;
 }
 
+static bool sampled_bit_depth(unsigned bits) noexcept {
+ return bits==1||bits==2||bits==4||bits==8||bits==12||
+        bits==16||bits==24||bits==32;
+}
+static bool sampled_byte_count(size_t samples,unsigned outputs,
+                               unsigned bits,size_t& bytes) noexcept {
+ if(!sampled_bit_depth(bits)||outputs==0||outputs>4||
+    samples>SIZE_MAX/outputs/bits)return false;
+ const size_t total=samples*outputs*bits;
+ if(total>SIZE_MAX-7)return false;
+ bytes=(total+7)/8;
+ return bytes<=4*1024*1024;
+}
+
 bool compile_multidimensional_pdf_function(
  const MultidimensionalSampledFunction& parameters,
  const std::vector<uint8_t>& decoded_samples,PdfFunction& output) {
@@ -737,10 +751,10 @@ bool compile_multidimensional_pdf_function(
      count>SIZE_MAX/parameters.sizes[i])return false;
   count*=parameters.sizes[i];
  }
- if(parameters.bits<1||parameters.bits>32||
-    count>SIZE_MAX/parameters.outputs/parameters.bits)return false;
- const size_t bits=count*parameters.outputs*parameters.bits;
- if(bits>SIZE_MAX-7||decoded_samples.size()!=(bits+7)/8)return false;
+ size_t expected_bytes=0;
+ if(!sampled_byte_count(count,parameters.outputs,parameters.bits,
+                        expected_bytes)||
+    decoded_samples.size()!=expected_bytes)return false;
  double inputs[4]{},probe[4]{};
  for(unsigned i=0;i<parameters.inputs;++i)
   inputs[i]=parameters.domain[2*i];
@@ -772,10 +786,11 @@ bool compile_sampled_pdf_function(const SampledFunction& parameters,
                                   PdfFunction& output) {
  if(!pdf_function_limits(parameters.outputs,parameters.domain[0],
                          parameters.domain[1],parameters.range))return false;
- if(parameters.count<2||parameters.count>4096||parameters.bits==0||
-    parameters.count>SIZE_MAX/parameters.outputs/parameters.bits)return false;
- const size_t bytes=(parameters.count*parameters.outputs*parameters.bits+7)/8;
- if(decoded_samples.size()!=bytes)return false;
+ size_t bytes=0;
+ if(parameters.count<2||parameters.count>4096||
+    !sampled_byte_count(parameters.count,parameters.outputs,
+                        parameters.bits,bytes)||
+    decoded_samples.size()!=bytes)return false;
  PdfFunction compiled;
  compiled.kind=PdfFunction::Kind::Sampled;
  compiled.outputs=parameters.outputs;
