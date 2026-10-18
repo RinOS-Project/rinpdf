@@ -370,7 +370,19 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
      if(run.bytes.empty())continue;
      std::string decoded;
      if(!decode_run(run.bytes,fonts.at(selected),decoded))return false;
-     if(decoded.empty())continue;
+     // An empty ToUnicode replacement still represents positioned glyphs.
+     // Advance the cursor even when the decoded output has no characters.
+     if(decoded.empty()){
+      double silent_advance=0;
+      if(text_cursor_known&&text_advance(run.bytes,active_font,
+          font_size,character_spacing,word_spacing,horizontal_scale,
+          silent_advance)){
+       text_cursor+=silent_advance;
+       if(!std::isfinite(text_cursor)||std::abs(text_cursor)>1e12)return false;
+      }else text_cursor_known=false;
+      net_adjustment=0;
+      continue;
+     }
      double run_advance=0;
      if(text_cursor_known&&text_advance(run.bytes,active_font,
          font_size,character_spacing,word_spacing,horizontal_scale,run_advance)){
