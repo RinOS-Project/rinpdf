@@ -900,12 +900,12 @@ struct Reader {
       !enc||enc->kind!=Value::Kind::Array||
       enc->array.size()!=functions->array.size()*2)return false;
    unsigned segment=0;
-   double start=low;
+   double previous_bound=low;
    for(const Value& bound:bounds->array){
     double b=0;
-    if(!number(bound,b)||b<=start||b>=high)return false;
+    if(!number(bound,b)||b<=previous_bound||b>=high)return false;
     if(x>=b)++segment;
-    if(segment==0)start=b;
+    previous_bound=b;
    }
    double left=low,right=high;
    if(segment){
