@@ -52,7 +52,8 @@ bool actual_text(const std::string& raw,std::string& out){
 bool cid_text_advance(const std::string& bytes,const PageFont& font,
  double font_size,double tc,double hz,double& advance){
  if(font.subtype!="Type0"||font.encoding!="Identity-H"||
-    bytes.size()%2||font_size<=0||!std::isfinite(font_size))return false;
+    bytes.size()%2||font_size<=0||!std::isfinite(font_size)||
+    !std::isfinite(tc)||!std::isfinite(hz)||hz<0)return false;
  double units=0;
  for(size_t i=0;i<bytes.size();i+=2){
   const uint16_t cid=(uint16_t(uint8_t(bytes[i]))<<8)|
