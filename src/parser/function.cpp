@@ -212,8 +212,11 @@ bool evaluate_calculator_tokens(const std::vector<std::string>& parsed_tokens,
                                 const std::map<std::string,std::pair<double,uint8_t>>* constants,
                                 const std::map<std::string,uint8_t>* operators,
                                 const std::vector<CalculatorInstruction>* instructions) {
- if(!result||outputs<1||outputs>4||!std::isfinite(input)||parsed_tokens.size()>4096)return false;
- if(instructions&&instructions->size()!=parsed_tokens.size())return false;
+ if(!result||outputs<1||outputs>4||!std::isfinite(input))return false;
+ const size_t program_size=instructions?instructions->size():parsed_tokens.size();
+ if(program_size>4096)return false;
+ if(instructions&&!parsed_tokens.empty()&&
+    instructions->size()!=parsed_tokens.size())return false;
  if(instructions){
   // Reject malformed IR before execution; do not fall back to textual
   // interpretation for compiled programs.
@@ -236,7 +239,7 @@ bool evaluate_calculator_tokens(const std::vector<std::string>& parsed_tokens,
  struct ExecutionFrame { size_t pc,end; uint8_t depth; };
  std::vector<CalcValue> stack{{input,0,0}};
  std::vector<ProcedureSpan> procedures;
- std::vector<ExecutionFrame> frames{{0,tokens.size(),0}};
+ std::vector<ExecutionFrame> frames{{0,program_size,0}};
  size_t operations=0;
  std::string token;
  while(!frames.empty()){
@@ -283,7 +286,7 @@ bool evaluate_calculator_tokens(const std::vector<std::string>& parsed_tokens,
    const ProcedureSpan span=procedures[id-1];
    for(size_t j=0;j<needed+1;++j)stack.pop_back();
    if((needed==1&&!condition)||span.begin==span.end)continue;
-   if(frame.depth>=8||span.end>tokens.size())return false;
+   if(frame.depth>=8||span.end>program_size)return false;
    frames.push_back({span.begin,span.end,uint8_t(frame.depth+1)});
    continue;
   }
@@ -645,7 +648,7 @@ bool compile_calculator_function(const std::vector<uint8_t>& source,
 }
 bool evaluate_calculator_function(const CalculatorProgram& program,
                                   double input,unsigned outputs,double* result) {
- return evaluate_calculator_tokens(program.tokens,input,outputs,result,
+ return evaluate_calculator_tokens({},input,outputs,result,
                                    &program.numeric_constants,
                                    &program.operator_codes,
                                    &program.instructions);
