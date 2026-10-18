@@ -1173,6 +1173,7 @@ struct Reader {
       if(lhs<0&&rhs!=std::trunc(rhs))return false;
       lhs=std::pow(lhs,rhs);
      }else if(token=="atan"){
+      if(lhs==0&&rhs==0)return false;
       lhs=std::atan2(lhs,rhs)*(180.0/3.14159265358979323846);
       if(lhs<0)lhs+=360.0;
      }else{
@@ -1183,7 +1184,8 @@ struct Reader {
       const int shift=int(rhs);
       // Calculate signed 32-bit shifts explicitly without implementation-
       // defined unsigned-to-signed narrowing on out-of-range values.
-      const uint32_t shifted=shift>=0?n<<shift:n>>(-shift);
+      const uint32_t shifted=shift>=0?n<<shift:
+        (n>>(-shift))|(lhs<0?(~uint32_t(0)<<(32+shift)):0u);
       lhs=shifted>=0x80000000u?
           double(int64_t(shifted)-4294967296LL):double(shifted);
      }
