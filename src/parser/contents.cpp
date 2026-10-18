@@ -665,61 +665,28 @@ struct Reader {
        for(size_t i=0;i<size_t(image.width)*image.height;++i){
         double values[4]{};
         if(sampled_tint){
-         // Multilinear interpolation over the sampled function grid.
-         // The first input varies fastest in the PDF sample table.
-         size_t lower[4]{},strides[4]{};
-         double fraction[4]{};
-         size_t stride=1;
-         for(unsigned dimension=0;dimension<device_inputs;++dimension){
-          const double sample=double(image.pixels[i*device_inputs+dimension])/255;
-          const double input=std::clamp(sample,tint_domain[2*dimension],
-                                           tint_domain[2*dimension+1]);
-          const double domain_span=tint_domain[2*dimension+1]-
-                                   tint_domain[2*dimension];
-          const double normalized=(input-tint_domain[2*dimension])/domain_span;
-          const double position=std::clamp(
-           tint_encode[2*dimension]+normalized*
-             (tint_encode[2*dimension+1]-tint_encode[2*dimension]),
-           0.0,double(tint_sizes[dimension]-1));
-          lower[dimension]=size_t(position);
-          fraction[dimension]=position-double(lower[dimension]);
-          if(lower[dimension]>=tint_sizes[dimension]-1){
-           lower[dimension]=tint_sizes[dimension]-1;
-           fraction[dimension]=0;
-          }
-          strides[dimension]=stride;
-          stride*=tint_sizes[dimension];
+         MultidimensionalSampledFunction function;
+         function.inputs=device_inputs;
+         function.outputs=tint_channels;
+         function.bits=tint_sample_bits;
+         for(unsigned d=0;d<device_inputs;++d){
+          function.sizes[d]=tint_sizes[d];
+          function.domain[2*d]=tint_domain[2*d];
+          function.domain[2*d+1]=tint_domain[2*d+1];
+          function.encode[2*d]=tint_encode[2*d];
+          function.encode[2*d+1]=tint_encode[2*d+1];
          }
-         const unsigned corners=1u<<device_inputs;
-         for(unsigned corner=0;corner<corners;++corner){
-          size_t index=0;
-          double weight=1;
-          for(unsigned dimension=0;dimension<device_inputs;++dimension){
-           const bool upper=(corner&(1u<<dimension))!=0;
-           const bool can_advance=lower[dimension]+1<tint_sizes[dimension];
-           index+=(lower[dimension]+(upper&&can_advance?1:0))*
-                  strides[dimension];
-           weight*=upper?fraction[dimension]:1-fraction[dimension];
-          }
-          for(unsigned c=0;c<tint_channels;++c){
-           const size_t sample_index=index*tint_channels+c;
-           // FunctionType 0 samples are packed MSB-first, without
-           // per-sample byte padding (including 12/24/32-bit values).
-           const size_t first_bit=sample_index*size_t(tint_sample_bits);
-           uint64_t sample=0;
-           for(unsigned bit=0;bit<tint_sample_bits;++bit){
-            const size_t position=first_bit+bit;
-            sample=(sample<<1)|
-               ((tint_samples[position/8]>>(7-(position%8)))&1u);
-           }
-           const uint64_t maximum=(uint64_t(1)<<tint_sample_bits)-1;
-           const double raw=double(sample)/double(maximum);
-           const double decoded=tint_decode[2*c]+raw*
-              (tint_decode[2*c+1]-tint_decode[2*c]);
-           values[c]+=weight*std::clamp(decoded,tint_range[2*c],
-                                                  tint_range[2*c+1]);
-          }
+         for(unsigned c=0;c<tint_channels;++c){
+          function.decode[2*c]=tint_decode[2*c];
+          function.decode[2*c+1]=tint_decode[2*c+1];
+          function.range[2*c]=tint_range[2*c];
+          function.range[2*c+1]=tint_range[2*c+1];
          }
+         double inputs[4]{};
+         for(unsigned d=0;d<device_inputs;++d)
+          inputs[d]=double(image.pixels[i*device_inputs+d])/255;
+         if(!evaluate_multidimensional_sampled_function(
+                function,tint_samples,inputs,values))return false;
         }else if(recursive_stitch){
          if(!eval_tint_function(stitch_function,
               double(image.pixels[i])/255,tint_channels,values))
