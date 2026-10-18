@@ -41,5 +41,19 @@ int main(){
  if(!extract_page_text(reinterpret_cast<const uint8_t*>(pdf.data()),
      pdf.size(),0,extracted))return 1;
  if(extracted!="A B\nA")return 2;
+ // Remove the explicit space override while preserving object byte counts.
+ // /DW=1000 must now define the space width, preventing the -300 TJ
+ // movement from being mistaken for a full inferred space.
+ std::string default_space_pdf=pdf;
+ const std::string explicit_width="/W [32 [250]]";
+ const std::string unrelated_width="/W [65 [250]]";
+ static_assert(sizeof("/W [32 [250]]")==sizeof("/W [65 [250]]"));
+ const auto width_at=default_space_pdf.find(explicit_width);
+ if(width_at==std::string::npos)return 5;
+ default_space_pdf.replace(width_at,explicit_width.size(),unrelated_width);
+ std::string default_result;
+ if(!extract_page_text(reinterpret_cast<const uint8_t*>(default_space_pdf.data()),
+     default_space_pdf.size(),0,default_result))return 6;
+ if(default_result!="AB\nA")return 7;
  return 0;
 }
