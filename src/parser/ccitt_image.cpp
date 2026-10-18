@@ -1,6 +1,8 @@
 #include "ccitt_image.h"
 #include <algorithm>
 #include <cstring>
+#include <cstdio>
+#include <utility>
 #if defined(RINPDF_HAVE_TIFF)
 #include <tiffio.h>
 #endif
