@@ -214,6 +214,22 @@ bool evaluate_calculator_tokens(const std::vector<std::string>& parsed_tokens,
                                 const std::vector<CalculatorInstruction>* instructions) {
  if(!result||outputs<1||outputs>4||!std::isfinite(input)||parsed_tokens.size()>4096)return false;
  if(instructions&&instructions->size()!=parsed_tokens.size())return false;
+ if(instructions){
+  // Reject malformed IR before execution; do not fall back to textual
+  // interpretation for compiled programs.
+  for(size_t i=0;i<instructions->size();++i){
+   const auto& instruction=(*instructions)[i];
+   if(instruction.kind>4)return false;
+   if(instruction.kind==4&&instruction.opcode>=calculator_operator_names().size())
+    return false;
+   if(instruction.kind==2||instruction.kind==3){
+    if(instruction.matching_brace>=instructions->size())return false;
+    const auto& other=(*instructions)[instruction.matching_brace];
+    if(other.matching_brace!=i||
+       other.kind!=(instruction.kind==2?3:2))return false;
+   }
+  }
+ }
  const auto& tokens=parsed_tokens;
  struct CalcValue { double number; uint8_t kind; size_t procedure; };
  struct ProcedureSpan { size_t begin,end; };
@@ -236,6 +252,9 @@ bool evaluate_calculator_tokens(const std::vector<std::string>& parsed_tokens,
       inst->matching_brace>pc&&(*instructions)[inst->matching_brace].kind==3)
     end=inst->matching_brace;
    else{
+    // A compiled program must have validated matching braces. Only the
+    // legacy token-only path performs runtime delimiter discovery.
+    if(inst)return false;
     unsigned nested=1;
     for(size_t i=pc+1;i<frame.end;++i){
      if(tokens[i]=="{"){if(++nested>8)return false;}
