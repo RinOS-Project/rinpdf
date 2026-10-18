@@ -42,6 +42,8 @@ struct Reader {
  mutable std::map<size_t,Value> compressed_cache;
  mutable std::map<std::pair<int64_t,int64_t>,std::vector<std::string>> calculator_token_cache;
  mutable std::map<std::tuple<int64_t,int64_t,unsigned,unsigned>,std::array<double,4>> calculator_result_cache;
+ mutable std::map<std::pair<int64_t,int64_t>,std::vector<uint8_t>> sampled_function_cache;
+ mutable size_t sampled_function_cache_bytes=0;
  bool entry(const Value& ref,const XrefEntry*& out) const {
   if(ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
   auto it=std::find_if(xref.begin(),xref.end(),[&](const XrefEntry& e){
@@ -927,9 +929,27 @@ struct Reader {
    const unsigned bps=unsigned(bits->integer);
    const size_t bytes=(count*outputs*bps+7)/8;
    if(bytes>4*1024*1024)return false;
-   std::vector<uint8_t> samples;
-   if(!decode_stream(data,size,sampled_stream,samples,bytes)||
-      samples.size()!=bytes)return false;
+   // Keep decoded sample grids across evaluations, including non-byte-
+   // aligned inputs reached through stitching functions.
+   if(reference.kind!=Value::Kind::Reference)return false;
+   const auto sample_key=std::make_pair(reference.integer,reference.generation);
+   const std::vector<uint8_t>* samples=nullptr;
+   std::vector<uint8_t> uncached_samples;
+   auto hit=sampled_function_cache.find(sample_key);
+   if(hit!=sampled_function_cache.end()){
+    if(hit->second.size()!=bytes)return false;
+    samples=&hit->second;
+   }else{
+    if(!decode_stream(data,size,sampled_stream,uncached_samples,bytes)||
+       uncached_samples.size()!=bytes)return false;
+    if(bytes<=8*1024*1024-sampled_function_cache_bytes&&
+       sampled_function_cache.size()<64){
+     sampled_function_cache_bytes+=bytes;
+     auto inserted=sampled_function_cache.emplace(
+       sample_key,std::move(uncached_samples));
+     samples=&inserted.first->second;
+    }else samples=&uncached_samples;
+   }
    double e0=0,e1=double(count-1);
    if(encode){
     if(encode->kind!=Value::Kind::Array||encode->array.size()!=2||
@@ -946,7 +966,7 @@ struct Reader {
     uint64_t value=0;
     for(unsigned bit=0;bit<bps;++bit){
      const size_t p=start+bit;
-     value=(value<<1)|((samples[p/8]>>(7-(p%8)))&1u);
+     value=(value<<1)|(((*samples)[p/8]>>(7-(p%8)))&1u);
     }
     return double(value)/double((uint64_t(1)<<bps)-1);
    };
