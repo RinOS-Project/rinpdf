@@ -51,4 +51,9 @@ bool evaluate_calculator_tokens(const std::vector<std::string>& tokens,
                                 double input,unsigned outputs,
                                 double* result);
 
+// Lex a decoded PDF Type 4 calculator stream into a validated token program.
+// Output is replaced only on success.
+bool tokenize_calculator_function(const std::vector<uint8_t>& program,
+                                  std::vector<std::string>& tokens);
+
 } // namespace rinpdf::parser
