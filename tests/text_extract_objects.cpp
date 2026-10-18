@@ -5,13 +5,13 @@
 using namespace rinpdf::parser;
 static std::string make_pdf(const std::string& content,bool missing_b_width=false){
  std::string pdf="%PDF-1.5\n";
- size_t offsets[7]{};
+ size_t offsets[8]{};
  auto obj=[&](int id,const std::string& body){
   offsets[id]=pdf.size();
   pdf+=std::to_string(id)+" 0 obj\n"+body+"\nendobj\n";
  };
  obj(1,"<< /Type /Catalog /Pages 2 0 R >>");
- obj(2,"<< /Type /Pages /Count 1 /Kids [3 0 R] /Resources << /Font << /F1 4 0 R /F2 4 0 R >> >> >>");
+ obj(2,"<< /Type /Pages /Count 1 /Kids [3 0 R] /Resources << /Font << /F1 4 0 R /F2 7 0 R >> >> >>");
  obj(3,"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 5 0 R >>");
  obj(4,missing_b_width?
   "<< /Type /Font /Subtype /TrueType /BaseFont /Example /Encoding /WinAnsiEncoding /FirstChar 65 /LastChar 65 /Widths [600] /ToUnicode 6 0 R >>":
@@ -19,13 +19,15 @@ static std::string make_pdf(const std::string& content,bool missing_b_width=fals
  obj(5,"<< /Length "+std::to_string(content.size())+" >>\nstream\n"+content+"\nendstream");
  const std::string cmap="2 beginbfchar <41> <0041> <42> <0042> endbfchar";
  obj(6,"<< /Length "+std::to_string(cmap.size())+" >>\nstream\n"+cmap+"\nendstream");
+ // F2 has its own PDF widths: A=300, B=800, unlike F1 (600 each).
+ obj(7,"<< /Type /Font /Subtype /TrueType /BaseFont /Example2 /Encoding /WinAnsiEncoding /FirstChar 65 /LastChar 66 /Widths [300 800] /ToUnicode 6 0 R >>");
  const size_t xref=pdf.size();
- pdf+="xref\n0 7\n0000000000 65535 f \n";
- for(int i=1;i<=6;i++){
+ pdf+="xref\n0 8\n0000000000 65535 f \n";
+ for(int i=1;i<=7;i++){
   char line[32];std::snprintf(line,sizeof(line),"%010zu 00000 n \n",offsets[i]);
   pdf+=line;
  }
- pdf+="trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n"+
+ pdf+="trailer\n<< /Size 8 /Root 1 0 R >>\nstartxref\n"+
       std::to_string(xref)+"\n%%EOF\n";
  return pdf;
 }
@@ -102,5 +104,14 @@ int main(){
            "/F2 20 Tf [ -300 <42>] TJ ET","AB"))return 18;
  if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm <41> Tj "
            "/F2 20 Tf [ -600 <42>] TJ <41> Tj ET","A BA"))return 19;
+ // Cursor advance must use F2's actual widths (B=800 at size 10).
+ // F1 A advances 6, F2 B advances 8, so the next absolute origin
+ // at x=20 leaves a 6-unit gap; x=17 leaves only a 3-unit gap.
+ if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm <41> Tj "
+           "/F2 10 Tf <42> Tj 1 0 0 1 20 0 Tm <41> Tj ET",
+           "AB A"))return 20;
+ if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm <41> Tj "
+           "/F2 10 Tf <42> Tj 1 0 0 1 17 0 Tm <41> Tj ET",
+           "ABA"))return 21;
  return 0;
 }
