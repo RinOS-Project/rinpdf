@@ -172,8 +172,8 @@ int main(){
  // previous run ends in a literal space. The latter is mapped only in
  // fixtures that support it, so here test the explicit newline boundary.
  if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm <41> Tj "
-           "10 TL T* [<42> -600 <41>] TJ ET","A\\nB A"))return 41;
+           "10 TL T* [<42> -600 <41>] TJ ET","A\nB A"))return 41;
  if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm <41> Tj "
-           "10 TL T* <42> Tj [ -600 <41>] TJ ET","A\\nB A"))return 42;
+           "10 TL T* <42> Tj [ -600 <41>] TJ ET","A\nB A"))return 42;
  return 0;
 }
