@@ -178,35 +178,48 @@
    }
    if(!evaluate_pdf_function(*compiled,x,result))return false;
   }else if(type->integer==2){
-   CachedExponent local;
-   const CachedExponent* compiled=nullptr;
+   PdfFunction local;
+   const PdfFunction* compiled=nullptr;
    const bool indirect=reference.kind==Value::Kind::Reference;
    const auto key=std::make_tuple(reference.integer,reference.generation,
                                   outputs);
    if(indirect){
-    const auto hit=exponent_function_cache.find(key);
-    if(hit!=exponent_function_cache.end())compiled=&hit->second;
+    const auto hit=compiled_exponent_cache.find(key);
+    if(hit!=compiled_exponent_cache.end())compiled=&hit->second;
    }
    if(!compiled){
-    const Value* n=get(function,"N");
-    if(!n||!number(*n,local.exponent)||
-       local.exponent<=0||local.exponent>100)return false;
+    ExponentialFunction parameters;
+    const Value* exponent=get(function,"N");
+    if(!exponent||!number(*exponent,parameters.exponent)||
+       parameters.exponent<=0||parameters.exponent>100)return false;
     for(const auto& [name,dest]:
-       std::initializer_list<std::pair<const char*,std::array<double,4>*>>{
-        {"C0",&local.c0},{"C1",&local.c1}}){
-     if(const Value* values=get(function,name)){
-      if(values->kind!=Value::Kind::Array||
-         values->array.size()!=outputs)return false;
+        std::initializer_list<std::pair<const char*,std::array<double,4>*>>{
+          {"C0",&parameters.c0},{"C1",&parameters.c1}}){
+     if(const Value* entries=get(function,name)){
+      if(entries->kind!=Value::Kind::Array||
+         entries->array.size()!=outputs)return false;
       for(unsigned j=0;j<outputs;++j)
-       if(!number(values->array[j],(*dest)[j]))return false;
+       if(!number(entries->array[j],(*dest)[j]))return false;
      }
     }
-    if(indirect&&exponent_function_cache.size()<128)
-     compiled=&exponent_function_cache.emplace(key,std::move(local)).first->second;
+    std::array<double,8> limits{};
+    if(const Value* range=get(function,"Range")){
+     if(range->kind!=Value::Kind::Array||range->array.size()!=outputs*2)
+      return false;
+     for(unsigned j=0;j<outputs*2;++j)
+      if(!number(range->array[j],limits[j]))return false;
+    }else{
+     for(unsigned j=0;j<outputs;++j){
+      limits[2*j]=-100000;limits[2*j+1]=100000;
+     }
+    }
+    if(!compile_exponential_pdf_function(parameters,outputs,low,high,
+                                         limits,local))return false;
+    if(indirect&&compiled_exponent_cache.size()<128)
+     compiled=&compiled_exponent_cache.emplace(key,std::move(local)).first->second;
     else compiled=&local;
    }
-   if(!evaluate_exponential_function(*compiled,x,outputs,result))
-    return false;
+   if(!evaluate_pdf_function(*compiled,x,result))return false;
   }else if(type->integer==3){
    CachedStitch local;
    const CachedStitch* compiled=nullptr;
