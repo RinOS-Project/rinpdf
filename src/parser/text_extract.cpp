@@ -112,10 +112,10 @@ double tj_space_threshold(const PageFont& font){
  if(font.subtype=="Type0"&&font.encoding=="Identity-H"){
   for(const auto& [key,sequence]:font.unicode_sequences){
    if(key.width!=2||sequence!=U" "||key.code>65535)continue;
-   const auto it=font.cid_widths.overrides.find(uint16_t(key.code));
-   if(it==font.cid_widths.overrides.end())continue;
-   const double width=it->second;
-   if(std::isfinite(width)&&width>0)
+   // /DW applies when /W does not override the mapped space CID.
+   double width=0;
+   if(cid_width(font.cid_widths,uint16_t(key.code),width)&&
+      std::isfinite(width)&&width>0)
     return std::clamp(width,250.0,1000.0);
   }
  }
