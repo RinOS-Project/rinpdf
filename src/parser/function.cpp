@@ -277,7 +277,13 @@ bool evaluate_calculator_tokens(const std::vector<std::string>& parsed_tokens,
       if(instructions){
        // Expanded procedure instructions are decoded on demand. Unexpanded
        // instructions retain their original precompiled representation.
-       program.insert(program.begin()+pc+1,chosen.size(),
+       const size_t insertion=pc+1;
+       for(auto& instruction:program){
+        if(instruction.matching_brace!=SIZE_MAX&&
+           instruction.matching_brace>=insertion)
+         instruction.matching_brace+=chosen.size();
+       }
+       program.insert(program.begin()+insertion,chosen.size(),
                       CalculatorInstruction{});
        for(size_t j=0;j<chosen.size();++j){
         const auto& text=chosen[j];
@@ -294,6 +300,20 @@ bool evaluate_calculator_tokens(const std::vector<std::string>& parsed_tokens,
          decoded.kind=4;decoded.opcode=operators->at(text);
         }else return false;
        }
+       std::vector<size_t> open;
+       for(size_t j=0;j<chosen.size();++j){
+        auto& instruction=program[insertion+j];
+        if(instruction.kind==2){
+         if(open.size()>=8)return false;
+         open.push_back(insertion+j);
+        }else if(instruction.kind==3){
+         if(open.empty())return false;
+         const size_t start=open.back();open.pop_back();
+         program[start].matching_brace=insertion+j;
+         instruction.matching_brace=start;
+        }
+       }
+       if(!open.empty())return false;
       }
       execution_depth.insert(execution_depth.begin()+pc+1,
                              chosen.size(),uint8_t(active_depth+1));
