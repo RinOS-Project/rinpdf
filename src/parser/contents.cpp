@@ -190,9 +190,29 @@ struct Reader {
          (bits->integer!=8&&bits->integer!=1)||
          w->integer<=0||h->integer<=0||
          w->integer>4096||h->integer>4096||
-         cs->kind!=Value::Kind::Name){return false;}
-      const unsigned channels=cs->text=="DeviceGray"?1:
-                              cs->text=="DeviceRGB"?3:0;
+         (cs->kind!=Value::Kind::Name&&cs->kind!=Value::Kind::Array)){return false;}
+      bool indexed=false;
+      std::string palette;
+      unsigned maximum_index=0;
+      unsigned palette_channels=0;
+      if(cs->kind==Value::Kind::Array){
+       if(cs->array.size()!=4||cs->array[0].kind!=Value::Kind::Name||
+          cs->array[0].text!="Indexed"||
+          cs->array[1].kind!=Value::Kind::Name||
+          cs->array[2].kind!=Value::Kind::Integer||
+          cs->array[2].integer<0||cs->array[2].integer>255||
+          cs->array[3].kind!=Value::Kind::String)return false;
+       palette_channels=cs->array[1].text=="DeviceRGB"?3:
+                        cs->array[1].text=="DeviceGray"?1:0;
+       if(!palette_channels)return false;
+       maximum_index=unsigned(cs->array[2].integer);
+       palette=cs->array[3].text;
+       if(palette.size()!=size_t(maximum_index+1)*palette_channels)return false;
+       indexed=true;
+      }
+      const unsigned channels=indexed?1:
+        cs->text=="DeviceGray"?1:cs->text=="DeviceRGB"?3:
+        cs->text=="DeviceCMYK"?4:0;
       if(!channels||get(range.dictionary,"Mask")||
          get(range.dictionary,"Decode")){return false;}
       const size_t expected=size_t(w->integer)*size_t(h->integer)*channels;
@@ -270,6 +290,8 @@ struct Reader {
       const bool dct=filter&&filter->kind==Value::Kind::Name&&
         (filter->text=="DCTDecode"||filter->text=="DCT");
       if(dct){
+       // The JPEG backend only decodes native Gray/RGB samples.
+       if(indexed||channels==4)return false;
        // JPEG image data is compressed independently of PDF Flate filters.
        // DecodeParms predictors are not valid for this path.
        if(get(range.dictionary,"DecodeParms")||
@@ -293,6 +315,26 @@ struct Reader {
       }
       if(!decode_stream(data,size,range,image.pixels,expected)||
          image.pixels.size()!=expected)return false;
+      if(indexed){
+       std::vector<uint8_t> rgb(size_t(image.width)*image.height*3);
+       for(size_t i=0;i<size_t(image.width)*image.height;++i){
+        const unsigned index=image.pixels[i];
+        if(index>maximum_index)return false;
+        for(unsigned c=0;c<3;++c)
+         rgb[3*i+c]=uint8_t(palette[index*palette_channels+
+                                     (palette_channels==1?0:c)]);
+       }
+       image.pixels=std::move(rgb);image.channels=3;
+      }else if(channels==4){
+       std::vector<uint8_t> rgb(size_t(image.width)*image.height*3);
+       for(size_t i=0;i<size_t(image.width)*image.height;++i){
+        const unsigned k=image.pixels[4*i+3];
+        for(unsigned c=0;c<3;++c)
+         rgb[3*i+c]=uint8_t(((255-unsigned(image.pixels[4*i+c]))*
+                                  (255-k)+127)/255);
+       }
+       image.pixels=std::move(rgb);image.channels=3;
+      }
       return true;
  }
  bool walk_images(const Value& ref,size_t depth,size_t& current,size_t target,
