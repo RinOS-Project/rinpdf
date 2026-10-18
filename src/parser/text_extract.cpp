@@ -510,8 +510,11 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
      const double dx=next_x-previous_end_x;
      const double dy=next_y-previous_end_y;
      const double perpendicular=(dy*previous_a-dx*previous_b)/axis_length;
-     if(std::isfinite(perpendicular)&&std::abs(perpendicular)>0.001)
-      new_line_pending=true;
+     // Ignore sub-glyph baseline jitter; a fixed 0.001 unit tolerance
+     // incorrectly split text objects with tiny positioning differences.
+     const double tolerance=std::max(0.001,font_size*axis_length*0.15);
+     if(std::isfinite(perpendicular)&&std::isfinite(tolerance)&&
+        std::abs(perpendicular)>tolerance)new_line_pending=true;
     }
    }
    if(cross_object_pending&&previous_end_valid&&!suppressed&&
