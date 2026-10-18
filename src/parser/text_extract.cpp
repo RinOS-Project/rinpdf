@@ -706,7 +706,13 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
    if(!std::isfinite(text_line_x)||!std::isfinite(text_line_y)||
       std::abs(text_line_x)>1e12||std::abs(text_line_y)>1e12)return false;
    has_line_origin=true;
-   if(!suppressed)new_line_pending=true;
+   // In Identity-V, T* advances along the writing axis within the
+   // current column. It does not by itself start a new column.
+   const auto current_font=fonts.find(selected);
+   const bool vertical=current_font!=fonts.end()&&
+      current_font->second.subtype=="Type0"&&
+      current_font->second.encoding=="Identity-V";
+   if(!suppressed&&!vertical)new_line_pending=true;
    continue;
   }
   if(t.value=="ET"){if(!text||have_pending||!operands.empty())return false;
@@ -763,7 +769,11 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
     text_run_emitted=false;
     text_cursor=0;text_cursor_known=true;
    vertical_cursor=0;vertical_cursor_known=true;
-    if(!suppressed)new_line_pending=true;
+    const auto current_font=fonts.find(selected);
+    const bool vertical=current_font!=fonts.end()&&
+       current_font->second.subtype=="Type0"&&
+       current_font->second.encoding=="Identity-V";
+    if(!suppressed&&!vertical)new_line_pending=true;
    }
    if(!suppressed){
     if(!pending.empty()&&new_line_pending&&!output.empty()&&
