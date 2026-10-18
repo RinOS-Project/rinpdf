@@ -233,17 +233,24 @@ bool evaluate_calculator_tokens(const std::vector<std::string>& parsed_tokens,
        instructions&&pc<program.size()?&program[pc]:nullptr;
     const uint8_t active_depth=execution_depth[pc];
     if(token=="{"){
-     size_t nested=1;
-     std::vector<std::string> procedure;
-     for(++pc;pc<tokens.size();++pc){
-      if(tokens[pc]=="{"){
-       if(++nested>8)return false;
-      }else if(tokens[pc]=="}"){
-       if(--nested==0)break;
+     size_t end=SIZE_MAX;
+     if(inst&&inst->kind==2&&inst->matching_brace<tokens.size()&&
+        inst->matching_brace>pc&&tokens[inst->matching_brace]=="}")
+      end=inst->matching_brace;
+     else{
+      size_t nested=1;
+      for(size_t i=pc+1;i<tokens.size();++i){
+       if(tokens[i]=="{"){
+        if(++nested>8)return false;
+       }else if(tokens[i]=="}"&&--nested==0){
+        end=i;break;
+       }
       }
-      procedure.push_back(tokens[pc]);
      }
-     if(nested||procedures.size()>=64||procedure.size()>4096)return false;
+     if(end==SIZE_MAX||end-pc-1>4096||procedures.size()>=64)return false;
+     std::vector<std::string> procedure(tokens.begin()+pc+1,
+                                         tokens.begin()+end);
+     pc=end;
      if(stack.size()>=64)return false;
      procedures.push_back(std::move(procedure));
      stack.push_back({0,3,procedures.size()});continue;
