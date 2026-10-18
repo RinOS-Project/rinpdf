@@ -24,14 +24,16 @@ static bool number(const std::string& s,double& v){
 static bool space(unsigned char c){return c==0||c==9||c==10||c==12||c==13||c==32;}
 struct Rect {double x,y,w,h;};
 bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsigned width,unsigned height,uint8_t *rgba,size_t stride,PageBox box,const FontResources& fonts,
- const MarkedProperties& properties,const ImageResources& images){
+ const MarkedProperties& properties,const ImageResources& images,
+ const FormResources& forms,bool clear_background){
  if(!std::isfinite(box.x0)||!std::isfinite(box.y0)||!std::isfinite(box.x1)||!std::isfinite(box.y1)||box.x1<=box.x0||box.y1<=box.y0)return false;
  const double sx=(double)width/(box.x1-box.x0),sy=(double)height/(box.y1-box.y0);
  if(!std::isfinite(sx)||!std::isfinite(sy))return false;
  if(!rgba||(!contents&&size)||!width||!height||width>16384||height>16384||stride<(size_t)width*4)return false;
  if(size>16*1024*1024)return false;
  if((size_t)width*height>16777216)return false;
- for(unsigned y=0;y<height;++y)std::memset(rgba+(size_t)y*stride,255,(size_t)width*4);
+ if(clear_background)for(unsigned y=0;y<height;++y)
+  std::memset(rgba+(size_t)y*stride,255,(size_t)width*4);
  double red=0,green=0,blue=0;
  struct Color { double r,g,b,a,bx,cx,d,e,f,width,sr,sg,sb; int cap,join; double miter,flatness; std::vector<double> dash; double dash_phase; };
  double a=1,bx=0,cx=0,d=1,e=0,f=0;
@@ -223,6 +225,33 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
     pending_image=token.value;
     lex=look;
     // Dispatch image painting through the normal Do branch.
+    const auto form=forms.find(pending_image);
+    if(form!=forms.end()){
+     // A recursive call begins with the current page pixels and a fresh
+     // graphics state. Do not attempt nested forms or inherited clipping.
+     if(clip_mask||clip.x0||clip.y0||clip.x1!=width||clip.y1!=height||
+        !path.empty()||!polygons.empty())return false;
+     const auto& fm=form->second;
+     auto number_text=[](double value){return std::to_string(value);};
+     std::string stream="q ";
+     for(double v:{a,bx,cx,d,e,f})stream+=number_text(v)+" ";
+     stream+="cm ";
+     for(double v:fm.matrix)stream+=number_text(v)+" ";
+     stream+="cm ";
+     stream+=number_text(fm.bbox[0])+" "+number_text(fm.bbox[1])+" "+
+             number_text(fm.bbox[2]-fm.bbox[0])+" "+
+             number_text(fm.bbox[3]-fm.bbox[1])+" re W n ";
+     if(stream.size()+fm.content.size()+3>4*1024*1024)return false;
+     stream.append(reinterpret_cast<const char*>(fm.content.data()),
+                   fm.content.size());
+     stream+=" Q";
+     pending_image.clear();
+     if(!render_rectangles_box_with_fonts(
+           reinterpret_cast<const uint8_t*>(stream.data()),stream.size(),
+           width,height,rgba,stride,box,fonts,properties,images,{},false))
+      return false;
+     continue;
+    }
     const auto found=images.find(pending_image);
     if(found==images.end())return false;
     const auto& im=found->second;
