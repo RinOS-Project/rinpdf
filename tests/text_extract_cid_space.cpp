@@ -55,5 +55,26 @@ int main(){
  if(!extract_page_text(reinterpret_cast<const uint8_t*>(default_space_pdf.data()),
      default_space_pdf.size(),0,default_result))return 6;
  if(default_result!="AB\nA")return 7;
+ // A 100-unit CID space is narrower than the previous 250-unit one.
+ // Keep all PDF stream lengths and xref offsets unchanged in both edits.
+ std::string narrow_pdf=pdf;
+ const auto narrow_width_at=narrow_pdf.find("/W [32 [250]]");
+ const auto narrow_gap_at=narrow_pdf.find("-300");
+ if(narrow_width_at==std::string::npos||
+    narrow_gap_at==std::string::npos)return 8;
+ narrow_pdf.replace(narrow_width_at,sizeof("/W [32 [250]]")-1,
+                    "/W [32 [100]]");
+ narrow_pdf.replace(narrow_gap_at,4,"-150");
+ std::string narrow_result;
+ if(!extract_page_text(reinterpret_cast<const uint8_t*>(narrow_pdf.data()),
+      narrow_pdf.size(),0,narrow_result))return 9;
+ if(narrow_result!="A B\nA")return 10;
+ // The same gap is insufficient with the original 250-unit space.
+ std::string regular_gap_pdf=pdf;
+ regular_gap_pdf.replace(narrow_gap_at,4,"-150");
+ std::string regular_gap_result;
+ if(!extract_page_text(reinterpret_cast<const uint8_t*>(regular_gap_pdf.data()),
+      regular_gap_pdf.size(),0,regular_gap_result))return 11;
+ if(regular_gap_result!="AB\nA")return 12;
  return 0;
 }
