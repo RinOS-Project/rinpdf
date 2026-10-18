@@ -1051,8 +1051,11 @@ struct Reader {
      double value=0;
      if(integer_literal){
       int64_t whole=0;
-      const auto parsed=std::from_chars(token.data(),
-         token.data()+token.size(),whole);
+      const char* first=token.data();
+      const char* last=first+token.size();
+      if(*first=='+')++first;
+      if(first==last)return false;
+      const auto parsed=std::from_chars(first,last,whole);
       if(parsed.ec!=std::errc()||
          parsed.ptr!=token.data()+token.size()||
          whole<INT32_MIN||whole>INT32_MAX)return false;
