@@ -68,7 +68,8 @@
    const Value* sz=get(dictionary,"Size");
    const Value* bp=get(dictionary,"BitsPerSample");
    const Value* order=get(dictionary,"Order");
-   if(order&&(order->kind!=Value::Kind::Integer||order->integer!=1))
+   if(order&&(order->kind!=Value::Kind::Integer||
+              (order->integer!=1&&order->integer!=3)))
     return false;
    if(!sz||sz->kind!=Value::Kind::Array||sz->array.size()!=1||
       sz->array[0].kind!=Value::Kind::Integer||
@@ -76,6 +77,7 @@
       !bp||bp->kind!=Value::Kind::Integer)return false;
    SampledFunction p;
    p.count=size_t(sz->array[0].integer);p.bits=unsigned(bp->integer);
+   p.order=order?unsigned(order->integer):1;
    if(p.bits!=1&&p.bits!=2&&p.bits!=4&&p.bits!=8&&p.bits!=12&&
       p.bits!=16&&p.bits!=24&&p.bits!=32)return false;
    p.outputs=outputs;p.domain[0]=d0;p.domain[1]=d1;
@@ -200,7 +202,8 @@
     const Value* sizes=get(function,"Size");
     const Value* bits=get(function,"BitsPerSample");
     const Value* order=get(function,"Order");
-    if(order&&(order->kind!=Value::Kind::Integer||order->integer!=1))
+    if(order&&(order->kind!=Value::Kind::Integer||
+              (order->integer!=1&&order->integer!=3)))
      return false;
     const Value* encode=get(function,"Encode");
     const Value* decode=get(function,"Decode");
@@ -217,6 +220,7 @@
     SampledFunction parameters;
     parameters.count=size_t(sizes->array[0].integer);
     parameters.bits=unsigned(bits->integer);
+    parameters.order=order?unsigned(order->integer):1;
     parameters.outputs=outputs;
     parameters.domain[0]=low;parameters.domain[1]=high;
     parameters.encode[0]=0;
