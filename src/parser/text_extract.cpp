@@ -217,6 +217,11 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
  double line_axis_x=1,line_axis_y=0;
  double line_a=1,line_b=0,line_c=0,line_d=1;
  bool has_line_origin=false;
+ // Preserve the last rendered endpoint across BT/ET boundaries.
+ double previous_end_x=0,previous_end_y=0;
+ double previous_a=1,previous_b=0;
+ bool previous_end_valid=false;
+ bool cross_object_pending=false;
  unsigned suppressed=0;
  size_t tokens=0;
  while(true){
@@ -494,6 +499,19 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
      output+=' ';
     }
    }
+   if(cross_object_pending&&previous_end_valid&&!suppressed&&
+      !new_line_pending&&!output.empty()&&output.back()!=' '&&
+      output.back()!='\n'&&
+      operands[0]==previous_a&&operands[1]==previous_b){
+    const auto font_it=fonts.find(selected);
+    if(font_it!=fonts.end()&&has_position_gap(previous_end_x,previous_end_y,
+       next_x,next_y,previous_a,previous_b,0,
+       tj_space_threshold(font_it->second),font_size,horizontal_scale)){
+     if(output.size()>=4*1024*1024)return false;
+     output+=' ';
+    }
+   }
+   cross_object_pending=false;
    text_cursor=0;text_cursor_known=true;text_run_emitted=false;
    text_line_x=next_x;text_line_y=next_y;
    line_axis_x=operands[0]/next_length;
@@ -508,7 +526,8 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
    pending_tj_adjustment=0;text_run_emitted=false;
    text_cursor=0;text_cursor_known=true;
    text_line_x=0;text_line_y=0;line_axis_x=1;line_axis_y=0;
-   line_a=1;line_b=0;line_c=0;line_d=1;continue;}
+   line_a=1;line_b=0;line_c=0;line_d=1;
+   cross_object_pending=previous_end_valid;continue;}
   if(t.value=="T*"&&text){
    if(have_pending||!operands.empty())return false;
    // Move to the next line's origin, not the prior line's glyph cursor.
@@ -521,6 +540,13 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
    continue;
   }
   if(t.value=="ET"){if(!text||have_pending||!operands.empty())return false;
+   if(has_line_origin&&text_run_emitted&&text_cursor_known){
+    previous_end_x=text_line_x+line_a*text_cursor;
+    previous_end_y=text_line_y+line_b*text_cursor;
+    previous_a=line_a;previous_b=line_b;
+    previous_end_valid=std::isfinite(previous_end_x)&&
+      std::isfinite(previous_end_y);
+   }else previous_end_valid=false;
    text=false;pending_tj_adjustment=0;text_run_emitted=false;continue;}
   if(t.value=="EMC"){
    if(actual_stack.empty())return false;
