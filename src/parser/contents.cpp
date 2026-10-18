@@ -194,6 +194,9 @@ struct Reader {
          (cs->kind!=Value::Kind::Name&&cs->kind!=Value::Kind::Array)){return false;}
       bool indexed=false;
       unsigned icc_channels=0;
+      bool separation=false;
+      unsigned tint_channels=0;
+      double tint_c0[4]{0,0,0,0},tint_c1[4]{1,1,1,1},tint_n=1;
       unsigned calibrated=0;
       bool lab=false;
       double lab_range[4]{-100,100,-100,100};
@@ -290,6 +293,50 @@ struct Reader {
        }
        lab=true;
       }
+      if(cs->kind==Value::Kind::Array&&cs->array.size()==4&&
+         cs->array[0].kind==Value::Kind::Name&&
+         cs->array[0].text=="Separation"){
+       if(cs->array[1].kind!=Value::Kind::Name||
+          cs->array[2].kind!=Value::Kind::Name)return false;
+       const std::string& alternate=cs->array[2].text;
+       tint_channels=alternate=="DeviceGray"?1:
+                     alternate=="DeviceRGB"?3:
+                     alternate=="DeviceCMYK"?4:0;
+       if(!tint_channels)return false;
+       Value fn;
+       if(cs->array[3].kind==Value::Kind::Reference){
+        if(!object(cs->array[3],fn))return false;
+       }else fn=cs->array[3];
+       const Value* type=get(fn,"FunctionType");
+       const Value* domain=get(fn,"Domain");
+       const Value* exponent=get(fn,"N");
+       const Value* c0=get(fn,"C0");
+       const Value* c1=get(fn,"C1");
+       auto number=[](const Value& v,double& out){
+        if(v.kind==Value::Kind::Integer)out=double(v.integer);
+        else if(v.kind==Value::Kind::Real)out=v.real;
+        else return false;
+        return std::isfinite(out)&&std::abs(out)<=100000;
+       };
+       if(!type||type->kind!=Value::Kind::Integer||type->integer!=2||
+          !domain||domain->kind!=Value::Kind::Array||
+          domain->array.size()!=2||!exponent||
+          !number(*exponent,tint_n)||tint_n<=0||tint_n>100)
+        return false;
+       double d0=0,d1=0;
+       if(!number(domain->array[0],d0)||!number(domain->array[1],d1)||
+          d0!=0||d1!=1)return false;
+       for(const auto& setting:std::initializer_list<std::pair<const Value*,double*>>{
+             {c0,tint_c0},{c1,tint_c1}}){
+        if(!setting.first)continue;
+        if(setting.first->kind!=Value::Kind::Array||
+           setting.first->array.size()!=tint_channels)return false;
+        for(unsigned c=0;c<tint_channels;++c)
+         if(!number(setting.first->array[c],setting.second[c])||
+            setting.second[c]<0||setting.second[c]>1)return false;
+       }
+       separation=true;
+      }
       std::string palette;
       unsigned maximum_index=0;
       unsigned palette_channels=0;
@@ -317,7 +364,7 @@ struct Reader {
        std::vector<uint8_t> profile;
        if(!decode_stream(data,size,icc_range,profile,4*1024*1024)||
           profile.size()<128)return false;
-      }else if(cs->kind==Value::Kind::Array&&!calibrated&&!lab){
+      }else if(cs->kind==Value::Kind::Array&&!calibrated&&!lab&&!separation){
        if(cs->array.size()!=4||cs->array[0].kind!=Value::Kind::Name||
           cs->array[0].text!="Indexed"||
           cs->array[1].kind!=Value::Kind::Name||
@@ -344,7 +391,7 @@ struct Reader {
       if(!indexed&&bits->integer!=8&&bits->integer!=1)return false;
       if(indexed&&unsigned(maximum_index)>=(1u<<unsigned(bits->integer)))
        return false;
-      const unsigned channels=indexed?1:lab?3:calibrated?calibrated:icc_channels?icc_channels:
+      const unsigned channels=indexed?1:separation?1:lab?3:calibrated?calibrated:icc_channels?icc_channels:
         cs->text=="DeviceGray"?1:cs->text=="DeviceRGB"?3:
         cs->text=="DeviceCMYK"?4:0;
       if(!channels||get(range.dictionary,"Mask")||
@@ -425,7 +472,7 @@ struct Reader {
         (filter->text=="DCTDecode"||filter->text=="DCT");
       if(dct){
        // The JPEG backend only decodes native Gray/RGB samples.
-       if(indexed||calibrated||lab||channels==4)return false;
+       if(indexed||separation||calibrated||lab||channels==4)return false;
        // JPEG image data is compressed independently of PDF Flate filters.
        // DecodeParms predictors are not valid for this path.
        if(get(range.dictionary,"DecodeParms")||
@@ -473,6 +520,21 @@ struct Reader {
         for(unsigned c=0;c<3;++c)
          rgb[3*i+c]=uint8_t(palette[index*palette_channels+
                                      (palette_channels==1?0:c)]);
+       }
+       image.pixels=std::move(rgb);image.channels=3;
+      }else if(separation){
+       std::vector<uint8_t> rgb(size_t(image.width)*image.height*3);
+       for(size_t i=0;i<size_t(image.width)*image.height;++i){
+        const double tint=std::pow(double(image.pixels[i])/255,tint_n);
+        double values[4]{};
+        for(unsigned c=0;c<tint_channels;++c)
+         values[c]=tint_c0[c]+tint*(tint_c1[c]-tint_c0[c]);
+        for(unsigned c=0;c<3;++c){
+         double v=tint_channels==1?values[0]:
+                  tint_channels==3?values[c]:
+                  (1-values[c])*(1-values[3]);
+         rgb[3*i+c]=uint8_t(std::lround(255*std::clamp(v,0.0,1.0)));
+        }
        }
        image.pixels=std::move(rgb);image.channels=3;
       }else if(lab){
