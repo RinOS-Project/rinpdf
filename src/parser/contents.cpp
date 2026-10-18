@@ -995,9 +995,13 @@ struct Reader {
    std::vector<CalcValue> stack{{x,0,0}};
    std::vector<std::vector<std::string>> procedures;
    size_t operations=0;
+   // Each expanded token carries the procedure-call depth at which it runs.
+   // This bounds nested execution even when branches are expanded iteratively.
+   std::vector<uint8_t> execution_depth(tokens.size(),0);
    for(size_t pc=0;pc<tokens.size();++pc){
     token=tokens[pc];
     if(++operations>4096||token.size()>64)return false;
+    const uint8_t active_depth=execution_depth[pc];
     if(token=="{"){
      size_t nested=1;
      std::vector<std::string> procedure;
@@ -1009,7 +1013,7 @@ struct Reader {
       }
       procedure.push_back(tokens[pc]);
      }
-     if(nested||procedures.size()>=64)return false;
+     if(nested||procedures.size()>=64||procedure.size()>4096)return false;
      if(stack.size()>=64)return false;
      procedures.push_back(std::move(procedure));
      stack.push_back({0,3,procedures.size()});continue;
@@ -1030,8 +1034,12 @@ struct Reader {
      for(size_t j=0;j<required+1;++j){
       stack.pop_back();
      }
-     if(chosen.size()>4096-tokens.size())return false;
-     tokens.insert(tokens.begin()+pc+1,chosen.begin(),chosen.end());
+     if(!chosen.empty()){
+      if(active_depth>=8||chosen.size()>4096-tokens.size())return false;
+      tokens.insert(tokens.begin()+pc+1,chosen.begin(),chosen.end());
+      execution_depth.insert(execution_depth.begin()+pc+1,
+                             chosen.size(),uint8_t(active_depth+1));
+     }
      continue;
     }
     double value=0;
