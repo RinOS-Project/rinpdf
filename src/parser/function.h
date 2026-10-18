@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <vector>
+#include <string>
 
 namespace rinpdf::parser {
 
@@ -44,5 +45,10 @@ bool map_stitching_input(const std::vector<double>& bounds,
                          const std::vector<double>& encode,
                          double input,size_t& segment,
                          double& mapped_input) noexcept;
+
+// Execute a pre-tokenized, bounded PDF Type 4 calculator program.
+bool evaluate_calculator_tokens(const std::vector<std::string>& tokens,
+                                double input,unsigned outputs,
+                                double* result);
 
 } // namespace rinpdf::parser
