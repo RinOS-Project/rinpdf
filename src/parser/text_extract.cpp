@@ -259,6 +259,8 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
  // Preserve the last rendered endpoint across BT/ET boundaries.
  double previous_end_x=0,previous_end_y=0;
  double previous_a=1,previous_b=0;
+ double previous_vertical_c=0,previous_vertical_d=1;
+ bool previous_vertical=false;
  bool previous_end_valid=false;
  bool cross_object_pending=false;
  unsigned suppressed=0;
@@ -639,7 +641,18 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
    // Use the previous baseline normal to distinguish a new line from
    // a horizontal word gap.
    if(cross_object_pending&&previous_end_valid&&!suppressed&&
-      operands[0]==previous_a&&operands[1]==previous_b){
+      previous_vertical&&operands[2]==previous_vertical_c&&
+      operands[3]==previous_vertical_d){
+    const double len=std::hypot(previous_vertical_c,previous_vertical_d);
+    if(!std::isfinite(len)||len<=1e-12)return false;
+    const double dx=next_x-previous_end_x,dy=next_y-previous_end_y;
+    const double across=(dx*previous_vertical_d-dy*previous_vertical_c)/len;
+    const double tolerance=std::max(0.001,font_size*len*0.15);
+    if(!std::isfinite(across)||!std::isfinite(tolerance))return false;
+    if(std::abs(across)>tolerance)new_line_pending=true;
+   }
+   if(cross_object_pending&&previous_end_valid&&!suppressed&&
+      !previous_vertical&&operands[0]==previous_a&&operands[1]==previous_b){
     const double axis_length=std::hypot(previous_a,previous_b);
     if(axis_length>1e-12&&std::isfinite(axis_length)){
      const double dx=next_x-previous_end_x;
@@ -652,8 +665,8 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
         std::abs(perpendicular)>tolerance)new_line_pending=true;
     }
    }
-   if(cross_object_pending&&previous_end_valid&&!suppressed&&
-      !new_line_pending&&!output.empty()&&output.back()!=' '&&
+   if(cross_object_pending&&previous_end_valid&&!previous_vertical&&
+      !suppressed&&!new_line_pending&&!output.empty()&&output.back()!=' '&&
       output.back()!='\n'&&
       operands[0]==previous_a&&operands[1]==previous_b){
     const auto font_it=fonts.find(selected);
@@ -698,10 +711,19 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
   }
   if(t.value=="ET"){if(!text||have_pending||!operands.empty())return false;
    if(object_glyph_emitted){
-    if(text_run_emitted&&has_line_origin&&text_cursor_known){
-     previous_end_x=text_line_x+line_a*text_cursor;
-     previous_end_y=text_line_y+line_b*text_cursor;
+    const auto active=fonts.find(selected);
+    const bool is_vertical=active!=fonts.end()&&
+      active->second.subtype=="Type0"&&
+      active->second.encoding=="Identity-V";
+    if(text_run_emitted&&has_line_origin&&
+       (is_vertical?vertical_cursor_known:text_cursor_known)){
+     previous_end_x=is_vertical?
+       text_line_x-line_c*vertical_cursor:text_line_x+line_a*text_cursor;
+     previous_end_y=is_vertical?
+       text_line_y-line_d*vertical_cursor:text_line_y+line_b*text_cursor;
      previous_a=line_a;previous_b=line_b;
+     previous_vertical=is_vertical;
+     previous_vertical_c=line_c;previous_vertical_d=line_d;
      previous_end_valid=std::isfinite(previous_end_x)&&
        std::isfinite(previous_end_y);
     }else{
