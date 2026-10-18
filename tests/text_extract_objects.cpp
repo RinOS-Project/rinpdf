@@ -175,5 +175,10 @@ int main(){
            "10 TL T* [<42> -600 <41>] TJ ET","A\nB A"))return 41;
  if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm <41> Tj "
            "10 TL T* <42> Tj [ -600 <41>] TJ ET","A\nB A"))return 42;
+ // Inline ActualText after a text-line movement must insert one newline
+ // and replace the marked glyph instead of emitting its original text.
+ if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm <41> Tj 0 -12 Td ET "
+           "/Span << /ActualText <FEFF0042> >> BDC "
+           "BT /F1 10 Tf <41> Tj ET EMC","A\nB"))return 43;
  return 0;
 }
