@@ -384,12 +384,25 @@ struct Reader {
      const Value* encoding=get(font,"Encoding");
      const Value* descriptor=get(font,"FontDescriptor");
      if(!subtype||subtype->kind!=Value::Kind::Name||
-        !base||base->kind!=Value::Kind::Name||
-        !encoding||encoding->kind!=Value::Kind::Name)return false;
+        !base||base->kind!=Value::Kind::Name||!encoding)return false;
      PageFont local;
      local.base_font=base->text;
      local.subtype=subtype->text;
-     local.encoding=encoding->text;
+     Value resolved_encoding;
+     if(encoding->kind==Value::Kind::Reference){
+      if(!object(*encoding,resolved_encoding))return false;
+     }else resolved_encoding=*encoding;
+     if(resolved_encoding.kind==Value::Kind::Name)
+      local.encoding=resolved_encoding.text;
+     else if(resolved_encoding.kind==Value::Kind::Dictionary){
+      const Value* base_encoding=get(resolved_encoding,"BaseEncoding");
+      const Value* differences=get(resolved_encoding,"Differences");
+      if(!base_encoding||base_encoding->kind!=Value::Kind::Name||
+         !differences||
+         !decode_font_differences(*differences,local.differences))
+       return false;
+      local.encoding=base_encoding->text;
+     }else return false;
      Value desc;
      if(local.subtype=="Type0"){
       if(local.encoding!="Identity-H"&&local.encoding!="Identity-V")
