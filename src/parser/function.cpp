@@ -649,4 +649,43 @@ bool evaluate_calculator_function(const CalculatorProgram& program,
                                    nullptr,nullptr,&program.instructions);
 }
 
+bool evaluate_pdf_function(const PdfFunction& function,
+                           double input,double* result) {
+ if(!result||function.outputs<1||function.outputs>4||
+    !std::isfinite(input)||!std::isfinite(function.domain[0])||
+    !std::isfinite(function.domain[1])||
+    function.domain[0]>=function.domain[1])return false;
+ const double clamped=std::clamp(input,function.domain[0],
+                                      function.domain[1]);
+ std::array<double,4> values{};
+ bool ok=false;
+ switch(function.kind){
+  case PdfFunction::Kind::Sampled:
+   if(function.sampled.outputs!=function.outputs||
+      function.sampled.domain[0]!=function.domain[0]||
+      function.sampled.domain[1]!=function.domain[1])return false;
+   ok=evaluate_sampled_function(function.sampled,function.samples,
+                                 clamped,values.data());
+   break;
+  case PdfFunction::Kind::Exponential:
+   ok=evaluate_exponential_function(function.exponential,clamped,
+                                    function.outputs,values.data());
+   break;
+  case PdfFunction::Kind::Calculator:
+   ok=evaluate_calculator_function(function.calculator,clamped,
+                                   function.outputs,values.data());
+   break;
+  default:return false;
+ }
+ if(!ok)return false;
+ for(unsigned c=0;c<function.outputs;++c){
+  const double lo=function.range[2*c],hi=function.range[2*c+1];
+  if(!std::isfinite(lo)||!std::isfinite(hi)||lo>hi||
+     !std::isfinite(values[c]))return false;
+  values[c]=std::clamp(values[c],lo,hi);
+ }
+ for(unsigned c=0;c<function.outputs;++c)result[c]=values[c];
+ return true;
+}
+
 } // namespace rinpdf::parser
