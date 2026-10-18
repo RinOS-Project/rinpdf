@@ -1109,10 +1109,11 @@ struct Reader {
        token=="atan"||token=="bitshift"){
      if(stack.size()<2)return false;
      if(is_bool.back()==1||is_bool[is_bool.size()-2]==1)return false;
+     const bool rhs_integer=is_bool.back()==2;
      const double rhs=stack.back();stack.pop_back();is_bool.pop_back();
      double& lhs=stack.back();
      if(token=="idiv"||token=="mod"){
-      if(is_bool.back()!=2||rhs!=std::trunc(rhs)||rhs==0)return false;
+      if(is_bool.back()!=2||!rhs_integer||rhs==0)return false;
       if(rhs==0||lhs!=std::trunc(lhs)||rhs!=std::trunc(rhs)||
          std::abs(lhs)>2147483647||std::abs(rhs)>2147483647)return false;
       if(token=="idiv")lhs=std::trunc(lhs/rhs);
@@ -1124,7 +1125,7 @@ struct Reader {
       lhs=std::atan2(lhs,rhs)*(180.0/3.14159265358979323846);
       if(lhs<0)lhs+=360.0;
      }else{
-      if(is_bool.back()!=2||rhs!=std::trunc(rhs)||
+      if(is_bool.back()!=2||!rhs_integer||
          lhs!=std::trunc(lhs)||
          std::abs(lhs)>2147483647||std::abs(rhs)>31)return false;
       const uint32_t n=uint32_t(int32_t(lhs));
