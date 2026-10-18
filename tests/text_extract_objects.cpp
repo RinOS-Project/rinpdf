@@ -70,5 +70,16 @@ int main(){
  if(!extract_page_text(reinterpret_cast<const uint8_t*>(unknown_pdf.data()),
       unknown_pdf.size(),0,unknown_result))return 10;
  if(unknown_result!="A BA")return 11;
+ // A positioning operator after an unknown-width glyph resets the
+ // current run state but must not make the text object appear empty.
+ const std::string reset_pdf=make_pdf(
+   "BT /F1 10 Tf 1 0 0 1 0 0 Tm <41> Tj ET "
+   "BT /F1 10 Tf 1 0 0 1 20 0 Tm <42> Tj "
+   "1 0 0 1 25 0 Tm ET "
+   "BT /F1 10 Tf 1 0 0 1 40 0 Tm <41> Tj ET",true);
+ std::string reset_result;
+ if(!extract_page_text(reinterpret_cast<const uint8_t*>(reset_pdf.data()),
+      reset_pdf.size(),0,reset_result))return 12;
+ if(reset_result!="A BA")return 13;
  return 0;
 }
