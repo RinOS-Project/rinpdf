@@ -15,6 +15,7 @@
 #include <map>
 #include <set>
 #include <cmath>
+#include <tuple>
 namespace rinpdf::parser {
 static const Value* get(const Value& v,const char* name){
  if(v.kind!=Value::Kind::Dictionary)return nullptr;
@@ -197,6 +198,11 @@ struct Reader {
       bool separation=false;
       unsigned device_inputs=1;
       bool sampled_tint=false;
+      struct StitchPart {
+       double c0[4]{0,0,0,0},c1[4]{1,1,1,1},exponent=1;
+      };
+      std::vector<StitchPart> stitch_parts;
+      std::vector<double> stitch_bounds,stitch_encode;
       std::vector<uint8_t> tint_samples;
       std::vector<unsigned> tint_sizes;
       std::vector<double> tint_encode,tint_decode,tint_domain,tint_range;
@@ -418,6 +424,65 @@ struct Reader {
                           size_t(byte_count))||
            tint_samples.size()!=size_t(byte_count))return false;
         sampled_tint=true;
+       }else if(type->integer==3){
+        // A stitching function has one input; each segment is mapped
+        // into a bounded Type 2 exponential subfunction.
+        if(device_inputs!=1||!domain||domain->kind!=Value::Kind::Array||
+           domain->array.size()!=2)return false;
+        double d0=0,d1=0;
+        if(!number(domain->array[0],d0)||
+           !number(domain->array[1],d1)||d0!=0||d1!=1)return false;
+        const Value* functions=get(fn,"Functions");
+        const Value* bounds=get(fn,"Bounds");
+        const Value* encode_stitch=get(fn,"Encode");
+        if(!functions||functions->kind!=Value::Kind::Array||
+           functions->array.empty()||functions->array.size()>32||
+           !bounds||bounds->kind!=Value::Kind::Array||
+           bounds->array.size()!=functions->array.size()-1||
+           !encode_stitch||encode_stitch->kind!=Value::Kind::Array||
+           encode_stitch->array.size()!=functions->array.size()*2)
+         return false;
+        double previous=0;
+        stitch_bounds.push_back(0);
+        for(const Value& bound:bounds->array){
+         double value=0;
+         if(!number(bound,value)||value<=previous||value>=1)return false;
+         stitch_bounds.push_back(value);previous=value;
+        }
+        stitch_bounds.push_back(1);
+        for(const Value& value:encode_stitch->array){
+         double v=0;
+         if(!number(value,v))return false;
+         stitch_encode.push_back(v);
+        }
+        for(const Value& reference:functions->array){
+         Value sub;
+         if(reference.kind==Value::Kind::Reference){
+          if(!object(reference,sub))return false;
+         }else sub=reference;
+         const Value* subtype=get(sub,"FunctionType");
+         const Value* power=get(sub,"N");
+         if(!subtype||subtype->kind!=Value::Kind::Integer||
+            subtype->integer!=2||!power)return false;
+         StitchPart part;
+         if(!number(*power,part.exponent)||part.exponent<=0||
+            part.exponent>100)return false;
+         for(const auto& [key,destination,default_value]:
+           std::initializer_list<std::tuple<const char*,double*,double>>{
+             {"C0",part.c0,0},{"C1",part.c1,1}}){
+          const Value* values=get(sub,key);
+          if(!values){
+           for(unsigned c=0;c<tint_channels;++c)destination[c]=default_value;
+           continue;
+          }
+          if(values->kind!=Value::Kind::Array||
+             values->array.size()!=tint_channels)return false;
+          for(unsigned c=0;c<tint_channels;++c)
+           if(!number(values->array[c],destination[c])||
+              destination[c]<0||destination[c]>1)return false;
+         }
+         stitch_parts.push_back(part);
+        }
        }else if(type->integer==2){
         if(device_inputs!=1||!domain||domain->kind!=Value::Kind::Array||
            domain->array.size()!=2||!exponent||
@@ -685,6 +750,21 @@ struct Reader {
                                                   tint_range[2*c+1]);
           }
          }
+        }else if(!stitch_parts.empty()){
+         const double x=double(image.pixels[i])/255;
+         size_t part=0;
+         while(part+1<stitch_parts.size()&&x>=stitch_bounds[part+1])
+          ++part;
+         const double begin=stitch_bounds[part];
+         const double end=stitch_bounds[part+1];
+         const double normalized=(x-begin)/(end-begin);
+         const double input=stitch_encode[2*part]+normalized*
+           (stitch_encode[2*part+1]-stitch_encode[2*part]);
+         const double tint=std::pow(std::clamp(input,0.0,1.0),
+                                     stitch_parts[part].exponent);
+         for(unsigned c=0;c<tint_channels;++c)
+          values[c]=stitch_parts[part].c0[c]+tint*
+                    (stitch_parts[part].c1[c]-stitch_parts[part].c0[c]);
         }else{
          const double tint=std::pow(double(image.pixels[i])/255,tint_n);
          for(unsigned c=0;c<tint_channels;++c)
