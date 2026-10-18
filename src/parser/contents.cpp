@@ -1243,8 +1243,10 @@ struct Reader {
            double(int64_t(bits)-4294967296LL):double(bits);
      }else return false;
     }else return false;
-    if(stack.empty()||!std::isfinite(stack.back().number)||
-       std::abs(stack.back().number)>1e12)return false;
+    // Empty intermediary stacks are valid (for example after pop).
+    if(stack.size()>64)return false;
+    if(!stack.empty()&&(!std::isfinite(stack.back().number)||
+       std::abs(stack.back().number)>1e12))return false;
    }
    if(stack.size()!=outputs)return false;
    for(const CalcValue& value:stack)
