@@ -1115,8 +1115,10 @@ struct Reader {
      double& lhs=stack.back().number;
      if(token=="idiv"||token=="mod"){
       if(stack.back().kind!=2||!rhs_integer||rhs==0)return false;
-      if(rhs==0||lhs!=std::trunc(lhs)||rhs!=std::trunc(rhs)||
-         std::abs(lhs)>2147483647||std::abs(rhs)>2147483647)return false;
+      if(lhs!=std::trunc(lhs)||rhs!=std::trunc(rhs)||
+         lhs< -2147483648.0||lhs>2147483647.0||
+         rhs< -2147483648.0||rhs>2147483647.0||
+         (lhs==-2147483648.0&&rhs==-1))return false;
       if(token=="idiv")lhs=std::trunc(lhs/rhs);
       else lhs=std::fmod(lhs,rhs);
      }else if(token=="exp"){
@@ -1127,11 +1129,15 @@ struct Reader {
       if(lhs<0)lhs+=360.0;
      }else{
       if(stack.back().kind!=2||!rhs_integer||
-         lhs!=std::trunc(lhs)||
-         std::abs(lhs)>2147483647||std::abs(rhs)>31)return false;
+         lhs!=std::trunc(lhs)||lhs< -2147483648.0||
+         lhs>2147483647.0||std::abs(rhs)>31)return false;
       const uint32_t n=uint32_t(int32_t(lhs));
       const int shift=int(rhs);
-      lhs=double(int32_t(shift>=0?(n<<shift):(n>>(-shift))));
+      // Calculate signed 32-bit shifts explicitly without implementation-
+      // defined unsigned-to-signed narrowing on out-of-range values.
+      const uint32_t shifted=shift>=0?n<<shift:n>>(-shift);
+      lhs=shifted>=0x80000000u?
+          double(int64_t(shifted)-4294967296LL):double(shifted);
      }
      if(!std::isfinite(lhs)||std::abs(lhs)>1e12)return false;
      stack.back().kind=(token=="idiv"||token=="mod"||token=="bitshift")?2:0;
@@ -1163,8 +1169,11 @@ struct Reader {
       lhs/=rhs;
      }else if(token=="min")lhs=std::min(lhs,rhs);
      else lhs=std::max(lhs,rhs);
+     const bool in_integer_range=std::isfinite(lhs)&&
+       lhs>=-2147483648.0&&lhs<=2147483647.0;
+     if(integer_pair&&token!="div"&&!in_integer_range)return false;
      const bool keep_integer=integer_pair&&token!="div"&&
-       lhs==std::trunc(lhs)&&lhs>=-2147483648.0&&lhs<=2147483647.0;
+       lhs==std::trunc(lhs)&&in_integer_range;
      stack.back().kind=keep_integer?2:0;
     }else if(token=="eq"||token=="ne"||token=="gt"||
              token=="ge"||token=="lt"||token=="le"||
