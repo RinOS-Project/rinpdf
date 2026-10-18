@@ -158,7 +158,8 @@ static bool parse_calculator_number(const std::string& token,double& value,uint8
 bool evaluate_calculator_tokens(const std::vector<std::string>& parsed_tokens,
                                 double input,unsigned outputs,
                                 double* result,
-                                const std::map<std::string,std::pair<double,uint8_t>>* constants) {
+                                const std::map<std::string,std::pair<double,uint8_t>>* constants,
+                                const std::map<std::string,uint8_t>* operators) {
  if(!result||outputs<1||outputs>4||!std::isfinite(input)||parsed_tokens.size()>4096)return false;
  std::vector<std::string> tokens=parsed_tokens;
    struct CalcValue { double number; uint8_t kind; size_t procedure; };
@@ -231,6 +232,7 @@ bool evaluate_calculator_tokens(const std::vector<std::string>& parsed_tokens,
      if(stack.size()>=64)return false;
      stack.push_back({token=="true"?1.0:0.0,1,0});continue;
     }
+    if(operators&&operators->find(token)==operators->end())return false;
     if(token=="copy"){
      if(stack.empty())return false;
      if(stack.back().kind!=2)return false;
@@ -525,7 +527,8 @@ bool compile_calculator_function(const std::vector<uint8_t>& source,
 bool evaluate_calculator_function(const CalculatorProgram& program,
                                   double input,unsigned outputs,double* result) {
  return evaluate_calculator_tokens(program.tokens,input,outputs,result,
-                                   &program.numeric_constants);
+                                   &program.numeric_constants,
+                                   &program.operator_codes);
 }
 
 } // namespace rinpdf::parser
