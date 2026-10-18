@@ -175,6 +175,7 @@ struct Reader {
       }
       const Value* subtype=get(range.dictionary,"Subtype");
       if(!subtype||subtype->kind!=Value::Kind::Name){active.erase(id);return false;}
+      if(subtype->text=="Form")continue;
       if(subtype->text!="Image"){active.erase(id);return false;}
       const Value* w=get(range.dictionary,"Width");
       const Value* h=get(range.dictionary,"Height");
