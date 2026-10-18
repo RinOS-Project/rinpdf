@@ -1042,33 +1042,53 @@ struct Reader {
      }
      continue;
     }
-    // PostScript numeric literals: integers and reals, including
-    // leading-dot decimals. Reject malformed numeric-looking tokens.
+    // Calculator numbers support signed decimals, exponent notation and
+    // PostScript radix integers (base#digits). Invalid literals fail closed.
     const bool numeric_start=token[0]=='+'||token[0]=='-'||
       token[0]=='.'||(token[0]>='0'&&token[0]<='9');
     if(numeric_start){
-     const bool integer_literal=token.find_first_of(".eE")==std::string::npos;
+     const char* first=token.data();
+     const char* last=first+token.size();
+     bool negative=false;
+     if(*first=='+'||*first=='-'){
+      negative=*first=='-';++first;
+     }
+     if(first==last)return false;
      double value=0;
-     if(integer_literal){
+     bool integer_literal=true;
+     const char* hash=std::find(first,last,'#');
+     if(hash!=last){
+      // PostScript radix literals are unsigned and have a 2..36 base.
+      if(negative||first==hash||hash+1==last)return false;
+      unsigned base=0;
+      const auto radix=std::from_chars(first,hash,base);
+      if(radix.ec!=std::errc()||radix.ptr!=hash||base<2||base>36)
+       return false;
+      uint64_t accumulated=0;
+      for(const char* p=hash+1;p!=last;++p){
+       const char ch=*p;
+       const unsigned digit=ch>='0'&&ch<='9'?unsigned(ch-'0'):
+          ch>='A'&&ch<='Z'?unsigned(ch-'A'+10):
+          ch>='a'&&ch<='z'?unsigned(ch-'a'+10):36u;
+       if(digit>=base||
+          accumulated>(uint64_t(INT32_MAX)-digit)/base)return false;
+       accumulated=accumulated*base+digit;
+      }
+      value=double(accumulated);
+     }else if(std::find_first_of(first,last,".eE",".eE"+3)==last){
       int64_t whole=0;
-      const char* first=token.data();
-      const char* last=first+token.size();
-      if(*first=='+')++first;
-      if(first==last)return false;
       const auto parsed=std::from_chars(first,last,whole);
-      if(parsed.ec!=std::errc()||
-         parsed.ptr!=token.data()+token.size()||
-         whole<INT32_MIN||whole>INT32_MAX)return false;
+      if(parsed.ec!=std::errc()||parsed.ptr!=last)return false;
+      if(negative)whole=-whole;
+      if(whole<INT32_MIN||whole>INT32_MAX)return false;
       value=double(whole);
      }else{
-      const char* first=token.data();
-      const char* last=first+token.size();
-      if(*first=='+')++first;
-      if(first==last)return false;
+      integer_literal=false;
       const auto parsed=std::from_chars(first,last,value,
-                                         std::chars_format::general);
-      if(parsed.ec!=std::errc()||parsed.ptr!=last||
-         !std::isfinite(value))return false;
+                                        std::chars_format::general);
+      if(parsed.ec!=std::errc()||parsed.ptr!=last)return false;
+      if(negative)value=-value;
+      if(!std::isfinite(value))return false;
      }
      if(stack.size()>=64)return false;
      stack.push_back({value,uint8_t(integer_literal?2:0),0});
