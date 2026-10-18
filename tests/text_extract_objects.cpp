@@ -163,5 +163,10 @@ int main(){
            "[<41> -900] TJ <42> Tj ET","A B"))return 37;
  if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm 2 Tc "
            "[<41> -900 <42>] TJ ET","A B"))return 38;
+ // A mixture of Tj and TJ must retain the same advances and spacing.
+ if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm "
+           "<41> Tj [ -600 <42>] TJ <41> Tj ET","A BA"))return 39;
+ if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm "
+           "[<41> -600 <42>] TJ <41> Tj ET","A BA"))return 40;
  return 0;
 }
