@@ -487,7 +487,10 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
    const double displacement_normal=
       -(next_x-text_line_x)*line_axis_y/old_length+
        (next_y-text_line_y)*line_axis_x/old_length;
-   if(has_line_origin&&std::abs(displacement_normal)>0.001&&!suppressed)
+   // Matrix setup alone does not emit glyphs. Do not infer a line break
+   // from successive Tm operators before any text has been shown.
+   if(has_line_origin&&text_run_emitted&&
+      std::abs(displacement_normal)>0.001&&!suppressed)
     new_line_pending=true;
    if(!suppressed&&has_line_origin&&text_run_emitted&&text_cursor_known&&
       !new_line_pending&&operands[0]==line_a&&operands[1]==line_b&&
