@@ -4,7 +4,7 @@
 #include <string>
 using namespace rinpdf::parser;
 int main(){
- const std::string content="BT /F1 10 Tf <0041> Tj <0042> Tj ET";
+ const std::string content="BT /F1 10 Tf [<0041> -200 <0042>] TJ ET";
  const std::string cmap="2 beginbfchar <0041> <65E5> <0042> <672C> endbfchar";
  std::string pdf="%PDF-1.5\n";
  size_t offsets[8]{};
