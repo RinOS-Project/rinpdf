@@ -85,7 +85,7 @@ bool evaluate_calculator_function(const CalculatorProgram& program,
 // Multi-input sampled functions and recursive Type 3 compilation will use
 // separate extensions; unsupported kinds fail closed.
 struct PdfFunction {
- enum class Kind : uint8_t { Sampled=0, Exponential=2, Calculator=4 };
+ enum class Kind : uint8_t { Sampled=0, Exponential=2, Stitching=3, Calculator=4 };
  Kind kind=Kind::Exponential;
  unsigned outputs=0;
  double domain[2]{0,1};
@@ -94,7 +94,20 @@ struct PdfFunction {
  SampledFunction sampled;
  std::vector<uint8_t> samples;
  CalculatorProgram calculator;
+ std::vector<double> stitch_bounds,stitch_encode;
+ std::vector<PdfFunction> stitch_children;
 };
+
+bool compile_sampled_pdf_function(const SampledFunction& parameters,
+                                  const std::vector<uint8_t>& decoded_samples,
+                                  PdfFunction& output);
+bool compile_stitching_pdf_function(const std::vector<PdfFunction>& children,
+                                    const std::vector<double>& bounds,
+                                    const std::vector<double>& encode,
+                                    unsigned outputs,double domain_min,
+                                    double domain_max,
+                                    const std::array<double,8>& range,
+                                    PdfFunction& output);
 
 bool compile_exponential_pdf_function(const ExponentialFunction& parameters,
                                       unsigned outputs,double domain_min,
