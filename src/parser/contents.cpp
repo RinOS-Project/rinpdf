@@ -1058,7 +1058,8 @@ struct Reader {
      bool integer_literal=true;
      const char* hash=std::find(first,last,'#');
      if(hash!=last){
-      // PostScript radix literals are unsigned and have a 2..36 base.
+      // Radix integers use a 32-bit bit pattern; values with the high
+      // bit set are interpreted as negative signed integers.
       if(negative||first==hash||hash+1==last)return false;
       unsigned base=0;
       const auto radix=std::from_chars(first,hash,base);
@@ -1071,10 +1072,11 @@ struct Reader {
           ch>='A'&&ch<='Z'?unsigned(ch-'A'+10):
           ch>='a'&&ch<='z'?unsigned(ch-'a'+10):36u;
        if(digit>=base||
-          accumulated>(uint64_t(INT32_MAX)-digit)/base)return false;
+          accumulated>(uint64_t(UINT32_MAX)-digit)/base)return false;
        accumulated=accumulated*base+digit;
       }
-      value=double(accumulated);
+      value=accumulated>=0x80000000ULL?
+        double(int64_t(accumulated)-4294967296LL):double(accumulated);
      }else if(std::find_first_of(first,last,".eE",".eE"+3)==last){
       int64_t whole=0;
       const auto parsed=std::from_chars(first,last,whole);
@@ -1161,7 +1163,8 @@ struct Reader {
      }else if(token=="truncate")value=std::trunc(value);
      else if(token=="floor")value=std::floor(value);
      else if(token=="ceiling")value=std::ceil(value);
-     else if(token=="round")value=std::floor(value+0.5);
+     else if(token=="round")
+      value=value<0? -std::floor(-value+0.5):std::floor(value+0.5);
      else if(token=="ln"||token=="log"){
       if(value<=0)return false;
       value=token=="ln"?std::log(value):std::log10(value);
