@@ -975,6 +975,7 @@ struct Reader {
    std::vector<double> stack{x};
    std::vector<uint8_t> is_bool{0}; // 0: real, 1: boolean, 2: integer.
    std::vector<std::vector<std::string>> procedures;
+   std::vector<size_t> procedure_ids{0}; // Parallel operand-stack slots.
    size_t operations=0;
    for(size_t pc=0;pc<tokens.size();++pc){
     token=tokens[pc];
@@ -991,23 +992,27 @@ struct Reader {
       procedure.push_back(tokens[pc]);
      }
      if(nested||procedures.size()>=64)return false;
-     procedures.push_back(std::move(procedure));continue;
+     if(stack.size()>=64)return false;
+     procedures.push_back(std::move(procedure));
+     stack.push_back(0);is_bool.push_back(3);
+     procedure_ids.push_back(procedures.size());continue;
     }
     if(token=="}")return false;
     if(token=="if"||token=="ifelse"){
      const size_t required=token=="if"?1:2;
-     if(procedures.size()<required||stack.empty())return false;
-     if(is_bool.back()!=1)return false;
-     const bool condition=stack.back()!=0;
-     stack.pop_back();is_bool.pop_back();
-     std::vector<std::string> chosen;
-     if(required==1){
-      if(condition)chosen=procedures.back();
-      procedures.pop_back();
-     }else{
-      chosen=condition?procedures[procedures.size()-2]:
-                       procedures.back();
-      procedures.pop_back();procedures.pop_back();
+     if(stack.size()<required+1||
+        is_bool[stack.size()-required-1]!=1)return false;
+     for(size_t j=0;j<required;++j)
+      if(is_bool[stack.size()-required+j]!=3)return false;
+     const bool condition=stack[stack.size()-required-1]!=0;
+     const size_t chosen_id=required==1?procedure_ids.back():
+       procedure_ids[stack.size()-(condition?2:1)];
+     if(chosen_id==0||chosen_id>procedures.size())return false;
+     const std::vector<std::string> chosen=condition?
+       procedures[chosen_id-1]:required==2?procedures[procedure_ids.back()-1]:
+       std::vector<std::string>{};
+     for(size_t j=0;j<required+1;++j){
+      stack.pop_back();is_bool.pop_back();procedure_ids.pop_back();
      }
      if(tokens.size()+chosen.size()>4096)return false;
      tokens.insert(tokens.begin()+pc+1,chosen.begin(),chosen.end());
@@ -1019,42 +1024,46 @@ struct Reader {
     if(parsed.ec==std::errc()&&
        parsed.ptr==token.data()+token.size()){
      if(!std::isfinite(value)||stack.size()>=64)return false;
-     stack.push_back(value);
+     stack.push_back(value);procedure_ids.push_back(0);
      const bool integer_literal=token.find_first_of(".eE")==std::string::npos&&
        value>=-2147483648.0&&value<=2147483647.0;
      is_bool.push_back(integer_literal?2:0);continue;
     }
     if(token=="true"||token=="false"){
      if(stack.size()>=64)return false;
-     stack.push_back(token=="true"?1.0:0.0);is_bool.push_back(1);continue;
+     stack.push_back(token=="true"?1.0:0.0);is_bool.push_back(1);
+     procedure_ids.push_back(0);continue;
     }
     if(token=="copy"){
      if(stack.empty())return false;
-     if(is_bool.back()==1)return false;
-     const double n=stack.back();stack.pop_back();is_bool.pop_back();
+     if(is_bool.back()==1||is_bool.back()==3)return false;
+     const double n=stack.back();stack.pop_back();is_bool.pop_back();procedure_ids.pop_back();
      if(n<0||n!=std::floor(n)||n>double(stack.size())||
         stack.size()+size_t(n)>64)return false;
      const size_t count=size_t(n);
      const std::vector<double> copied(stack.end()-count,stack.end());
      const std::vector<uint8_t> kinds(is_bool.end()-count,is_bool.end());
+     const std::vector<size_t> ids(procedure_ids.end()-count,procedure_ids.end());
      stack.insert(stack.end(),copied.begin(),copied.end());
      is_bool.insert(is_bool.end(),kinds.begin(),kinds.end());
+     procedure_ids.insert(procedure_ids.end(),ids.begin(),ids.end());
      continue;
     }
     if(token=="index"){
      if(stack.empty()||is_bool.back())return false;
-     const double n=stack.back();stack.pop_back();is_bool.pop_back();
+     const double n=stack.back();stack.pop_back();is_bool.pop_back();procedure_ids.pop_back();
      if(n<0||n!=std::floor(n)||n>=double(stack.size())||
         stack.size()>=64)return false;
      stack.push_back(stack[stack.size()-1-size_t(n)]);
      is_bool.push_back(is_bool[is_bool.size()-1-size_t(n)]);
+     procedure_ids.push_back(procedure_ids[procedure_ids.size()-1-size_t(n)]);
      continue;
     }
     if(token=="roll"){
      if(stack.size()<2)return false;
-     if(is_bool.back()==1||is_bool[is_bool.size()-2]==1)return false;
-     const double shift=stack.back();stack.pop_back();is_bool.pop_back();
-     const double n=stack.back();stack.pop_back();is_bool.pop_back();
+     if(is_bool.back()==1||is_bool.back()==3||is_bool[is_bool.size()-2]==1||is_bool[is_bool.size()-2]==3)return false;
+     const double shift=stack.back();stack.pop_back();is_bool.pop_back();procedure_ids.pop_back();
+     const double n=stack.back();stack.pop_back();is_bool.pop_back();procedure_ids.pop_back();
      if(n<0||n!=std::floor(n)||n>double(stack.size())||
         shift!=std::trunc(shift)||!std::isfinite(shift))return false;
      const size_t count=size_t(n);
@@ -1064,27 +1073,30 @@ struct Reader {
       const size_t right=size_t((distance+long long(count))%long long(count));
       std::rotate(stack.end()-count,stack.end()-right,stack.end());
       std::rotate(is_bool.end()-count,is_bool.end()-right,is_bool.end());
+      std::rotate(procedure_ids.end()-count,procedure_ids.end()-right,procedure_ids.end());
      }
      continue;
     }
     if(token=="dup"){
      if(stack.empty()||stack.size()>=64)return false;
-     stack.push_back(stack.back());is_bool.push_back(is_bool.back());continue;
+     stack.push_back(stack.back());is_bool.push_back(is_bool.back());
+     procedure_ids.push_back(procedure_ids.back());continue;
     }
     if(token=="exch"){
      if(stack.size()<2)return false;
      std::swap(stack[stack.size()-1],stack[stack.size()-2]);
-     std::swap(is_bool[is_bool.size()-1],is_bool[is_bool.size()-2]);continue;
+     std::swap(is_bool[is_bool.size()-1],is_bool[is_bool.size()-2]);
+     std::swap(procedure_ids[procedure_ids.size()-1],procedure_ids[procedure_ids.size()-2]);continue;
     }
     if(token=="pop"){
      if(stack.empty())return false;
-     stack.pop_back();is_bool.pop_back();continue;
+     stack.pop_back();is_bool.pop_back();procedure_ids.pop_back();continue;
     }
     if(token=="cvi"||token=="cvr"||token=="floor"||
        token=="ceiling"||token=="round"||token=="truncate"||
        token=="ln"||token=="log"||token=="sin"||token=="cos"){
      if(stack.empty())return false;
-     if(is_bool.back()==1)return false;
+     if(is_bool.back()==1||is_bool.back()==3)return false;
      double& value=stack.back();
      if(token=="cvi"||token=="truncate")value=std::trunc(value);
      else if(token=="floor")value=std::floor(value);
@@ -1108,9 +1120,9 @@ struct Reader {
     if(token=="idiv"||token=="mod"||token=="exp"||
        token=="atan"||token=="bitshift"){
      if(stack.size()<2)return false;
-     if(is_bool.back()==1||is_bool[is_bool.size()-2]==1)return false;
+     if(is_bool.back()==1||is_bool.back()==3||is_bool[is_bool.size()-2]==1||is_bool[is_bool.size()-2]==3)return false;
      const bool rhs_integer=is_bool.back()==2;
-     const double rhs=stack.back();stack.pop_back();is_bool.pop_back();
+     const double rhs=stack.back();stack.pop_back();is_bool.pop_back();procedure_ids.pop_back();procedure_ids.pop_back();
      double& lhs=stack.back();
      if(token=="idiv"||token=="mod"){
       if(is_bool.back()!=2||!rhs_integer||rhs==0)return false;
@@ -1138,7 +1150,7 @@ struct Reader {
     }
     if(token=="neg"||token=="abs"||token=="sqrt"){
      if(stack.empty())return false;
-     if(is_bool.back()==1)return false;
+     if(is_bool.back()==1||is_bool.back()==3)return false;
      double& top=stack.back();
      if(token=="sqrt")is_bool.back()=0;
      if(token=="neg")top=-top;
@@ -1150,9 +1162,9 @@ struct Reader {
     }else if(token=="add"||token=="sub"||token=="mul"||
              token=="div"||token=="min"||token=="max"){
      if(stack.size()<2)return false;
-     if(is_bool.back()==1||is_bool[is_bool.size()-2]==1)return false;
+     if(is_bool.back()==1||is_bool.back()==3||is_bool[is_bool.size()-2]==1||is_bool[is_bool.size()-2]==3)return false;
      const bool integer_pair=is_bool.back()==2&&is_bool[is_bool.size()-2]==2;
-     const double rhs=stack.back();stack.pop_back();is_bool.pop_back();
+     const double rhs=stack.back();stack.pop_back();is_bool.pop_back();procedure_ids.pop_back();
      double& lhs=stack.back();
      if(token=="add")lhs+=rhs;
      else if(token=="sub")lhs-=rhs;
@@ -1175,7 +1187,7 @@ struct Reader {
      const bool equality=token=="eq"||token=="ne";
      if((logic&&(!lb||!rb))||(equality&&lb!=rb)||
         (!logic&&!equality&&(lb||rb)))return false;
-     const double rhs=stack.back();stack.pop_back();is_bool.pop_back();
+     const double rhs=stack.back();stack.pop_back();is_bool.pop_back();procedure_ids.pop_back();
      double& lhs=stack.back();
      if(token=="eq")lhs=lhs==rhs;
      else if(token=="ne")lhs=lhs!=rhs;
@@ -1195,9 +1207,9 @@ struct Reader {
     if(stack.empty()||!std::isfinite(stack.back())||
        std::abs(stack.back())>1e12)return false;
    }
-   if(!procedures.empty()||stack.size()!=outputs||
-      is_bool.size()!=stack.size())return false;
-   for(uint8_t t:is_bool)if(t==1)return false;
+   if(stack.size()!=outputs||
+      is_bool.size()!=stack.size()||procedure_ids.size()!=stack.size())return false;
+   for(uint8_t t:is_bool)if(t==1||t==3)return false;
    for(unsigned j=0;j<outputs;++j)result[j]=stack[j];
   }else if(type->integer==2){
    const Value* n=get(function,"N");
