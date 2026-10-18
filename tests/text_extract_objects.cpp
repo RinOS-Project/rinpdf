@@ -168,5 +168,12 @@ int main(){
            "<41> Tj [ -600 <42>] TJ <41> Tj ET","A BA"))return 39;
  if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm "
            "[<41> -600 <42>] TJ <41> Tj ET","A BA"))return 40;
+ // Both show operators must avoid duplicate inferred spaces when a
+ // previous run ends in a literal space. The latter is mapped only in
+ // fixtures that support it, so here test the explicit newline boundary.
+ if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm <41> Tj "
+           "10 TL T* [<42> -600 <41>] TJ ET","A\\nB A"))return 41;
+ if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm <41> Tj "
+           "10 TL T* <42> Tj [ -600 <41>] TJ ET","A\\nB A"))return 42;
  return 0;
 }
