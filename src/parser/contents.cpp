@@ -325,6 +325,25 @@ struct Reader {
   }
   active.erase(id);return true;
  }
+ bool parse_cid_descendant(const Value& descendant,PageFont& resource) const {
+  const Value* subtype=get(descendant,"Subtype");
+  if(!subtype||subtype->kind!=Value::Kind::Name||
+     subtype->text!="CIDFontType2"||
+     !parse_cid_widths(get(descendant,"DW"),get(descendant,"W"),
+                       resource.cid_widths)||
+     !parse_cid_vertical_metrics(get(descendant,"DW2"),get(descendant,"W2"),
+                                 resource.vertical_metrics))return false;
+  if(const Value* map=get(descendant,"CIDToGIDMap")){
+   if(map->kind==Value::Kind::Name){
+    if(map->text!="Identity")return false;
+   }else if(map->kind==Value::Kind::Reference){
+    resource.cid_map.identity=false;
+    if(!stream(*map,resource.cid_map.bytes,131072)||
+       !cid_map_valid(resource.cid_map))return false;
+   }else return false;
+  }
+  return true;
+ }
  bool parse_font_encoding(const Value& font,PageFont& out) const {
   const Value* encoding=get(font,"Encoding");
   if(!encoding)return true;
@@ -420,21 +439,7 @@ struct Reader {
       if(child_ref.kind==Value::Kind::Reference){
        if(!object(child_ref,child))return false;
       }else child=child_ref;
-      const Value* child_type=get(child,"Subtype");
-      if(!child_type||child_type->kind!=Value::Kind::Name||
-         child_type->text!="CIDFontType2"||
-         !parse_cid_widths(get(child,"DW"),get(child,"W"),local.cid_widths)||
-         !parse_cid_vertical_metrics(get(child,"DW2"),get(child,"W2"),
-                                     local.vertical_metrics))return false;
-      if(const Value* gid=get(child,"CIDToGIDMap")){
-       if(gid->kind==Value::Kind::Name){
-        if(gid->text!="Identity")return false;
-       }else if(gid->kind==Value::Kind::Reference){
-        local.cid_map.identity=false;
-        if(!stream(*gid,local.cid_map.bytes,131072)||
-           !cid_map_valid(local.cid_map))return false;
-       }else return false;
-      }
+      if(!parse_cid_descendant(child,local))return false;
       const Value* child_desc=get(child,"FontDescriptor");
       if(!child_desc)return false;
       if(child_desc->kind==Value::Kind::Reference){
@@ -727,25 +732,8 @@ struct Reader {
        if(reference.kind==Value::Kind::Reference){
         if(!object(reference,descendant)){active.erase(id);return false;}
        }else descendant=reference;
-       const Value* child_type=get(descendant,"Subtype");
-       if(!child_type||child_type->kind!=Value::Kind::Name||
-          child_type->text!="CIDFontType2"){active.erase(id);return false;}
-       if(!parse_cid_widths(get(descendant,"DW"),get(descendant,"W"),resource.cid_widths)){
+       if(!parse_cid_descendant(descendant,resource)){
         active.erase(id);return false;
-       }
-       if(!parse_cid_vertical_metrics(get(descendant,"DW2"),
-            get(descendant,"W2"),resource.vertical_metrics)){
-        active.erase(id);return false;
-       }
-       const Value* map=get(descendant,"CIDToGIDMap");
-       if(map){
-        if(map->kind==Value::Kind::Name){
-         if(map->text!="Identity"){active.erase(id);return false;}
-        }else if(map->kind==Value::Kind::Reference){
-         resource.cid_map.identity=false;
-         if(!stream(*map,resource.cid_map.bytes,131072)||
-            !cid_map_valid(resource.cid_map)){active.erase(id);return false;}
-        }else{active.erase(id);return false;}
        }
        // CIDFont's descriptor owns the embedded TrueType, not Type0's.
        // Parse the descendant descriptor in the common path below.
