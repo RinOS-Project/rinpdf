@@ -16,6 +16,8 @@
 #include <set>
 #include <cmath>
 #include <tuple>
+#include <sstream>
+#include <charconv>
 namespace rinpdf::parser {
 static const Value* get(const Value& v,const char* name){
  if(v.kind!=Value::Kind::Dictionary)return nullptr;
@@ -934,6 +936,80 @@ struct Reader {
                         blend*read_sample(next*outputs+c);
     result[c]=std::clamp(d0+sample*(d1-d0),r0,r1);
    }
+  }else if(type->integer==4){
+   // Restricted calculator language: numeric stack operations without
+   // executable procedures or branches. Unsupported operators fail closed.
+   if(!has_sampled_stream)return false;
+   const Value* output_range=get(function,"Range");
+   if(!output_range||output_range->kind!=Value::Kind::Array||
+      output_range->array.size()!=outputs*2)return false;
+   std::vector<uint8_t> program;
+   if(!decode_stream(data,size,sampled_stream,program,16384))return false;
+   std::string source(program.begin(),program.end());
+   std::istringstream scanner(source);
+   std::string token;
+   std::vector<double> stack{x};
+   size_t operations=0;
+   bool began=false,ended=false;
+   while(scanner>>token){
+    if(++operations>4096||token.size()>64||ended)return false;
+    if(token=="{"){
+     if(began)return false;
+     began=true;continue;
+    }
+    if(token=="}"){
+     if(!began)return false;
+     ended=true;continue;
+    }
+    if(!began)return false;
+    double value=0;
+    const auto parsed=std::from_chars(token.data(),
+       token.data()+token.size(),value);
+    if(parsed.ec==std::errc()&&
+       parsed.ptr==token.data()+token.size()){
+     if(!std::isfinite(value)||stack.size()>=64)return false;
+     stack.push_back(value);continue;
+    }
+    if(token=="dup"){
+     if(stack.empty()||stack.size()>=64)return false;
+     stack.push_back(stack.back());continue;
+    }
+    if(token=="exch"){
+     if(stack.size()<2)return false;
+     std::swap(stack[stack.size()-1],stack[stack.size()-2]);continue;
+    }
+    if(token=="pop"){
+     if(stack.empty())return false;
+     stack.pop_back();continue;
+    }
+    if(token=="neg"||token=="abs"||token=="sqrt"){
+     if(stack.empty())return false;
+     double& top=stack.back();
+     if(token=="neg")top=-top;
+     else if(token=="abs")top=std::abs(top);
+     else{
+      if(top<0)return false;
+      top=std::sqrt(top);
+     }
+    }else if(token=="add"||token=="sub"||token=="mul"||
+             token=="div"||token=="min"||token=="max"){
+     if(stack.size()<2)return false;
+     const double rhs=stack.back();stack.pop_back();
+     double& lhs=stack.back();
+     if(token=="add")lhs+=rhs;
+     else if(token=="sub")lhs-=rhs;
+     else if(token=="mul")lhs*=rhs;
+     else if(token=="div"){
+      if(rhs==0)return false;
+      lhs/=rhs;
+     }else if(token=="min")lhs=std::min(lhs,rhs);
+     else lhs=std::max(lhs,rhs);
+    }else return false;
+    if(stack.empty()||!std::isfinite(stack.back())||
+       std::abs(stack.back())>1e12)return false;
+   }
+   if(!began||!ended||stack.size()!=outputs)return false;
+   for(unsigned j=0;j<outputs;++j)result[j]=stack[j];
   }else if(type->integer==2){
    const Value* n=get(function,"N");
    double exponent=0;
