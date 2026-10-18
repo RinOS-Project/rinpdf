@@ -750,8 +750,10 @@ bool compile_calculator_pdf_function(const std::vector<uint8_t>& source,
  return true;
 }
 
-bool evaluate_pdf_function(const PdfFunction& function,
-                           double input,double* result) {
+static bool evaluate_pdf_function_depth(const PdfFunction& function,
+                                        double input,double* result,
+                                        unsigned depth) {
+ if(depth>=8)return false;
  if(!result||function.outputs<1||function.outputs>4||
     !std::isfinite(input)||!std::isfinite(function.domain[0])||
     !std::isfinite(function.domain[1])||
@@ -780,8 +782,8 @@ bool evaluate_pdf_function(const PdfFunction& function,
       segment>=function.stitch_children.size())return false;
    // Bound recursive evaluation independently of the program's contents.
    // Compiler-built trees are finite; reject overly deep ones at compilation.
-   ok=evaluate_pdf_function(function.stitch_children[segment],mapped,
-                            values.data());
+   ok=evaluate_pdf_function_depth(function.stitch_children[segment],mapped,
+                                  values.data(),depth+1);
    break;
   }
   case PdfFunction::Kind::Calculator:
@@ -799,6 +801,11 @@ bool evaluate_pdf_function(const PdfFunction& function,
  }
  for(unsigned c=0;c<function.outputs;++c)result[c]=values[c];
  return true;
+}
+
+bool evaluate_pdf_function(const PdfFunction& function,
+                           double input,double* result) {
+ return evaluate_pdf_function_depth(function,input,result,0);
 }
 
 } // namespace rinpdf::parser
