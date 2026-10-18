@@ -50,6 +50,12 @@ struct Reader {
   bool is_stream=false;
  };
  mutable std::map<std::pair<int64_t,int64_t>,CachedFunction> function_dictionary_cache;
+ struct CachedStitch {
+  std::vector<Value> functions;
+  std::vector<double> bounds;
+  std::vector<double> encode;
+ };
+ mutable std::map<std::pair<int64_t,int64_t>,CachedStitch> stitch_function_cache;
  bool entry(const Value& ref,const XrefEntry*& out) const {
   if(ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
   auto it=std::find_if(xref.begin(),xref.end(),[&](const XrefEntry& e){
@@ -1402,34 +1408,54 @@ struct Reader {
     if(!std::isfinite(result[j]))return false;
    }
   }else if(type->integer==3){
-   const Value* functions=get(function,"Functions");
-   const Value* bounds=get(function,"Bounds");
-   const Value* enc=get(function,"Encode");
-   if(!functions||functions->kind!=Value::Kind::Array||
-      functions->array.empty()||functions->array.size()>32||
-      !bounds||bounds->kind!=Value::Kind::Array||
-      bounds->array.size()!=functions->array.size()-1||
-      !enc||enc->kind!=Value::Kind::Array||
-      enc->array.size()!=functions->array.size()*2)return false;
-   unsigned segment=0;
-   double previous_bound=low;
-   for(const Value& bound:bounds->array){
-    double b=0;
-    if(!number(bound,b)||b<=previous_bound||b>=high)return false;
-    if(x>=b)++segment;
-    previous_bound=b;
+   CachedStitch local;
+   const CachedStitch* compiled=nullptr;
+   const bool indirect=reference.kind==Value::Kind::Reference;
+   const auto key=std::make_pair(reference.integer,reference.generation);
+   if(indirect){
+    const auto hit=stitch_function_cache.find(key);
+    if(hit!=stitch_function_cache.end())compiled=&hit->second;
    }
-   double left=low,right=high;
-   if(segment){
-    if(!number(bounds->array[segment-1],left))return false;
+   if(!compiled){
+    const Value* functions=get(function,"Functions");
+    const Value* bounds=get(function,"Bounds");
+    const Value* enc=get(function,"Encode");
+    if(!functions||functions->kind!=Value::Kind::Array||
+       functions->array.empty()||functions->array.size()>32||
+       !bounds||bounds->kind!=Value::Kind::Array||
+       bounds->array.size()!=functions->array.size()-1||
+       !enc||enc->kind!=Value::Kind::Array||
+       enc->array.size()!=functions->array.size()*2)return false;
+    local.functions=functions->array;
+    local.bounds.push_back(low);
+    double previous=low;
+    for(const Value& v:bounds->array){
+     double boundary=0;
+     if(!number(v,boundary)||boundary<=previous||boundary>=high)
+      return false;
+     local.bounds.push_back(boundary);
+     previous=boundary;
+    }
+    local.bounds.push_back(high);
+    for(const Value& v:enc->array){
+     double coordinate=0;
+     if(!number(v,coordinate))return false;
+     local.encode.push_back(coordinate);
+    }
+    if(indirect&&stitch_function_cache.size()<128)
+     compiled=&stitch_function_cache.emplace(key,std::move(local)).first->second;
+    else compiled=&local;
    }
-   if(segment<bounds->array.size()&&
-      !number(bounds->array[segment],right))return false;
-   double e0=0,e1=0;
-   if(!number(enc->array[2*segment],e0)||
-      !number(enc->array[2*segment+1],e1))return false;
+   const auto it=std::upper_bound(compiled->bounds.begin()+1,
+                                  compiled->bounds.end()-1,x);
+   const size_t segment=size_t(it-(compiled->bounds.begin()+1));
+   if(segment>=compiled->functions.size())return false;
+   const double left=compiled->bounds[segment];
+   const double right=compiled->bounds[segment+1];
+   const double e0=compiled->encode[2*segment];
+   const double e1=compiled->encode[2*segment+1];
    const double mapped=e0+(x-left)/(right-left)*(e1-e0);
-   if(!eval_tint_function(functions->array[segment],mapped,outputs,
+   if(!eval_tint_function(compiled->functions[segment],mapped,outputs,
                           result,depth+1))return false;
   }else return false;
   if(const Value* range=get(function,"Range")){
