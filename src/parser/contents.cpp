@@ -5,6 +5,7 @@
 #include "object_resolver.h"
 #include "stream_object.h"
 #include "stream.h"
+#include "function_cache.h"
 #include "dct_image.h"
 #include "ccitt_image.h"
 #include "value.h"
@@ -44,31 +45,9 @@ struct Reader {
  mutable std::map<std::tuple<int64_t,int64_t,unsigned,unsigned>,std::array<double,4>> calculator_result_cache;
  mutable std::map<std::pair<int64_t,int64_t>,std::vector<uint8_t>> sampled_function_cache;
  mutable size_t sampled_function_cache_bytes=0;
- struct CachedFunction {
-  Value dictionary;
-  StreamRange stream;
-  bool is_stream=false;
- };
  mutable std::map<std::pair<int64_t,int64_t>,CachedFunction> function_dictionary_cache;
- struct CachedStitch {
-  std::vector<Value> functions;
-  std::vector<double> bounds;
-  std::vector<double> encode;
- };
  mutable std::map<std::pair<int64_t,int64_t>,CachedStitch> stitch_function_cache;
- struct CachedExponent {
-  double exponent=1;
-  std::array<double,4> c0{{0,0,0,0}};
-  std::array<double,4> c1{{1,1,1,1}};
- };
  mutable std::map<std::tuple<int64_t,int64_t,unsigned>,CachedExponent> exponent_function_cache;
- struct CachedSample {
-  size_t count=0;
-  unsigned bits=0;
-  double encode[2]{};
-  std::array<double,8> decode{};
-  std::array<double,8> range{};
- };
  mutable std::map<std::tuple<int64_t,int64_t,unsigned>,CachedSample> sample_parameter_cache;
  bool entry(const Value& ref,const XrefEntry*& out) const {
   if(ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
