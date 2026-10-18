@@ -41,7 +41,7 @@ static bool box_value(const Value& value,MediaBox& box){
 struct Reader {
  const uint8_t *data;size_t size;const std::vector<XrefEntry>& xref;const std::vector<XrefStreamEntry>& compressed;
  mutable std::map<size_t,Value> compressed_cache;
- mutable std::map<std::pair<int64_t,int64_t>,std::vector<std::string>> calculator_token_cache;
+ mutable std::map<std::pair<int64_t,int64_t>,CalculatorProgram> calculator_token_cache;
  mutable std::map<std::tuple<int64_t,int64_t,unsigned,unsigned>,std::array<double,4>> calculator_result_cache;
  mutable std::map<std::pair<int64_t,int64_t>,std::vector<uint8_t>> sampled_function_cache;
  mutable size_t sampled_function_cache_bytes=0;
