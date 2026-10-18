@@ -211,11 +211,6 @@ struct Reader {
       PdfFunction compiled_tint;
       bool recursive_stitch=false;
       Value stitch_function;
-      struct StitchPart {
-       double c0[4]{0,0,0,0},c1[4]{1,1,1,1},exponent=1;
-      };
-      std::vector<StitchPart> stitch_parts;
-      std::vector<double> stitch_bounds,stitch_encode;
       std::vector<uint8_t> tint_samples;
       std::vector<unsigned> tint_sizes;
       std::vector<double> tint_encode,tint_decode,tint_domain,tint_range;
