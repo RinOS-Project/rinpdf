@@ -114,9 +114,11 @@ double tj_space_threshold(const PageFont& font){
    if(key.width!=2||sequence!=U" "||key.code>65535)continue;
    // /DW applies when /W does not override the mapped space CID.
    double width=0;
+   // Use the actual PDF CID space width. Narrow spaces must not be
+   // inflated to 250 units, nor wide ones truncated to 1000 units.
    if(cid_width(font.cid_widths,uint16_t(key.code),width)&&
       std::isfinite(width)&&width>0)
-    return std::clamp(width,250.0,1000.0);
+    return width;
   }
  }
  if(font.subtype=="TrueType"&&!font.embedded_truetype.empty()){
