@@ -156,7 +156,7 @@ struct Reader {
          get(range.dictionary,"Decode")){return false;}
       const size_t expected=size_t(w->integer)*size_t(h->integer)*channels;
       if(expected>32*1024*1024){return false;}
-      PageImage image;
+      image=PageImage{};
       image.width=unsigned(w->integer);image.height=unsigned(h->integer);
       image.channels=channels;
       // Support a same-size, 8-bit grayscale SMask image. Restrict the
