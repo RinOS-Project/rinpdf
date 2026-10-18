@@ -62,6 +62,14 @@ struct Reader {
   std::array<double,4> c1{{1,1,1,1}};
  };
  mutable std::map<std::tuple<int64_t,int64_t,unsigned>,CachedExponent> exponent_function_cache;
+ struct CachedSample {
+  size_t count=0;
+  unsigned bits=0;
+  double encode[2]{};
+  std::array<double,8> decode{};
+  std::array<double,8> range{};
+ };
+ mutable std::map<std::tuple<int64_t,int64_t,unsigned>,CachedSample> sample_parameter_cache;
  bool entry(const Value& ref,const XrefEntry*& out) const {
   if(ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
   auto it=std::find_if(xref.begin(),xref.end(),[&](const XrefEntry& e){
@@ -983,12 +991,42 @@ struct Reader {
      samples=&inserted.first->second;
     }else samples=&uncached_samples;
    }
-   double e0=0,e1=double(count-1);
-   if(encode){
-    if(encode->kind!=Value::Kind::Array||encode->array.size()!=2||
-       !number(encode->array[0],e0)||!number(encode->array[1],e1))
-     return false;
+   CachedSample local_params;
+   const CachedSample* params=nullptr;
+   const auto param_key=std::make_tuple(reference.integer,
+                                        reference.generation,outputs);
+   const auto found=sample_parameter_cache.find(param_key);
+   if(found!=sample_parameter_cache.end()){
+    params=&found->second;
+   }else{
+    local_params.count=count;
+    local_params.bits=bps;
+    local_params.encode[0]=0;
+    local_params.encode[1]=double(count-1);
+    if(encode){
+     if(encode->kind!=Value::Kind::Array||encode->array.size()!=2||
+        !number(encode->array[0],local_params.encode[0])||
+        !number(encode->array[1],local_params.encode[1]))return false;
+    }
+    if(decode&&(decode->kind!=Value::Kind::Array||
+                decode->array.size()!=outputs*2))return false;
+    for(unsigned c=0;c<outputs;++c){
+     double r0=0,r1=0;
+     if(!number(range->array[2*c],r0)||
+        !number(range->array[2*c+1],r1)||r0>r1)return false;
+     local_params.range[2*c]=r0;
+     local_params.range[2*c+1]=r1;
+     local_params.decode[2*c]=r0;
+     local_params.decode[2*c+1]=r1;
+     if(decode&&(!number(decode->array[2*c],local_params.decode[2*c])||
+                 !number(decode->array[2*c+1],local_params.decode[2*c+1])))
+      return false;
+    }
+    if(sample_parameter_cache.size()<128)
+     params=&sample_parameter_cache.emplace(param_key,local_params).first->second;
+    else params=&local_params;
    }
+   const double e0=params->encode[0],e1=params->encode[1];
    const double position=std::clamp(e0+(x-low)/(high-low)*(e1-e0),
                                     0.0,double(count-1));
    const size_t index=size_t(position);
@@ -1004,15 +1042,8 @@ struct Reader {
     return double(value)/double((uint64_t(1)<<bps)-1);
    };
    for(unsigned c=0;c<outputs;++c){
-    double r0=0,r1=0,d0=0,d1=0;
-    if(!number(range->array[2*c],r0)||
-       !number(range->array[2*c+1],r1)||r0>r1)return false;
-    if(decode){
-     if(decode->kind!=Value::Kind::Array||
-        decode->array.size()!=outputs*2||
-        !number(decode->array[2*c],d0)||
-        !number(decode->array[2*c+1],d1))return false;
-    }else{d0=r0;d1=r1;}
+    const double r0=params->range[2*c],r1=params->range[2*c+1];
+    const double d0=params->decode[2*c],d1=params->decode[2*c+1];
     const double sample=(1-blend)*read_sample(index*outputs+c)+
                         blend*read_sample(next*outputs+c);
     result[c]=std::clamp(d0+sample*(d1-d0),r0,r1);
