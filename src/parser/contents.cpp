@@ -320,6 +320,94 @@ struct Reader {
   }
   active.erase(id);return true;
  }
+ bool walk_forms(const Value& ref,size_t depth,size_t& current,size_t target,
+  std::set<size_t>& active,const Value* inherited,
+  std::map<std::string,PageForm>& output) const {
+  if(depth>64||ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
+  const size_t id=size_t(ref.integer);
+  if(!active.insert(id).second)return false;
+  Value node,owned;
+  if(!object(ref,node)){active.erase(id);return false;}
+  if(const Value* resources=get(node,"Resources")){
+   if(resources->kind==Value::Kind::Reference){
+    if(!object(*resources,owned)){active.erase(id);return false;}
+   }else owned=*resources;
+   if(owned.kind!=Value::Kind::Dictionary){active.erase(id);return false;}
+   inherited=&owned;
+  }
+  const Value* type=get(node,"Type");
+  if(!type||type->kind!=Value::Kind::Name){active.erase(id);return false;}
+  if(type->text=="Page"){
+   if(current==target&&inherited){
+    if(const Value* x=get(*inherited,"XObject")){
+     Value entries;
+     if(x->kind==Value::Kind::Reference){
+      if(!object(*x,entries)){active.erase(id);return false;}
+     }else entries=*x;
+     if(entries.kind!=Value::Kind::Dictionary||entries.dictionary.size()>256){
+      active.erase(id);return false;
+     }
+     for(const auto& [name,objref]:entries.dictionary){
+      if(objref.kind!=Value::Kind::Reference){active.erase(id);return false;}
+      const XrefEntry* ent=nullptr;
+      if(!entry(objref,ent)){active.erase(id);return false;}
+      StreamRange range;
+      if(!locate_indirect_stream(data,size,*ent,xref,range)){
+       active.erase(id);return false;
+      }
+      const Value* subtype=get(range.dictionary,"Subtype");
+      if(!subtype||subtype->kind!=Value::Kind::Name){active.erase(id);return false;}
+      if(subtype->text!="Form")continue;
+      const Value* form_type=get(range.dictionary,"FormType");
+      if(form_type&&(form_type->kind!=Value::Kind::Integer||
+                     form_type->integer!=1)){active.erase(id);return false;}
+      // Own resources require resource namespace and nested XObject support.
+      if(get(range.dictionary,"Resources")||
+         get(range.dictionary,"Group")){active.erase(id);return false;}
+      const Value* bbox=get(range.dictionary,"BBox");
+      if(!bbox||bbox->kind!=Value::Kind::Array||bbox->array.size()!=4){
+       active.erase(id);return false;
+      }
+      PageForm form;
+      auto fill=[&](const Value& v,double& result){
+       if(v.kind==Value::Kind::Integer)result=double(v.integer);
+       else if(v.kind==Value::Kind::Real)result=v.real;
+       else return false;
+       return std::isfinite(result)&&std::abs(result)<=10000000;
+      };
+      for(size_t k=0;k<4;++k)if(!fill(bbox->array[k],form.bbox[k])){
+       active.erase(id);return false;
+      }
+      if(form.bbox[0]>=form.bbox[2]||form.bbox[1]>=form.bbox[3]){
+       active.erase(id);return false;
+      }
+      if(const Value* m=get(range.dictionary,"Matrix")){
+       if(m->kind!=Value::Kind::Array||m->array.size()!=6){
+        active.erase(id);return false;
+       }
+       for(size_t k=0;k<6;++k)if(!fill(m->array[k],form.matrix[k])){
+        active.erase(id);return false;
+       }
+      }
+      if(!decode_stream(data,size,range,form.content,4*1024*1024)){
+       active.erase(id);return false;
+      }
+      output.emplace(name,std::move(form));
+     }
+    }
+   }
+   ++current;active.erase(id);return true;
+  }
+  if(type->text!="Pages"){active.erase(id);return false;}
+  const Value* kids=get(node,"Kids");
+  if(!kids||kids->kind!=Value::Kind::Array){active.erase(id);return false;}
+  for(const Value& child:kids->array){
+   if(!walk_forms(child,depth+1,current,target,active,inherited,output)){
+    active.erase(id);return false;
+   }
+  }
+  active.erase(id);return true;
+ }
  bool walk_properties(const Value& ref,size_t depth,size_t& current,size_t target,
   std::set<size_t>& active,const Value* inherited,PageProperties& output) const {
   if(depth>64||ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
@@ -752,6 +840,26 @@ bool read_page_images(const uint8_t* data,size_t size,size_t index,
  if(!reader.walk_images(*pages,0,current,index,active,nullptr,result)||
     index>=current)return false;
  images=std::move(result);return true;
+}
+
+bool read_page_forms(const uint8_t* data,size_t size,size_t index,
+ std::map<std::string,PageForm>& forms){
+ if(!data)return false;
+ std::vector<XrefEntry> xref;std::vector<XrefStreamEntry> compressed;Value trailer;
+ if(!read_object_xref(data,size,xref,compressed,trailer)||get(trailer,"Encrypt"))
+  return false;
+ const Value* root=get(trailer,"Root");if(!root)return false;
+ Reader reader{data,size,xref,compressed,{}};
+ Value catalog;
+ if(!reader.object(*root,catalog))return false;
+ const Value* type=get(catalog,"Type"),*pages=get(catalog,"Pages");
+ if(!type||type->kind!=Value::Kind::Name||type->text!="Catalog"||!pages)
+  return false;
+ size_t current=0;std::set<size_t> active;
+ std::map<std::string,PageForm> result;
+ if(!reader.walk_forms(*pages,0,current,index,active,nullptr,result)||
+    index>=current)return false;
+ forms=std::move(result);return true;
 }
 
 }
