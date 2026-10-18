@@ -1039,7 +1039,7 @@ struct Reader {
      continue;
     }
     if(token=="index"){
-     if(stack.empty())return false;
+     if(stack.empty()||is_bool.back())return false;
      const double n=stack.back();stack.pop_back();is_bool.pop_back();
      if(n<0||n!=std::floor(n)||n>=double(stack.size())||
         stack.size()>=64)return false;
@@ -1051,7 +1051,7 @@ struct Reader {
      if(stack.size()<2)return false;
      if(is_bool.back()||is_bool[is_bool.size()-2])return false;
      const double shift=stack.back();stack.pop_back();is_bool.pop_back();
-     const double n=stack.back();stack.pop_back();
+     const double n=stack.back();stack.pop_back();is_bool.pop_back();
      if(n<0||n!=std::floor(n)||n>double(stack.size())||
         shift!=std::trunc(shift)||!std::isfinite(shift))return false;
      const size_t count=size_t(n);
