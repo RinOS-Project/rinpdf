@@ -25,7 +25,8 @@ static bool space(unsigned char c){return c==0||c==9||c==10||c==12||c==13||c==32
 struct Rect {double x,y,w,h;};
 bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsigned width,unsigned height,uint8_t *rgba,size_t stride,PageBox box,const FontResources& fonts,
  const MarkedProperties& properties,const ImageResources& images,
- const FormResources& forms,bool clear_background){
+ const FormResources& forms,bool clear_background,unsigned form_depth){
+ if(form_depth>8)return false;
  if(!std::isfinite(box.x0)||!std::isfinite(box.y0)||!std::isfinite(box.x1)||!std::isfinite(box.y1)||box.x1<=box.x0||box.y1<=box.y0)return false;
  const double sx=(double)width/(box.x1-box.x0),sy=(double)height/(box.y1-box.y0);
  if(!std::isfinite(sx)||!std::isfinite(sy))return false;
@@ -227,6 +228,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
     // Dispatch image painting through the normal Do branch.
     const auto form=forms.find(pending_image);
     if(form!=forms.end()){
+     if(form_depth>=8)return false;
      // A recursive call begins with the current page pixels and a fresh
      // graphics state. Do not attempt nested forms or inherited clipping.
      if(clip_mask||clip.x0||clip.y0||clip.x1!=width||clip.y1!=height||
@@ -262,7 +264,8 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      pending_image.clear();
      if(!render_rectangles_box_with_fonts(
            reinterpret_cast<const uint8_t*>(stream.data()),stream.size(),
-           width,height,rgba,stride,box,fonts,properties,images,{},false))
+           width,height,rgba,stride,box,fonts,properties,images,forms,false,
+           form_depth+1))
       return false;
      continue;
     }
