@@ -164,6 +164,11 @@ bool evaluate_multidimensional_sampled_function(
  }
  unsigned corners=1;
  for(unsigned d=0;d<f.inputs;++d)corners*=taps;
+ // Clamped cubic boundary taps can refer to the same grid point. Merge
+ // their weights so each distinct sample is unpacked only once.
+ std::array<size_t,256> sample_indices{};
+ std::array<double,256> sample_weights{};
+ unsigned unique=0;
  for(unsigned corner=0;corner<corners;++corner){
   size_t index=0;
   double weight=1;
@@ -175,18 +180,29 @@ bool evaluate_multidimensional_sampled_function(
    weight*=weights[d][tap];
   }
   if(weight==0)continue;
+  unsigned position=0;
+  for(;position<unique;++position)
+   if(sample_indices[position]==index)break;
+  if(position==unique){
+   sample_indices[unique]=index;
+   sample_weights[unique]=weight;
+   ++unique;
+  }else sample_weights[position]+=weight;
+ }
+ const double maximum=double((uint64_t(1)<<f.bits)-1);
+ for(unsigned i=0;i<unique;++i){
+  const double weight=sample_weights[i];
+  if(weight==0)continue;
+  const size_t first=(sample_indices[i]*f.outputs)*f.bits;
   for(unsigned c=0;c<f.outputs;++c){
-   const double lo=f.range[c*2],hi=f.range[c*2+1];
-   const double d0=f.decode[c*2],d1=f.decode[c*2+1];
-   const size_t offset=(index*f.outputs+c)*f.bits;
+   const size_t offset=first+size_t(c)*f.bits;
    uint64_t value=0;
    for(unsigned bit=0;bit<f.bits;++bit){
     const size_t p=offset+bit;
     value=(value<<1)|((samples[p/8]>>(7-(p%8)))&1u);
    }
-   const double raw=double(value)/double((uint64_t(1)<<f.bits)-1);
-   // Interpolate decoded sample values before clipping the result to
-   // /Range. Cubic weights can be negative and may overshoot the range.
+   const double raw=double(value)/maximum;
+   const double d0=f.decode[c*2],d1=f.decode[c*2+1];
    computed[c]+=weight*(d0+raw*(d1-d0));
   }
  }
