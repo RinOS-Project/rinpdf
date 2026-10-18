@@ -973,7 +973,7 @@ struct Reader {
    tokens.erase(tokens.begin());
    tokens.pop_back();
    std::vector<double> stack{x};
-   std::vector<uint8_t> is_bool{0}; // 0: real, 1: boolean, 2: integer.
+   std::vector<uint8_t> is_bool{0}; // 0 real, 1 boolean, 2 integer, 3 procedure.
    std::vector<std::vector<std::string>> procedures;
    std::vector<size_t> procedure_ids{0}; // Parallel operand-stack slots.
    size_t operations=0;
@@ -1050,7 +1050,7 @@ struct Reader {
      continue;
     }
     if(token=="index"){
-     if(stack.empty()||is_bool.back())return false;
+     if(stack.empty()||is_bool.back()!=2)return false;
      const double n=stack.back();stack.pop_back();is_bool.pop_back();procedure_ids.pop_back();
      if(n<0||n!=std::floor(n)||n>=double(stack.size())||
         stack.size()>=64)return false;
@@ -1122,7 +1122,7 @@ struct Reader {
      if(stack.size()<2)return false;
      if(is_bool.back()==1||is_bool.back()==3||is_bool[is_bool.size()-2]==1||is_bool[is_bool.size()-2]==3)return false;
      const bool rhs_integer=is_bool.back()==2;
-     const double rhs=stack.back();stack.pop_back();is_bool.pop_back();procedure_ids.pop_back();procedure_ids.pop_back();
+     const double rhs=stack.back();stack.pop_back();is_bool.pop_back();procedure_ids.pop_back();
      double& lhs=stack.back();
      if(token=="idiv"||token=="mod"){
       if(is_bool.back()!=2||!rhs_integer||rhs==0)return false;
