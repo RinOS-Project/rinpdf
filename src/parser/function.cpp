@@ -628,6 +628,20 @@ bool compile_calculator_function(const std::vector<uint8_t>& source,
   }
   instructions.push_back(instruction);
  }
+ // Resolve matching braces once and reject malformed nested procedures.
+ std::vector<size_t> openings;
+ for(size_t i=0;i<instructions.size();++i){
+  if(instructions[i].kind==2){
+   if(openings.size()>=8)return false;
+   openings.push_back(i);
+  }else if(instructions[i].kind==3){
+   if(openings.empty())return false;
+   const size_t start=openings.back();openings.pop_back();
+   instructions[start].matching_brace=i;
+   instructions[i].matching_brace=start;
+  }
+ }
+ if(!openings.empty())return false;
  output.tokens=std::move(tokens);
  output.instructions=std::move(instructions);
  output.numeric_constants=std::move(constants);
