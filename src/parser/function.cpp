@@ -61,7 +61,9 @@ bool evaluate_sampled_function(const SampledFunction& function,
     function.count>std::numeric_limits<size_t>::max()/outputs/bits)
   return false;
  const size_t total_bits=function.count*outputs*bits;
- if(total_bits>samples.size()*uint64_t(8))return false;
+ const size_t required_bytes=total_bits/8+size_t(total_bits%8!=0);
+ if(required_bytes!=samples.size()||required_bytes>4*1024*1024)
+  return false;
  const double clamped=std::clamp(input,function.domain[0],
                                       function.domain[1]);
  const double normalized=(clamped-function.domain[0])/
