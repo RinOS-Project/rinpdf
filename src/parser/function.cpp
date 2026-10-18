@@ -649,6 +649,54 @@ bool evaluate_calculator_function(const CalculatorProgram& program,
                                    nullptr,nullptr,&program.instructions);
 }
 
+static bool pdf_function_limits(unsigned outputs,double d0,double d1,
+                                const std::array<double,8>& range){
+ if(outputs<1||outputs>4||!std::isfinite(d0)||!std::isfinite(d1)||
+    d0>=d1)return false;
+ for(unsigned j=0;j<outputs;++j)
+  if(!std::isfinite(range[2*j])||!std::isfinite(range[2*j+1])||
+     range[2*j]>range[2*j+1])return false;
+ return true;
+}
+
+bool compile_exponential_pdf_function(const ExponentialFunction& parameters,
+                                      unsigned outputs,double domain_min,
+                                      double domain_max,
+                                      const std::array<double,8>& range,
+                                      PdfFunction& output) {
+ if(!pdf_function_limits(outputs,domain_min,domain_max,range))return false;
+ std::array<double,4> probe{};
+ if(!evaluate_exponential_function(parameters,domain_min,outputs,probe.data())||
+    !evaluate_exponential_function(parameters,domain_max,outputs,probe.data()))
+  return false;
+ PdfFunction compiled;
+ compiled.kind=PdfFunction::Kind::Exponential;
+ compiled.outputs=outputs;
+ compiled.domain[0]=domain_min;
+ compiled.domain[1]=domain_max;
+ compiled.range=range;
+ compiled.exponential=parameters;
+ output=std::move(compiled);
+ return true;
+}
+
+bool compile_calculator_pdf_function(const std::vector<uint8_t>& source,
+                                     unsigned outputs,double domain_min,
+                                     double domain_max,
+                                     const std::array<double,8>& range,
+                                     PdfFunction& output) {
+ if(!pdf_function_limits(outputs,domain_min,domain_max,range))return false;
+ PdfFunction compiled;
+ if(!compile_calculator_function(source,compiled.calculator))return false;
+ compiled.kind=PdfFunction::Kind::Calculator;
+ compiled.outputs=outputs;
+ compiled.domain[0]=domain_min;
+ compiled.domain[1]=domain_max;
+ compiled.range=range;
+ output=std::move(compiled);
+ return true;
+}
+
 bool evaluate_pdf_function(const PdfFunction& function,
                            double input,double* result) {
  if(!result||function.outputs<1||function.outputs>4||
