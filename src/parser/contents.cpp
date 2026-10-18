@@ -199,7 +199,7 @@ struct Reader {
       bool sampled_tint=false;
       std::vector<uint8_t> tint_samples;
       std::vector<unsigned> tint_sizes;
-      std::vector<double> tint_encode,tint_decode;
+      std::vector<double> tint_encode,tint_decode,tint_domain,tint_range;
       unsigned tint_sample_bits=8;
       unsigned tint_channels=0;
       double tint_c0[4]{0,0,0,0},tint_c1[4]{1,1,1,1},tint_n=1;
@@ -378,14 +378,18 @@ struct Reader {
          sample_count*=unsigned(v.integer);
          double d0=0,d1=0;
          if(!number(domain->array[2*i],d0)||
-            !number(domain->array[2*i+1],d1)||d0!=0||d1!=1)
-          return false;
+            !number(domain->array[2*i+1],d1)||d0>=d1||
+            d0<0||d1>1)return false;
+         tint_domain.push_back(d0);
+         tint_domain.push_back(d1);
         }
         for(unsigned c=0;c<tint_channels;++c){
          double a=0,b=0;
          if(!number(range->array[2*c],a)||
-            !number(range->array[2*c+1],b)||a!=0||b!=1)
-          return false;
+            !number(range->array[2*c+1],b)||a>=b||
+            a<0||b>1)return false;
+         tint_range.push_back(a);
+         tint_range.push_back(b);
         }
         tint_encode.resize(device_inputs*2);
         tint_decode.resize(tint_channels*2);
@@ -401,7 +405,8 @@ struct Reader {
           return false;
         }
         for(unsigned c=0;c<tint_channels;++c){
-         tint_decode[2*c]=0;tint_decode[2*c+1]=1;
+         tint_decode[2*c]=tint_range[2*c];
+         tint_decode[2*c+1]=tint_range[2*c+1];
          if(decode&&(!number(decode->array[2*c],tint_decode[2*c])||
                      !number(decode->array[2*c+1],tint_decode[2*c+1])))
           return false;
@@ -632,8 +637,13 @@ struct Reader {
          size_t stride=1;
          for(unsigned dimension=0;dimension<device_inputs;++dimension){
           const double sample=double(image.pixels[i*device_inputs+dimension])/255;
+          const double input=std::clamp(sample,tint_domain[2*dimension],
+                                           tint_domain[2*dimension+1]);
+          const double domain_span=tint_domain[2*dimension+1]-
+                                   tint_domain[2*dimension];
+          const double normalized=(input-tint_domain[2*dimension])/domain_span;
           const double position=std::clamp(
-           tint_encode[2*dimension]+sample*
+           tint_encode[2*dimension]+normalized*
              (tint_encode[2*dimension+1]-tint_encode[2*dimension]),
            0.0,double(tint_sizes[dimension]-1));
           lower[dimension]=size_t(position);
@@ -671,7 +681,8 @@ struct Reader {
            const double raw=double(sample)/double(maximum);
            const double decoded=tint_decode[2*c]+raw*
               (tint_decode[2*c+1]-tint_decode[2*c]);
-           values[c]+=weight*std::clamp(decoded,0.0,1.0);
+           values[c]+=weight*std::clamp(decoded,tint_range[2*c],
+                                                  tint_range[2*c+1]);
           }
          }
         }else{
