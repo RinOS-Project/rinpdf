@@ -92,7 +92,7 @@ static bool decode_ascii85(const uint8_t* input,size_t length,
     const unsigned count=digits;
     while(digits++<5)accumulator=accumulator*85+84;
     if(accumulator>0xffffffffULL)return false;
-    if(output.size()>limit-(count-1))return false;
+    if(output.size()>limit||count-1>limit-output.size())return false;
     for(unsigned j=0;j<count-1;++j)
      output.push_back(uint8_t(accumulator>>(24-8*j)));
    }
@@ -113,6 +113,31 @@ static bool decode_ascii85(const uint8_t* input,size_t length,
   }
  }
  return terminated;
+}
+static bool decode_run_length(const uint8_t* input,size_t length,
+ std::vector<uint8_t>& output,size_t limit){
+ output.clear();
+ size_t i=0;
+ while(i<length){
+  const unsigned control=input[i++];
+  if(control==128){
+   while(i<length)if(!space(input[i++]))return false;
+   return true;
+  }
+  if(control<=127){
+   const size_t count=control+1;
+   if(count>length-i||output.size()>limit||
+      count>limit-output.size())return false;
+   output.insert(output.end(),input+i,input+i+count);
+   i+=count;
+  }else{
+   const size_t count=257-control;
+   if(i>=length||output.size()>limit||
+      count>limit-output.size())return false;
+   output.insert(output.end(),count,input[i++]);
+  }
+ }
+ return false;
 }
 bool decode_stream(const uint8_t *data,size_t size,const StreamRange& range,std::vector<uint8_t>& output,size_t max_output){
  output.clear();
@@ -149,7 +174,9 @@ bool decode_stream(const uint8_t *data,size_t size,const StreamRange& range,std:
     (name=="ASCIIHexDecode"||name=="AHx")?
     decode_hex(stage.data(),stage.size(),decoded,max_output):
     (name=="ASCII85Decode"||name=="A85")?
-    decode_ascii85(stage.data(),stage.size(),decoded,max_output):false;
+    decode_ascii85(stage.data(),stage.size(),decoded,max_output):
+    (name=="RunLengthDecode"||name=="RL")?
+    decode_run_length(stage.data(),stage.size(),decoded,max_output):false;
   if(!ok){output.clear();return false;}
   stage=std::move(decoded);
  }
