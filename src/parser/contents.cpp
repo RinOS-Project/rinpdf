@@ -1068,6 +1068,51 @@ struct Reader {
      if(stack.empty())return false;
      stack.pop_back();continue;
     }
+    if(token=="cvi"||token=="cvr"||token=="floor"||
+       token=="ceiling"||token=="round"||token=="truncate"||
+       token=="ln"||token=="log"||token=="sin"||token=="cos"){
+     if(stack.empty())return false;
+     double& value=stack.back();
+     if(token=="cvi"||token=="truncate")value=std::trunc(value);
+     else if(token=="floor")value=std::floor(value);
+     else if(token=="ceiling")value=std::ceil(value);
+     else if(token=="round")value=std::floor(value+0.5);
+     else if(token=="ln"||token=="log"){
+      if(value<=0)return false;
+      value=token=="ln"?std::log(value):std::log10(value);
+     }else if(token=="sin"||token=="cos"){
+      const double radians=value*(3.14159265358979323846/180.0);
+      value=token=="sin"?std::sin(radians):std::cos(radians);
+     }
+     if(!std::isfinite(value)||std::abs(value)>1e12)return false;
+     continue;
+    }
+    if(token=="idiv"||token=="mod"||token=="exp"||
+       token=="atan"||token=="bitshift"){
+     if(stack.size()<2)return false;
+     const double rhs=stack.back();stack.pop_back();
+     double& lhs=stack.back();
+     if(token=="idiv"||token=="mod"){
+      if(rhs==0||lhs!=std::trunc(lhs)||rhs!=std::trunc(rhs)||
+         std::abs(lhs)>2147483647||std::abs(rhs)>2147483647)return false;
+      if(token=="idiv")lhs=std::trunc(lhs/rhs);
+      else lhs=std::fmod(lhs,rhs);
+     }else if(token=="exp"){
+      if(lhs<0&&rhs!=std::trunc(rhs))return false;
+      lhs=std::pow(lhs,rhs);
+     }else if(token=="atan"){
+      lhs=std::atan2(lhs,rhs)*(180.0/3.14159265358979323846);
+      if(lhs<0)lhs+=360.0;
+     }else{
+      if(lhs!=std::trunc(lhs)||rhs!=std::trunc(rhs)||
+         std::abs(lhs)>2147483647||std::abs(rhs)>31)return false;
+      const uint32_t n=uint32_t(int32_t(lhs));
+      const int shift=int(rhs);
+      lhs=double(int32_t(shift>=0?(n<<shift):(n>>(-shift))));
+     }
+     if(!std::isfinite(lhs)||std::abs(lhs)>1e12)return false;
+     continue;
+    }
     if(token=="neg"||token=="abs"||token=="sqrt"){
      if(stack.empty())return false;
      double& top=stack.back();
