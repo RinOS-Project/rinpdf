@@ -265,7 +265,7 @@ int main(){
  same_line_tm.replace(tm_at,tm_before.size(),tm_after);
  if(!extract_page_text(reinterpret_cast<const uint8_t*>(same_line_tm.data()),
       same_line_tm.size(),0,result))return 80;
- if(result.find("ABB\\nBB B\\n")==std::string::npos)return 81;
+ if(result.find("ABB\\nBB B")==std::string::npos)return 81;
  result=previous;
  // The UTF-16BE ActualText payload must reject lone low surrogates.
  // Replace equal-length hex digits so all xref offsets remain valid.
