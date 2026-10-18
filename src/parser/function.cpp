@@ -136,6 +136,15 @@ bool evaluate_multidimensional_sampled_function(
  const size_t total_bits=grid*f.outputs*f.bits;
  if(total_bits/8>samples.size()||((total_bits+7)/8)>samples.size())
   return false;
+ // Check every output channel once, even if all interpolation weights
+ // for some corner happen to be zero.
+ for(unsigned c=0;c<f.outputs;++c){
+  if(!std::isfinite(f.range[2*c])||
+     !std::isfinite(f.range[2*c+1])||
+     f.range[2*c]>f.range[2*c+1]||
+     !std::isfinite(f.decode[2*c])||
+     !std::isfinite(f.decode[2*c+1]))return false;
+ }
  std::array<double,4> computed{};
  const unsigned taps=f.order==3?4:2;
  double weights[4][4]{};
@@ -157,8 +166,6 @@ bool evaluate_multidimensional_sampled_function(
   for(unsigned c=0;c<f.outputs;++c){
    const double lo=f.range[c*2],hi=f.range[c*2+1];
    const double d0=f.decode[c*2],d1=f.decode[c*2+1];
-   if(!std::isfinite(lo)||!std::isfinite(hi)||lo>hi||
-      !std::isfinite(d0)||!std::isfinite(d1))return false;
    const size_t offset=(index*f.outputs+c)*f.bits;
    uint64_t value=0;
    for(unsigned bit=0;bit<f.bits;++bit){
