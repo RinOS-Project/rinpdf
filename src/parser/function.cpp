@@ -429,4 +429,48 @@ bool evaluate_calculator_tokens(const std::vector<std::string>& parsed_tokens,
  return true;
 }
 
+bool tokenize_calculator_function(const std::vector<uint8_t>& program,
+                                  std::vector<std::string>& output) {
+   if(program.size()>16384)return false;
+   // Lex calculator source as PDF/PostScript tokens. Percent starts a
+   // comment through end-of-line; braces delimit procedures even when adjacent.
+   std::vector<std::string> tokens;
+   std::string token;
+   auto emit=[&]()->bool{
+    if(token.empty())return true;
+    if(token.size()>64||tokens.size()>=4096)return false;
+    tokens.push_back(std::move(token));token.clear();
+    return true;
+   };
+   bool comment=false;
+   for(uint8_t byte:program){
+    const char ch=char(byte);
+    if(comment){
+     if(ch=='\n'||ch=='\r')comment=false;
+     continue;
+    }
+    if(ch=='%'){
+     if(!emit())return false;
+     comment=true;continue;
+    }
+    if(ch=='{'||ch=='}'){
+     if(!emit()||tokens.size()>=4096)return false;
+     tokens.emplace_back(1,ch);
+    }else if(ch==' '||ch=='\t'||ch=='\n'||ch=='\r'||
+             ch=='\f'||ch=='\0'){
+     if(!emit())return false;
+    }else{
+     if(byte<33||byte>126||token.size()>=64)return false;
+     token.push_back(ch);
+    }
+   }
+   if(!emit())return false;
+   if(tokens.size()<2||tokens.front()!="{"||tokens.back()!="}")
+    return false;
+   tokens.erase(tokens.begin());
+   tokens.pop_back();
+   output=std::move(tokens);
+   return true;
+}
+
 } // namespace rinpdf::parser
