@@ -281,6 +281,20 @@ int main(){
       rotated_gap.size(),0,result))return 83;
  if(result!=previous)return 84;
  result=previous;
+ // The Tm gap calculation must see the old cursor BEFORE resetting it.
+ // A small forward move after a 6-point glyph should not invent a space.
+ std::string short_tm_gap=pdf;
+ const auto short_tm_pos=short_tm_gap.find(tm_before);
+ if(short_tm_pos==std::string::npos)return 85;
+ short_tm_gap.replace(short_tm_pos,tm_before.size(),"1 0 0 1 10 0 Tm");
+ // Move the earlier line onto the same baseline without changing offsets.
+ const auto short_td_pos=short_tm_gap.find(td_before);
+ if(short_td_pos==std::string::npos)return 86;
+ short_tm_gap.replace(short_td_pos,td_before.size(),td_after);
+ if(!extract_page_text(reinterpret_cast<const uint8_t*>(short_tm_gap.data()),
+      short_tm_gap.size(),0,result))return 87;
+ if(result.find("ABB\\nBB B")!=std::string::npos)return 88;
+ result=previous;
  // The UTF-16BE ActualText payload must reject lone low surrogates.
  // Replace equal-length hex digits so all xref offsets remain valid.
  std::string unpaired_low=pdf;
