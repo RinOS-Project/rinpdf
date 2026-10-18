@@ -442,6 +442,13 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
     for(const auto& run:runs){
      if(run.adjustment){
       net_adjustment+=run.displacement;
+      if(active_font.subtype=="Type0"&&active_font.encoding=="Identity-V"&&
+         vertical_cursor_known){
+       // TJ changes the vertical text position, not the horizontal cursor.
+       vertical_cursor-=run.displacement*font_size/1000.0;
+       if(!std::isfinite(vertical_cursor)||
+          std::abs(vertical_cursor)>1e12)return false;
+      }
       if(text_cursor_known){
        text_cursor-=run.displacement*font_size*horizontal_scale/1000.0;
        if(!std::isfinite(text_cursor)||std::abs(text_cursor)>1e12)return false;
