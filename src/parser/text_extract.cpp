@@ -558,12 +558,18 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
    continue;
   }
   if(t.value=="ET"){if(!text||have_pending||!operands.empty())return false;
-   if(has_line_origin&&text_run_emitted&&text_cursor_known){
-    previous_end_x=text_line_x+line_a*text_cursor;
-    previous_end_y=text_line_y+line_b*text_cursor;
-    previous_a=line_a;previous_b=line_b;
-    previous_end_valid=std::isfinite(previous_end_x)&&
-      std::isfinite(previous_end_y);
+   if(text_run_emitted){
+    if(has_line_origin&&text_cursor_known){
+     previous_end_x=text_line_x+line_a*text_cursor;
+     previous_end_y=text_line_y+line_b*text_cursor;
+     previous_a=line_a;previous_b=line_b;
+     previous_end_valid=std::isfinite(previous_end_x)&&
+       std::isfinite(previous_end_y);
+    }else{
+     // A displayed run with unknown metrics invalidates the old endpoint.
+     // Only truly empty text objects may preserve that prior position.
+     previous_end_valid=false;
+    }
    }
    // Empty text objects emit no glyphs and must not erase the last
    // usable endpoint from an earlier text object.
