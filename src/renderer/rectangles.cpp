@@ -265,6 +265,10 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      ImageResources scoped_images;
      FormResources scoped_forms;
      if(fm.own_resources){
+      // A Form's own resource dictionary replaces its parent's namespace.
+      // Child Forms resolved from their indirect objects remain local.
+      for(const auto& [alias,child]:fm.local_forms)
+       scoped_forms.emplace(alias,child);
       for(const auto& [alias,referenced]:fm.xobject_aliases){
        const auto image=images.find(referenced);
        const auto child=forms.find(referenced);
