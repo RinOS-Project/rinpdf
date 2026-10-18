@@ -23,7 +23,7 @@ struct PageFont {
  CIDVerticalMetrics vertical_metrics;
  std::string language;
 };
-struct PageImage {unsigned width=0,height=0,channels=0;std::vector<uint8_t> pixels;};
+struct PageImage {unsigned width=0,height=0,channels=0;std::vector<uint8_t> pixels;std::vector<uint8_t> alpha;};
 bool read_page_images(const uint8_t* data,size_t size,size_t page_index,
  std::map<std::string,PageImage>& images);
 struct PageProperty {std::string language; std::string actual_text; bool has_actual_text=false;};
