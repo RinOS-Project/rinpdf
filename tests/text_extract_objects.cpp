@@ -86,5 +86,13 @@ int main(){
  if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm <41> Tj ET "
            "BT /F1 10 Tf 1 0 0 1 8 0 Tm "
            "1 0 0 1 8 0.5 Tm <42> Tj ET","AB"))return 14;
+ // Two individually permitted Td displacements must fail once their
+ // accumulated origin exceeds the supported coordinate budget.
+ const std::string overflowing=make_pdf(
+   "BT /F1 10 Tf 600000000000 0 Td 600000000000 0 Td <41> Tj ET");
+ std::string retained="unchanged";
+ if(extract_page_text(reinterpret_cast<const uint8_t*>(overflowing.data()),
+      overflowing.size(),0,retained))return 15;
+ if(retained!="unchanged")return 16;
  return 0;
 }
