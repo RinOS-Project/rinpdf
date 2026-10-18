@@ -241,13 +241,13 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
  // Centralize output bounds and avoid publishing a partial result.
  const auto append_extracted=[&](const std::string& decoded,
      bool infer_space)->bool{
-  if(decoded.size()>4*1024*1024-output.size())return false;
-  if(infer_space&&!output.empty()&&output.back()!=' '&&
-     output.back()!='\n'&&!decoded.empty()&&
-     decoded.front()!=' '&&decoded.front()!='\n'){
-   if(output.size()>=4*1024*1024)return false;
-   output+=' ';
-  }
+  const bool add_space=infer_space&&!output.empty()&&
+    output.back()!=' '&&output.back()!='\n'&&!decoded.empty()&&
+    decoded.front()!=' '&&decoded.front()!='\n';
+  const size_t remaining=4*1024*1024-output.size();
+  if(decoded.size()>remaining|| (add_space&&decoded.size()==remaining))
+   return false;
+  if(add_space)output+=' ';
   output+=decoded;
   return true;
  };
