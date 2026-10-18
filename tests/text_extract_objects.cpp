@@ -44,5 +44,11 @@ int main(){
            "BT /F1 10 Tf 0 1 -1 0 15 20 Tm <42> Tj ET","A\nB"))return 4;
  if(!check("BT /F1 10 Tf 0 1 -1 0 0 0 Tm <41> Tj ET "
            "BT /F1 10 Tf 0 1 -1 0 0 20 Tm <42> Tj ET","A B"))return 5;
+ // A small baseline offset is positioning jitter, not a new line.
+ if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm <41> Tj ET "
+           "BT /F1 10 Tf 1 0 0 1 8 0.5 Tm <42> Tj ET","AB"))return 6;
+ // With ten-point text, a two-point baseline move exceeds tolerance.
+ if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm <41> Tj ET "
+           "BT /F1 10 Tf 1 0 0 1 8 2 Tm <42> Tj ET","A\nB"))return 7;
  return 0;
 }
