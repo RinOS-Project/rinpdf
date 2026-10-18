@@ -44,6 +44,12 @@ struct Reader {
  mutable std::map<std::tuple<int64_t,int64_t,unsigned,unsigned>,std::array<double,4>> calculator_result_cache;
  mutable std::map<std::pair<int64_t,int64_t>,std::vector<uint8_t>> sampled_function_cache;
  mutable size_t sampled_function_cache_bytes=0;
+ struct CachedFunction {
+  Value dictionary;
+  StreamRange stream;
+  bool is_stream=false;
+ };
+ mutable std::map<std::pair<int64_t,int64_t>,CachedFunction> function_dictionary_cache;
  bool entry(const Value& ref,const XrefEntry*& out) const {
   if(ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
   auto it=std::find_if(xref.begin(),xref.end(),[&](const XrefEntry& e){
@@ -885,12 +891,27 @@ struct Reader {
   StreamRange sampled_stream;
   bool has_sampled_stream=false;
   if(reference.kind==Value::Kind::Reference){
-   const XrefEntry* stream_entry=nullptr;
-   if(entry(reference,stream_entry)&&
-      locate_indirect_stream(data,size,*stream_entry,xref,sampled_stream)){
-    function=sampled_stream.dictionary;
-    has_sampled_stream=true;
-   }else if(!object(reference,function))return false;
+   const auto key=std::make_pair(reference.integer,reference.generation);
+   const auto cached=function_dictionary_cache.find(key);
+   if(cached!=function_dictionary_cache.end()){
+    function=cached->second.dictionary;
+    has_sampled_stream=cached->second.is_stream;
+    if(has_sampled_stream)sampled_stream=cached->second.stream;
+   }else{
+    const XrefEntry* stream_entry=nullptr;
+    if(entry(reference,stream_entry)&&
+       locate_indirect_stream(data,size,*stream_entry,xref,sampled_stream)){
+     function=sampled_stream.dictionary;
+     has_sampled_stream=true;
+    }else if(!object(reference,function))return false;
+    if(function_dictionary_cache.size()<128){
+     CachedFunction parsed;
+     parsed.dictionary=function;
+     parsed.is_stream=has_sampled_stream;
+     if(has_sampled_stream)parsed.stream=sampled_stream;
+     function_dictionary_cache.emplace(key,std::move(parsed));
+    }
+   }
   }else function=reference;
   const Value* type=get(function,"FunctionType");
   const Value* domain=get(function,"Domain");
