@@ -726,6 +726,47 @@ static bool pdf_function_limits(unsigned outputs,double d0,double d1,
  return true;
 }
 
+bool compile_multidimensional_pdf_function(
+ const MultidimensionalSampledFunction& parameters,
+ const std::vector<uint8_t>& decoded_samples,PdfFunction& output) {
+ if(parameters.inputs<1||parameters.inputs>4||
+    parameters.outputs<1||parameters.outputs>4)return false;
+ size_t count=1;
+ for(unsigned i=0;i<parameters.inputs;++i){
+  if(parameters.sizes[i]<2||parameters.sizes[i]>4096||
+     count>SIZE_MAX/parameters.sizes[i])return false;
+  count*=parameters.sizes[i];
+ }
+ if(parameters.bits<1||parameters.bits>32||
+    count>SIZE_MAX/parameters.outputs/parameters.bits)return false;
+ const size_t bits=count*parameters.outputs*parameters.bits;
+ if(bits>SIZE_MAX-7||decoded_samples.size()!=(bits+7)/8)return false;
+ double inputs[4]{},probe[4]{};
+ for(unsigned i=0;i<parameters.inputs;++i)
+  inputs[i]=parameters.domain[2*i];
+ if(!evaluate_multidimensional_sampled_function(
+       parameters,decoded_samples,inputs,probe))return false;
+ PdfFunction compiled;
+ compiled.kind=PdfFunction::Kind::MultiSampled;
+ compiled.outputs=parameters.outputs;
+ compiled.multidimensional=parameters;
+ compiled.samples=decoded_samples;
+ output=std::move(compiled);
+ return true;
+}
+bool evaluate_pdf_function_inputs(const PdfFunction& function,
+                                  const double* inputs,unsigned count,
+                                  double* result) {
+ if(!inputs||!result)return false;
+ if(function.kind==PdfFunction::Kind::MultiSampled){
+  if(count!=function.multidimensional.inputs)return false;
+  return evaluate_multidimensional_sampled_function(
+    function.multidimensional,function.samples,inputs,result);
+ }
+ if(count!=1)return false;
+ return evaluate_pdf_function(function,inputs[0],result);
+}
+
 bool compile_sampled_pdf_function(const SampledFunction& parameters,
                                   const std::vector<uint8_t>& decoded_samples,
                                   PdfFunction& output) {
