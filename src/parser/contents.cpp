@@ -202,13 +202,22 @@ struct Reader {
           cs->array[1].kind!=Value::Kind::Name||
           cs->array[2].kind!=Value::Kind::Integer||
           cs->array[2].integer<0||cs->array[2].integer>255||
-          cs->array[3].kind!=Value::Kind::String)return false;
+          (cs->array[3].kind!=Value::Kind::String&&
+           cs->array[3].kind!=Value::Kind::Reference))return false;
        palette_channels=cs->array[1].text=="DeviceRGB"?3:
                         cs->array[1].text=="DeviceGray"?1:0;
        if(!palette_channels)return false;
        maximum_index=unsigned(cs->array[2].integer);
-       palette=cs->array[3].text;
-       if(palette.size()!=size_t(maximum_index+1)*palette_channels)return false;
+       const size_t palette_size=size_t(maximum_index+1)*palette_channels;
+       if(cs->array[3].kind==Value::Kind::String)
+        palette=cs->array[3].text;
+       else{
+        std::vector<uint8_t> decoded_palette;
+        if(!stream(cs->array[3],decoded_palette,palette_size)||
+           decoded_palette.size()!=palette_size)return false;
+        palette.assign(decoded_palette.begin(),decoded_palette.end());
+       }
+       if(palette.size()!=palette_size)return false;
        indexed=true;
       }
       if(!indexed&&bits->integer!=8&&bits->integer!=1)return false;
