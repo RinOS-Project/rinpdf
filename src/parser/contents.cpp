@@ -1042,16 +1042,34 @@ struct Reader {
      }
      continue;
     }
-    double value=0;
-    const auto parsed=std::from_chars(token.data(),
-       token.data()+token.size(),value);
-    if(parsed.ec==std::errc()&&
-       parsed.ptr==token.data()+token.size()){
-     if(!std::isfinite(value)||stack.size()>=64)return false;
-     stack.push_back({value,0,0});
-     const bool integer_literal=token.find_first_of(".eE")==std::string::npos&&
-       value>=-2147483648.0&&value<=2147483647.0;
-     stack.back().kind=integer_literal?2:0;continue;
+    // PostScript numeric literals: integers and reals, including
+    // leading-dot decimals. Reject malformed numeric-looking tokens.
+    const bool numeric_start=token[0]=='+'||token[0]=='-'||
+      token[0]=='.'||(token[0]>='0'&&token[0]<='9');
+    if(numeric_start){
+     const bool integer_literal=token.find_first_of(".eE")==std::string::npos;
+     double value=0;
+     if(integer_literal){
+      int64_t whole=0;
+      const auto parsed=std::from_chars(token.data(),
+         token.data()+token.size(),whole);
+      if(parsed.ec!=std::errc()||
+         parsed.ptr!=token.data()+token.size()||
+         whole<INT32_MIN||whole>INT32_MAX)return false;
+      value=double(whole);
+     }else{
+      const char* first=token.data();
+      const char* last=first+token.size();
+      if(*first=='+')++first;
+      if(first==last)return false;
+      const auto parsed=std::from_chars(first,last,value,
+                                         std::chars_format::general);
+      if(parsed.ec!=std::errc()||parsed.ptr!=last||
+         !std::isfinite(value))return false;
+     }
+     if(stack.size()>=64)return false;
+     stack.push_back({value,uint8_t(integer_literal?2:0),0});
+     continue;
     }
     if(token=="true"||token=="false"){
      if(stack.size()>=64)return false;
