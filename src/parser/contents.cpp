@@ -194,6 +194,62 @@ struct Reader {
          (cs->kind!=Value::Kind::Name&&cs->kind!=Value::Kind::Array)){return false;}
       bool indexed=false;
       unsigned icc_channels=0;
+      unsigned calibrated=0;
+      double cal_gamma[3]{1,1,1};
+      double cal_matrix[9]{1,0,0,0,1,0,0,0,1};
+      // Initially support D65-calibrated spaces with the default zero
+      // BlackPoint. Other illuminants require chromatic adaptation.
+      if(cs->kind==Value::Kind::Array&&cs->array.size()==2&&
+         cs->array[0].kind==Value::Kind::Name&&
+         (cs->array[0].text=="CalGray"||cs->array[0].text=="CalRGB")){
+       calibrated=cs->array[0].text=="CalGray"?1:3;
+       if(cs->array[1].kind!=Value::Kind::Dictionary)return false;
+       const Value& dict=cs->array[1];
+       auto read_number=[](const Value& v,double& x){
+        if(v.kind==Value::Kind::Integer)x=double(v.integer);
+        else if(v.kind==Value::Kind::Real)x=v.real;
+        else return false;
+        return std::isfinite(x);
+       };
+       const Value* white=get(dict,"WhitePoint");
+       if(!white||white->kind!=Value::Kind::Array||
+          white->array.size()!=3)return false;
+       double wp[3]{};
+       for(unsigned i=0;i<3;++i)
+        if(!read_number(white->array[i],wp[i]))return false;
+       if(std::abs(wp[0]-0.95047)>0.002||
+          std::abs(wp[1]-1)>0.002||
+          std::abs(wp[2]-1.08883)>0.002)return false;
+       if(const Value* black=get(dict,"BlackPoint")){
+        if(black->kind!=Value::Kind::Array||black->array.size()!=3)
+         return false;
+        for(const auto& val:black->array){
+         double v=0;
+         if(!read_number(val,v)||std::abs(v)>1e-8)return false;
+        }
+       }
+       if(const Value* gamma=get(dict,"Gamma")){
+        if(calibrated==1){
+         if(!read_number(*gamma,cal_gamma[0]))return false;
+        }else{
+         if(gamma->kind!=Value::Kind::Array||gamma->array.size()!=3)
+          return false;
+         for(unsigned i=0;i<3;++i)
+          if(!read_number(gamma->array[i],cal_gamma[i]))return false;
+        }
+       }
+       for(unsigned i=0;i<calibrated;++i)
+        if(cal_gamma[i]<=0||cal_gamma[i]>16)return false;
+       if(const Value* matrix=get(dict,"Matrix")){
+        if(calibrated!=3||matrix->kind!=Value::Kind::Array||
+           matrix->array.size()!=9)return false;
+        for(unsigned i=0;i<9;++i)
+         if(!read_number(matrix->array[i],cal_matrix[i])||
+            std::abs(cal_matrix[i])>16)return false;
+       }else if(calibrated==3){
+        // CalRGB identity is XYZ, not device RGB. It is converted below.
+       }
+      }
       std::string palette;
       unsigned maximum_index=0;
       unsigned palette_channels=0;
@@ -221,7 +277,7 @@ struct Reader {
        std::vector<uint8_t> profile;
        if(!decode_stream(data,size,icc_range,profile,4*1024*1024)||
           profile.size()<128)return false;
-      }else if(cs->kind==Value::Kind::Array){
+      }else if(cs->kind==Value::Kind::Array&&!calibrated){
        if(cs->array.size()!=4||cs->array[0].kind!=Value::Kind::Name||
           cs->array[0].text!="Indexed"||
           cs->array[1].kind!=Value::Kind::Name||
@@ -248,7 +304,7 @@ struct Reader {
       if(!indexed&&bits->integer!=8&&bits->integer!=1)return false;
       if(indexed&&unsigned(maximum_index)>=(1u<<unsigned(bits->integer)))
        return false;
-      const unsigned channels=indexed?1:icc_channels?icc_channels:
+      const unsigned channels=indexed?1:calibrated?calibrated:icc_channels?icc_channels:
         cs->text=="DeviceGray"?1:cs->text=="DeviceRGB"?3:
         cs->text=="DeviceCMYK"?4:0;
       if(!channels||get(range.dictionary,"Mask")||
@@ -329,7 +385,7 @@ struct Reader {
         (filter->text=="DCTDecode"||filter->text=="DCT");
       if(dct){
        // The JPEG backend only decodes native Gray/RGB samples.
-       if(indexed||channels==4)return false;
+       if(indexed||calibrated||channels==4)return false;
        // JPEG image data is compressed independently of PDF Flate filters.
        // DecodeParms predictors are not valid for this path.
        if(get(range.dictionary,"DecodeParms")||
@@ -377,6 +433,36 @@ struct Reader {
         for(unsigned c=0;c<3;++c)
          rgb[3*i+c]=uint8_t(palette[index*palette_channels+
                                      (palette_channels==1?0:c)]);
+       }
+       image.pixels=std::move(rgb);image.channels=3;
+      }else if(calibrated){
+       std::vector<uint8_t> rgb(size_t(image.width)*image.height*3);
+       auto srgb=[](double linear){
+        linear=std::clamp(linear,0.0,1.0);
+        const double encoded=linear<=0.0031308?
+          12.92*linear:1.055*std::pow(linear,1.0/2.4)-0.055;
+        return uint8_t(std::lround(std::clamp(encoded,0.0,1.0)*255));
+       };
+       for(size_t i=0;i<size_t(image.width)*image.height;++i){
+        double X=0,Y=0,Z=0;
+        if(calibrated==1){
+         Y=std::pow(double(image.pixels[i])/255,cal_gamma[0]);
+         X=0.95047*Y;Z=1.08883*Y;
+        }else{
+         double component[3];
+         for(unsigned c=0;c<3;++c)
+          component[c]=std::pow(double(image.pixels[i*3+c])/255,
+                                cal_gamma[c]);
+         X=cal_matrix[0]*component[0]+cal_matrix[3]*component[1]+
+           cal_matrix[6]*component[2];
+         Y=cal_matrix[1]*component[0]+cal_matrix[4]*component[1]+
+           cal_matrix[7]*component[2];
+         Z=cal_matrix[2]*component[0]+cal_matrix[5]*component[1]+
+           cal_matrix[8]*component[2];
+        }
+        rgb[3*i]=srgb(3.2406*X-1.5372*Y-0.4986*Z);
+        rgb[3*i+1]=srgb(-0.9689*X+1.8758*Y+0.0415*Z);
+        rgb[3*i+2]=srgb(0.0557*X-0.2040*Y+1.0570*Z);
        }
        image.pixels=std::move(rgb);image.channels=3;
       }else if(channels==4){
