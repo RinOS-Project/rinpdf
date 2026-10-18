@@ -63,6 +63,8 @@ struct CalculatorProgram {
  std::vector<std::string> tokens;
  // Parsed numeric constants keyed by their literal text, reused in branches.
  std::map<std::string,std::pair<double,uint8_t>> numeric_constants;
+ // Prevalidated operator spellings; unsupported names are rejected at compile time.
+ std::map<std::string,uint8_t> operator_codes;
 };
 // Compile without changing the destination on failure.
 bool compile_calculator_function(const std::vector<uint8_t>& source,
