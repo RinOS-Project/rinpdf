@@ -379,7 +379,7 @@ struct Reader {
          double d0=0,d1=0;
          if(!number(domain->array[2*i],d0)||
             !number(domain->array[2*i+1],d1)||d0>=d1||
-            d0<0||d1>1)return false;
+            std::abs(d0)>100000||std::abs(d1)>100000)return false;
          tint_domain.push_back(d0);
          tint_domain.push_back(d1);
         }
@@ -387,7 +387,7 @@ struct Reader {
          double a=0,b=0;
          if(!number(range->array[2*c],a)||
             !number(range->array[2*c+1],b)||a>=b||
-            a<0||b>1)return false;
+            std::abs(a)>100000||std::abs(b)>100000)return false;
          tint_range.push_back(a);
          tint_range.push_back(b);
         }
