@@ -314,51 +314,21 @@
    }
    if(!evaluate_pdf_function(*compiled,x,result))return false;
   }else if(type->integer==3){
-   CachedStitch local;
-   const CachedStitch* compiled=nullptr;
+   PdfFunction local;
+   const PdfFunction* compiled=nullptr;
    const bool indirect=reference.kind==Value::Kind::Reference;
-   const auto key=std::make_pair(reference.integer,reference.generation);
+   const auto key=std::make_tuple(reference.integer,reference.generation,outputs);
    if(indirect){
-    const auto hit=stitch_function_cache.find(key);
-    if(hit!=stitch_function_cache.end())compiled=&hit->second;
+    const auto hit=compiled_stitch_cache.find(key);
+    if(hit!=compiled_stitch_cache.end())compiled=&hit->second;
    }
    if(!compiled){
-    const Value* functions=get(function,"Functions");
-    const Value* bounds=get(function,"Bounds");
-    const Value* enc=get(function,"Encode");
-    if(!functions||functions->kind!=Value::Kind::Array||
-       functions->array.empty()||functions->array.size()>32||
-       !bounds||bounds->kind!=Value::Kind::Array||
-       bounds->array.size()!=functions->array.size()-1||
-       !enc||enc->kind!=Value::Kind::Array||
-       enc->array.size()!=functions->array.size()*2)return false;
-    local.functions=functions->array;
-    local.bounds.push_back(low);
-    double previous=low;
-    for(const Value& v:bounds->array){
-     double boundary=0;
-     if(!number(v,boundary)||boundary<=previous||boundary>=high)
-      return false;
-     local.bounds.push_back(boundary);
-     previous=boundary;
-    }
-    local.bounds.push_back(high);
-    for(const Value& v:enc->array){
-     double coordinate=0;
-     if(!number(v,coordinate))return false;
-     local.encode.push_back(coordinate);
-    }
-    if(indirect&&stitch_function_cache.size()<128)
-     compiled=&stitch_function_cache.emplace(key,std::move(local)).first->second;
+    if(!compile_tint_tree(reference,outputs,local,depth))return false;
+    if(indirect&&compiled_stitch_cache.size()<64)
+     compiled=&compiled_stitch_cache.emplace(key,std::move(local)).first->second;
     else compiled=&local;
    }
-   size_t segment=0;
-   double mapped=0;
-   if(!map_stitching_input(compiled->bounds,compiled->encode,
-                           x,segment,mapped)||
-      segment>=compiled->functions.size())return false;
-   if(!eval_tint_function(compiled->functions[segment],mapped,outputs,
-                          result,depth+1))return false;
+   if(!evaluate_pdf_function(*compiled,x,result))return false;
   }else return false;
   if(const Value* range=get(function,"Range")){
    if(range->kind!=Value::Kind::Array||range->array.size()!=outputs*2)
