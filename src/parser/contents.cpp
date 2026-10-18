@@ -384,24 +384,58 @@ struct Reader {
      const Value* encoding=get(font,"Encoding");
      const Value* descriptor=get(font,"FontDescriptor");
      if(!subtype||subtype->kind!=Value::Kind::Name||
-        subtype->text!="TrueType"||
         !base||base->kind!=Value::Kind::Name||
-        !encoding||encoding->kind!=Value::Kind::Name||
-        (encoding->text!="WinAnsiEncoding"&&
-         encoding->text!="MacRomanEncoding"&&
-         encoding->text!="StandardEncoding")||
-        !descriptor)return false;
-     Value desc;
-     if(descriptor->kind==Value::Kind::Reference){
-      if(!object(*descriptor,desc))return false;
-     }else desc=*descriptor;
-     const Value* file=get(desc,"FontFile2");
-     if(!file||file->kind!=Value::Kind::Reference)return false;
+        !encoding||encoding->kind!=Value::Kind::Name)return false;
      PageFont local;
      local.base_font=base->text;
-     local.subtype="TrueType";
+     local.subtype=subtype->text;
      local.encoding=encoding->text;
-     if(!stream(*file,local.embedded_truetype,16*1024*1024))
+     Value desc;
+     if(local.subtype=="Type0"){
+      if(local.encoding!="Identity-H"&&local.encoding!="Identity-V")
+       return false;
+      const Value* descendants=get(font,"DescendantFonts");
+      if(!descendants||descendants->kind!=Value::Kind::Array||
+         descendants->array.size()!=1)return false;
+      const Value& child_ref=descendants->array[0];
+      Value child;
+      if(child_ref.kind==Value::Kind::Reference){
+       if(!object(child_ref,child))return false;
+      }else child=child_ref;
+      const Value* child_type=get(child,"Subtype");
+      if(!child_type||child_type->kind!=Value::Kind::Name||
+         child_type->text!="CIDFontType2"||
+         !parse_cid_widths(get(child,"DW"),get(child,"W"),local.cid_widths)||
+         !parse_cid_vertical_metrics(get(child,"DW2"),get(child,"W2"),
+                                     local.vertical_metrics))return false;
+      if(const Value* gid=get(child,"CIDToGIDMap")){
+       if(gid->kind==Value::Kind::Name){
+        if(gid->text!="Identity")return false;
+       }else if(gid->kind==Value::Kind::Reference){
+        local.cid_map.identity=false;
+        if(!stream(*gid,local.cid_map.bytes,131072)||
+           !cid_map_valid(local.cid_map))return false;
+       }else return false;
+      }
+      const Value* child_desc=get(child,"FontDescriptor");
+      if(!child_desc)return false;
+      if(child_desc->kind==Value::Kind::Reference){
+       if(!object(*child_desc,desc))return false;
+      }else desc=*child_desc;
+     }else if(local.subtype=="TrueType"){
+      if(local.encoding!="WinAnsiEncoding"&&
+         local.encoding!="MacRomanEncoding"&&
+         local.encoding!="StandardEncoding")return false;
+      const Value* descriptor=get(font,"FontDescriptor");
+      if(!descriptor)return false;
+      if(descriptor->kind==Value::Kind::Reference){
+       if(!object(*descriptor,desc))return false;
+      }else desc=*descriptor;
+     }else return false;
+     if(desc.kind!=Value::Kind::Dictionary)return false;
+     const Value* file=get(desc,"FontFile2");
+     if(!file||file->kind!=Value::Kind::Reference||
+        !stream(*file,local.embedded_truetype,16*1024*1024))
       return false;
      renderer::SfntFont validated;
      if(!renderer::parse_sfnt(local.embedded_truetype.data(),
