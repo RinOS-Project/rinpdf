@@ -348,6 +348,13 @@ struct Reader {
      if(entries.kind!=Value::Kind::Dictionary||entries.dictionary.size()>256){
       active.erase(id);return false;
      }
+     // Build a reverse lookup for objects already resolved at page scope.
+     // A Form may rename these entries in its own XObject dictionary.
+     std::map<std::pair<int64_t,int64_t>,std::string> page_names;
+     for(const auto& [page_name,page_ref]:entries.dictionary)
+      if(page_ref.kind==Value::Kind::Reference)
+       page_names.emplace(std::make_pair(page_ref.integer,
+                           int64_t(page_ref.generation)),page_name);
      for(const auto& [name,objref]:entries.dictionary){
       if(objref.kind!=Value::Kind::Reference){active.erase(id);return false;}
       const XrefEntry* ent=nullptr;
@@ -362,14 +369,43 @@ struct Reader {
       const Value* form_type=get(range.dictionary,"FormType");
       if(form_type&&(form_type->kind!=Value::Kind::Integer||
                      form_type->integer!=1)){active.erase(id);return false;}
-      // Own resources require resource namespace and nested XObject support.
-      if(get(range.dictionary,"Resources")||
-         get(range.dictionary,"Group")){active.erase(id);return false;}
+      // Transparency groups are not composited by this renderer.
+      if(get(range.dictionary,"Group")){active.erase(id);return false;}
       const Value* bbox=get(range.dictionary,"BBox");
       if(!bbox||bbox->kind!=Value::Kind::Array||bbox->array.size()!=4){
        active.erase(id);return false;
       }
       PageForm form;
+      if(const Value* own=get(range.dictionary,"Resources")){
+       form.own_resources=true;
+       Value scope;
+       if(own->kind==Value::Kind::Reference){
+        if(!object(*own,scope)){active.erase(id);return false;}
+       }else scope=*own;
+       if(scope.kind!=Value::Kind::Dictionary||
+          get(scope,"Font")||get(scope,"Properties")||
+          get(scope,"ColorSpace")||get(scope,"ExtGState")||
+          get(scope,"Pattern")||get(scope,"Shading")){
+        active.erase(id);return false;
+       }
+       if(const Value* own_xobj=get(scope,"XObject")){
+        Value own_entries;
+        if(own_xobj->kind==Value::Kind::Reference){
+         if(!object(*own_xobj,own_entries)){active.erase(id);return false;}
+        }else own_entries=*own_xobj;
+        if(own_entries.kind!=Value::Kind::Dictionary||
+           own_entries.dictionary.size()>256){active.erase(id);return false;}
+        for(const auto& [alias,target]:own_entries.dictionary){
+         if(target.kind!=Value::Kind::Reference){active.erase(id);return false;}
+         const auto found=page_names.find({target.integer,
+                                           int64_t(target.generation)});
+         // Independently referenced child XObjects need recursive resource
+         // resolution; do not silently borrow a same-named page resource.
+         if(found==page_names.end()){active.erase(id);return false;}
+         form.xobject_aliases.emplace(alias,found->second);
+        }
+       }
+      }
       auto fill=[&](const Value& v,double& result){
        if(v.kind==Value::Kind::Integer)result=double(v.integer);
        else if(v.kind==Value::Kind::Real)result=v.real;
