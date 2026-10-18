@@ -130,5 +130,19 @@ int main(){
            "[<41> -1200] TJ 200 Tz <42> Tj ET","A B"))return 26;
  if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm "
            "[<41> -600] TJ 50 Tz <42> Tj ET","A B"))return 27;
+ // Applying Tf and Tz in sequence must not reinterpret a trailing
+ // TJ adjustment using either new text-state value.
+ if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm "
+           "[<41> -600] TJ /F2 20 Tf 200 Tz <42> Tj ET","AB"))return 28;
+ if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm "
+           "[<41> -1200] TJ /F2 20 Tf 200 Tz <42> Tj ET","A B"))return 29;
+ // Changing Tc affects later glyph advances, not the historical
+ // displacement already emitted by TJ.
+ if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm "
+           "[<41> -600] TJ 1 Tc <42> Tj ET","AB"))return 30;
+ // At zero horizontal scaling the pending gap has no physical length
+ // and must not reappear when scaling is restored.
+ if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm "
+           "[<41> -600] TJ 0 Tz 100 Tz <42> Tj ET","AB"))return 31;
  return 0;
 }
