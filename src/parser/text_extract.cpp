@@ -308,6 +308,14 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
      if(parsed.ec!=std::errc()||parsed.ptr!=end||
         !std::isfinite(parsed_size)||parsed_size<=0||
         parsed_size>10000)return false;
+     // A trailing TJ displacement is measured using the text state at
+     // the adjustment, not the font size selected for the next show.
+     // Convert its 1/1000-em representation before changing Tf.
+     if(pending_tj_adjustment!=0&&font_size>0){
+      const double converted=pending_tj_adjustment*font_size/parsed_size;
+      if(!std::isfinite(converted)||std::abs(converted)>1e12)return false;
+      pending_tj_adjustment=converted;
+     }
      selected=t.value;font_size=parsed_size;lexer=choose;continue;
     }
    }
