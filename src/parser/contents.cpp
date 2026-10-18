@@ -850,8 +850,15 @@ struct Reader {
                          double* result,unsigned depth=0) const {
   if(depth>=8||outputs<1||outputs>4||!std::isfinite(x))return false;
   Value function;
+  StreamRange sampled_stream;
+  bool has_sampled_stream=false;
   if(reference.kind==Value::Kind::Reference){
-   if(!object(reference,function))return false;
+   const XrefEntry* stream_entry=nullptr;
+   if(entry(reference,stream_entry)&&
+      locate_indirect_stream(data,size,*stream_entry,xref,sampled_stream)){
+    function=sampled_stream.dictionary;
+    has_sampled_stream=true;
+   }else if(!object(reference,function))return false;
   }else function=reference;
   const Value* type=get(function,"FunctionType");
   const Value* domain=get(function,"Domain");
@@ -868,7 +875,66 @@ struct Reader {
   if(!number(domain->array[0],low)||!number(domain->array[1],high)||
      high<=low)return false;
   x=std::clamp(x,low,high);
-  if(type->integer==2){
+  if(type->integer==0){
+   // Sampled subfunctions inside stitching functions have one input.
+   // Decode packed samples and interpolate the two neighboring entries.
+   if(!has_sampled_stream)return false;
+   const Value* sizes=get(function,"Size");
+   const Value* bits=get(function,"BitsPerSample");
+   const Value* encode=get(function,"Encode");
+   const Value* decode=get(function,"Decode");
+   const Value* range=get(function,"Range");
+   if(!sizes||sizes->kind!=Value::Kind::Array||sizes->array.size()!=1||
+      sizes->array[0].kind!=Value::Kind::Integer||
+      sizes->array[0].integer<2||sizes->array[0].integer>4096||
+      !bits||bits->kind!=Value::Kind::Integer||
+      (bits->integer!=1&&bits->integer!=2&&bits->integer!=4&&
+       bits->integer!=8&&bits->integer!=12&&bits->integer!=16&&
+       bits->integer!=24&&bits->integer!=32)||
+      !range||range->kind!=Value::Kind::Array||
+      range->array.size()!=2*outputs)return false;
+   const size_t count=size_t(sizes->array[0].integer);
+   const unsigned bps=unsigned(bits->integer);
+   const size_t bytes=(count*outputs*bps+7)/8;
+   if(bytes>4*1024*1024)return false;
+   std::vector<uint8_t> samples;
+   if(!decode_stream(data,size,sampled_stream,samples,bytes)||
+      samples.size()!=bytes)return false;
+   double e0=0,e1=double(count-1);
+   if(encode){
+    if(encode->kind!=Value::Kind::Array||encode->array.size()!=2||
+       !number(encode->array[0],e0)||!number(encode->array[1],e1))
+     return false;
+   }
+   const double position=std::clamp(e0+(x-low)/(high-low)*(e1-e0),
+                                    0.0,double(count-1));
+   const size_t index=size_t(position);
+   const size_t next=std::min(index+1,count-1);
+   const double blend=position-double(index);
+   auto read_sample=[&](size_t sample_index)->double{
+    const size_t start=sample_index*bps;
+    uint64_t value=0;
+    for(unsigned bit=0;bit<bps;++bit){
+     const size_t p=start+bit;
+     value=(value<<1)|((samples[p/8]>>(7-(p%8)))&1u);
+    }
+    return double(value)/double((uint64_t(1)<<bps)-1);
+   };
+   for(unsigned c=0;c<outputs;++c){
+    double r0=0,r1=0,d0=0,d1=0;
+    if(!number(range->array[2*c],r0)||
+       !number(range->array[2*c+1],r1)||r0>r1)return false;
+    if(decode){
+     if(decode->kind!=Value::Kind::Array||
+        decode->array.size()!=outputs*2||
+        !number(decode->array[2*c],d0)||
+        !number(decode->array[2*c+1],d1))return false;
+    }else{d0=r0;d1=r1;}
+    const double sample=(1-blend)*read_sample(index*outputs+c)+
+                        blend*read_sample(next*outputs+c);
+    result[c]=std::clamp(d0+sample*(d1-d0),r0,r1);
+   }
+  }else if(type->integer==2){
    const Value* n=get(function,"N");
    double exponent=0;
    if(!n||!number(*n,exponent)||exponent<=0||exponent>100)
