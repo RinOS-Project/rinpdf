@@ -154,18 +154,24 @@ bool evaluate_multidimensional_sampled_function(
  std::array<double,4> computed{};
  const unsigned taps=f.order==3?4:2;
  double weights[4][4]{};
- for(unsigned d=0;d<f.inputs;++d)
+ size_t offsets[4][4]{};
+ for(unsigned d=0;d<f.inputs;++d){
   sample_kernel(f.order,fraction[d],weights[d]);
+  for(unsigned tap=0;tap<taps;++tap){
+   const size_t neighbor=sample_neighbor(lower[d],tap,f.sizes[d],f.order);
+   offsets[d][tap]=neighbor*stride[d];
+  }
+ }
  unsigned corners=1;
  for(unsigned d=0;d<f.inputs;++d)corners*=taps;
  for(unsigned corner=0;corner<corners;++corner){
   size_t index=0;
   double weight=1;
+  unsigned coordinates=corner;
   for(unsigned d=0;d<f.inputs;++d){
-   unsigned tap=corner;
-   for(unsigned j=0;j<d;++j)tap/=taps;
-   tap%=taps;
-   index+=sample_neighbor(lower[d],tap,f.sizes[d],f.order)*stride[d];
+   const unsigned tap=coordinates%taps;
+   coordinates/=taps;
+   index+=offsets[d][tap];
    weight*=weights[d][tap];
   }
   if(weight==0)continue;
