@@ -281,21 +281,36 @@ bool decode_stream(const uint8_t *data,size_t size,const StreamRange& range,std:
    filters.push_back(item.text);
   }
  }else return false;
- // DecodeParms is meaningful for image predictors and other specialized
- // filters. Do not silently discard parameters for arbitrary chains.
+ // DecodeParms may be a dictionary for a single filter or an array
+ // aligned with the Filter array. Null entries mean default parameters.
  const auto parms=range.dictionary.dictionary.find("DecodeParms");
- if(parms!=range.dictionary.dictionary.end()&&filters.size()>1)
-  return false;
+ std::vector<const Value*> parameters(filters.size(),nullptr);
+ if(parameter){
+  const Value& p=parms->second;
+  if(p.kind==Value::Kind::Dictionary){
+   if(filters.size()!=1)return false;
+   parameters[0]=&p;
+  }else if(p.kind==Value::Kind::Array){
+   if(p.array.size()!=filters.size())return false;
+   for(size_t i=0;i<p.array.size();++i){
+    if(p.array[i].kind==Value::Kind::Dictionary)
+     parameters[i]=&p.array[i];
+    else if(p.array[i].kind!=Value::Kind::Null)return false;
+   }
+  }else if(p.kind!=Value::Kind::Null)return false;
+ }
  std::vector<uint8_t> stage(data+range.offset,
                            data+range.offset+range.length);
  if(stage.size()>max_output&&filters.size()==0)return false;
- for(const std::string& name:filters){
+ for(size_t filter_index=0;filter_index<filters.size();++filter_index){
+  const std::string& name=filters[filter_index];
+  const Value* parameter=parameters[filter_index];
   unsigned early_change=1;
   if(name=="LZWDecode"||name=="LZW"){
-   if(parms!=range.dictionary.dictionary.end()){
-    if(parms->second.kind!=Value::Kind::Dictionary)return false;
-    const auto it=parms->second.dictionary.find("EarlyChange");
-    if(it!=parms->second.dictionary.end()){
+   if(parameter){
+    if(parameter->kind!=Value::Kind::Dictionary)return false;
+    const auto it=parameter->dictionary.find("EarlyChange");
+    if(it!=parameter->dictionary.end()){
      if(it->second.kind!=Value::Kind::Integer||
         (it->second.integer!=0&&it->second.integer!=1))return false;
      early_change=unsigned(it->second.integer);
@@ -306,11 +321,11 @@ bool decode_stream(const uint8_t *data,size_t size,const StreamRange& range,std:
   // PNG predictors prepend one selector byte per decoded row.
   // Allow only that bounded overhead before the predictor is removed.
   size_t stage_limit=max_output;
-  if(parms!=range.dictionary.dictionary.end()&&
+  if(parameter&&
      (name=="FlateDecode"||name=="Fl"||
       name=="LZWDecode"||name=="LZW")&&
      parms->second.kind==Value::Kind::Dictionary){
-   const auto& d=parms->second.dictionary;
+   const auto& d=parameter->dictionary;
    const auto it=d.find("Predictor");
    if(it!=d.end()&&it->second.kind==Value::Kind::Integer&&
       it->second.integer>=10&&it->second.integer<=15){
@@ -330,11 +345,11 @@ bool decode_stream(const uint8_t *data,size_t size,const StreamRange& range,std:
     decode_lzw(stage.data(),stage.size(),decoded,stage_limit,early_change):false;
   if(!ok){output.clear();return false;}
   stage=std::move(decoded);
-  if(parms!=range.dictionary.dictionary.end()&&
+  if(parameter&&
      (name=="LZWDecode"||name=="LZW"||
       name=="FlateDecode"||name=="Fl")){
-   if(parms->second.kind!=Value::Kind::Dictionary||
-      !apply_predictor(stage,parms->second,max_output))return false;
+   if(parameter->kind!=Value::Kind::Dictionary||
+      !apply_predictor(stage,*parameter,max_output))return false;
   }
  }
  output=std::move(stage);return true;
