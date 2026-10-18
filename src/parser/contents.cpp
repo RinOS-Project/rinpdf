@@ -193,10 +193,35 @@ struct Reader {
          w->integer>4096||h->integer>4096||
          (cs->kind!=Value::Kind::Name&&cs->kind!=Value::Kind::Array)){return false;}
       bool indexed=false;
+      unsigned icc_channels=0;
       std::string palette;
       unsigned maximum_index=0;
       unsigned palette_channels=0;
-      if(cs->kind==Value::Kind::Array){
+      if(cs->kind==Value::Kind::Array&&cs->array.size()==2&&
+         cs->array[0].kind==Value::Kind::Name&&
+         cs->array[0].text=="ICCBased"){
+       // Without an ICC color engine, use only an explicitly specified
+       // PDF Alternate. Never silently treat unknown profiles as sRGB.
+       if(cs->array[1].kind!=Value::Kind::Reference)return false;
+       const XrefEntry* icc_entry=nullptr;
+       if(!entry(cs->array[1],icc_entry))return false;
+       StreamRange icc_range;
+       if(!locate_indirect_stream(data,size,*icc_entry,xref,icc_range))
+        return false;
+       const Value* n=get(icc_range.dictionary,"N");
+       const Value* alternate=get(icc_range.dictionary,"Alternate");
+       if(!n||n->kind!=Value::Kind::Integer||
+          !alternate||alternate->kind!=Value::Kind::Name)return false;
+       icc_channels=alternate->text=="DeviceGray"?1:
+                    alternate->text=="DeviceRGB"?3:
+                    alternate->text=="DeviceCMYK"?4:0;
+       if(!icc_channels||n->integer!=icc_channels)return false;
+       // Validate the profile stream reference, but do not claim ICC-based
+       // color accuracy: the fallback uses the explicit Alternate only.
+       std::vector<uint8_t> profile;
+       if(!decode_stream(data,size,icc_range,profile,4*1024*1024)||
+          profile.size()<128)return false;
+      }else if(cs->kind==Value::Kind::Array){
        if(cs->array.size()!=4||cs->array[0].kind!=Value::Kind::Name||
           cs->array[0].text!="Indexed"||
           cs->array[1].kind!=Value::Kind::Name||
@@ -223,7 +248,7 @@ struct Reader {
       if(!indexed&&bits->integer!=8&&bits->integer!=1)return false;
       if(indexed&&unsigned(maximum_index)>=(1u<<unsigned(bits->integer)))
        return false;
-      const unsigned channels=indexed?1:
+      const unsigned channels=indexed?1:icc_channels?icc_channels:
         cs->text=="DeviceGray"?1:cs->text=="DeviceRGB"?3:
         cs->text=="DeviceCMYK"?4:0;
       if(!channels||get(range.dictionary,"Mask")||
