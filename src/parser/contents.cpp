@@ -945,8 +945,8 @@ struct Reader {
     result[c]=std::clamp(d0+sample*(d1-d0),r0,r1);
    }
   }else if(type->integer==4){
-   // Restricted calculator language: numeric stack operations without
-   // executable procedures or branches. Unsupported operators fail closed.
+   // Bounded numeric calculator with executable procedures and branches.
+   // Unsupported operators and malformed procedure nesting fail closed.
    if(!has_sampled_stream)return false;
    const Value* output_range=get(function,"Range");
    if(!output_range||output_range->kind!=Value::Kind::Array||
@@ -962,21 +962,55 @@ struct Reader {
      source.insert(i,1,' ');
     }
    std::istringstream scanner(source);
+   std::vector<std::string> tokens;
    std::string token;
-   std::vector<double> stack{x};
-   size_t operations=0;
-   bool began=false,ended=false;
    while(scanner>>token){
-    if(++operations>4096||token.size()>64||ended)return false;
+    if(token.size()>64||tokens.size()>=4096)return false;
+    tokens.push_back(token);
+   }
+   if(tokens.size()<2||tokens.front()!="{"||tokens.back()!="}")
+    return false;
+   tokens.erase(tokens.begin());
+   tokens.pop_back();
+   std::vector<double> stack{x};
+   std::vector<std::vector<std::string>> procedures;
+   size_t operations=0;
+   for(size_t pc=0;pc<tokens.size();++pc){
+    token=tokens[pc];
+    if(++operations>4096||token.size()>64)return false;
     if(token=="{"){
-     if(began)return false;
-     began=true;continue;
+     size_t nested=1;
+     std::vector<std::string> procedure;
+     for(++pc;pc<tokens.size();++pc){
+      if(tokens[pc]=="{"){
+       if(++nested>8)return false;
+      }else if(tokens[pc]=="}"){
+       if(--nested==0)break;
+      }
+      procedure.push_back(tokens[pc]);
+     }
+     if(nested||procedures.size()>=64)return false;
+     procedures.push_back(std::move(procedure));continue;
     }
-    if(token=="}"){
-     if(!began)return false;
-     ended=true;continue;
+    if(token=="}")return false;
+    if(token=="if"||token=="ifelse"){
+     const size_t required=token=="if"?1:2;
+     if(procedures.size()<required||stack.empty())return false;
+     const bool condition=stack.back()!=0;
+     stack.pop_back();
+     std::vector<std::string> chosen;
+     if(required==1){
+      if(condition)chosen=procedures.back();
+      procedures.pop_back();
+     }else{
+      chosen=condition?procedures[procedures.size()-2]:
+                       procedures.back();
+      procedures.pop_back();procedures.pop_back();
+     }
+     if(tokens.size()+chosen.size()>4096)return false;
+     tokens.insert(tokens.begin()+pc+1,chosen.begin(),chosen.end());
+     continue;
     }
-    if(!began)return false;
     double value=0;
     const auto parsed=std::from_chars(token.data(),
        token.data()+token.size(),value);
@@ -1078,7 +1112,7 @@ struct Reader {
     if(stack.empty()||!std::isfinite(stack.back())||
        std::abs(stack.back())>1e12)return false;
    }
-   if(!began||!ended||stack.size()!=outputs)return false;
+   if(!procedures.empty()||stack.size()!=outputs)return false;
    for(unsigned j=0;j<outputs;++j)result[j]=stack[j];
   }else if(type->integer==2){
    const Value* n=get(function,"N");
