@@ -4,6 +4,8 @@
 #include <utility>
 #include <algorithm>
 #include <string>
+#include <cmath>
+#include <cstdint>
 namespace rinpdf::parser {
 static bool space(unsigned char c){return c==0||c==9||c==10||c==12||c==13||c==32;}
 static bool keyword(const uint8_t *data,size_t size,size_t pos,const char *word,size_t len){
@@ -195,7 +197,67 @@ static bool decode_lzw(const uint8_t* input,size_t length,
    table[next++]={previous,word[0]};
    if(bits<12&&next+early_change==(1u<<bits))++bits;
   }
-  previous=int(code);
+  previous=int(cstatic bool apply_predictor(std::vector<uint8_t>& bytes,
+ const Value& params,size_t limit){
+ auto param=[&](const char* name,unsigned fallback,unsigned& result){
+  const auto it=params.dictionary.find(name);
+  if(it==params.dictionary.end()){result=fallback;return true;}
+  if(it->second.kind!=Value::Kind::Integer||it->second.integer<0||
+     it->second.integer>1000000)return false;
+  result=unsigned(it->second.integer);return true;
+ };
+ unsigned predictor=1,colors=1,bpc=8,columns=1;
+ if(!param("Predictor",1,predictor)||!param("Colors",1,colors)||
+    !param("BitsPerComponent",8,bpc)||!param("Columns",1,columns)||
+    !colors||!columns||!(bpc==1||bpc==2||bpc==4||bpc==8||bpc==16))
+  return false;
+ if(predictor==1)return bytes.size()<=limit;
+ if(predictor!=2&&(predictor<10||predictor>15))return false;
+ const uint64_t row_bits=uint64_t(colors)*columns*bpc;
+ const uint64_t pixel_bits=uint64_t(colors)*bpc;
+ const uint64_t row64=(row_bits+7)/8;
+ const uint64_t bpp64=(pixel_bits+7)/8;
+ if(!row64||row64>limit||bpp64>row64)return false;
+ const size_t row=size_t(row64),bpp=size_t(bpp64);
+ if(predictor==2){
+  // TIFF differencing is component-wise. This implementation supports
+  // byte-aligned samples; packed samples are rejected rather than corrupted.
+  if(bpc!=8)return false;
+  if(bytes.size()%row)return false;
+  for(size_t offset=0;offset<bytes.size();offset+=row)
+   for(size_t i=bpp;i<row;++i)
+    bytes[offset+i]=uint8_t(bytes[offset+i]+bytes[offset+i-bpp]);
+  return true;
+ }
+ const size_t encoded_row=row+1;
+ if(bytes.size()%encoded_row)return false;
+ const size_t rows=bytes.size()/encoded_row;
+ if(rows>limit/row)return false;
+ std::vector<uint8_t> result(rows*row);
+ for(size_t r=0;r<rows;++r){
+  const uint8_t filter=bytes[r*encoded_row];
+  if(filter>4||(predictor!=15&&filter!=predictor-10))return false;
+  for(size_t x=0;x<row;++x){
+   const unsigned left=x>=bpp?result[r*row+x-bpp]:0;
+   const unsigned up=r?result[(r-1)*row+x]:0;
+   const unsigned corner=r&&x>=bpp?result[(r-1)*row+x-bpp]:0;
+   unsigned prediction=0;
+   if(filter==1)prediction=left;
+   else if(filter==2)prediction=up;
+   else if(filter==3)prediction=(left+up)/2;
+   else if(filter==4){
+    const int p=int(left)+int(up)-int(corner);
+    const int dl=std::abs(p-int(left)),du=std::abs(p-int(up));
+    const int dc=std::abs(p-int(corner));
+    prediction=dl<=du&&dl<=dc?left:du<=dc?up:corner;
+   }
+   result[r*row+x]=uint8_t(bytes[r*encoded_row+1+x]+prediction);
+  }
+ }
+ bytes=std::move(result);
+ return true;
+}
+ode);
   previous_length=count;
  }
 }
@@ -238,7 +300,6 @@ bool decode_stream(const uint8_t *data,size_t size,const StreamRange& range,std:
         (it->second.integer!=0&&it->second.integer!=1))return false;
      early_change=unsigned(it->second.integer);
     }
-    if(parms->second.dictionary.count("Predictor"))return false;
    }
   }
   std::vector<uint8_t> decoded;
@@ -254,6 +315,12 @@ bool decode_stream(const uint8_t *data,size_t size,const StreamRange& range,std:
     decode_lzw(stage.data(),stage.size(),decoded,max_output,early_change):false;
   if(!ok){output.clear();return false;}
   stage=std::move(decoded);
+  if(parms!=range.dictionary.dictionary.end()&&
+     (name=="LZWDecode"||name=="LZW"||
+      name=="FlateDecode"||name=="Fl")){
+   if(parms->second.kind!=Value::Kind::Dictionary||
+      !apply_predictor(stage,parms->second,max_output))return false;
+  }
  }
  output=std::move(stage);return true;
 }
