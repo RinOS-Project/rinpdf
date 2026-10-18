@@ -24,7 +24,7 @@ static bool number(const std::string& s,double& v){
 static bool space(unsigned char c){return c==0||c==9||c==10||c==12||c==13||c==32;}
 struct Rect {double x,y,w,h;};
 bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsigned width,unsigned height,uint8_t *rgba,size_t stride,PageBox box,const FontResources& fonts,
- const MarkedProperties& properties){
+ const MarkedProperties& properties,const ImageResources& images){
  if(!std::isfinite(box.x0)||!std::isfinite(box.y0)||!std::isfinite(box.x1)||!std::isfinite(box.y1)||box.x1<=box.x0||box.y1<=box.y0)return false;
  const double sx=(double)width/(box.x1-box.x0),sy=(double)height/(box.y1-box.y0);
  if(!std::isfinite(sx)||!std::isfinite(sy))return false;
@@ -46,6 +46,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
  std::string selected_font;
  double selected_font_size=0;
  std::string pending_font;
+ std::string pending_image;
  double text_x=0,text_y=0,text_leading=0;
  double line_x=0,line_y=0;
  double text_a=1,text_b=0,text_c=0,text_d=1;
@@ -216,6 +217,53 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      if(!lang.empty())active_marked_language=lang;
      lex=properties_lexer;continue;
     }
+   }
+   if(!in_text&&next.kind==parser::TokenKind::Keyword&&
+      next.value=="Do"&&stack.empty()){
+    pending_image=token.value;
+    lex=look;
+    // Dispatch image painting through the normal Do branch.
+    const auto found=images.find(pending_image);
+    if(found==images.end())return false;
+    const auto& im=found->second;
+    pending_image.clear();
+    if((im.channels!=1&&im.channels!=3)||!im.width||!im.height||
+       im.pixels.size()!=size_t(im.width)*im.height*im.channels)return false;
+    const double det=a*d-bx*cx;
+    if(!std::isfinite(det)||std::abs(det)<1e-12)return false;
+    const Point corners[]={transform(0,0),transform(1,0),
+                           transform(0,1),transform(1,1)};
+    double xmin=corners[0].x,xmax=xmin,ymin=corners[0].y,ymax=ymin;
+    for(const auto& p:corners){
+     if(!std::isfinite(p.x)||!std::isfinite(p.y))return false;
+     xmin=std::min(xmin,p.x);xmax=std::max(xmax,p.x);
+     ymin=std::min(ymin,p.y);ymax=std::max(ymax,p.y);
+    }
+    auto bound=[](double v,unsigned n)->unsigned{
+     return v<=0?0:v>=n?n:unsigned(v);
+    };
+    const unsigned left=bound(std::floor((xmin-box.x0)*sx),width);
+    const unsigned right=bound(std::ceil((xmax-box.x0)*sx),width);
+    const unsigned top=bound(std::floor((box.y1-ymax)*sy),height);
+    const unsigned bottom=bound(std::ceil((box.y1-ymin)*sy),height);
+    for(unsigned py=top;py<bottom;++py)for(unsigned px=left;px<right;++px){
+     if(px<clip.x0||px>=clip.x1||py<clip.y0||py>=clip.y1)continue;
+     if(clip_mask&&(*clip_mask)[size_t(py)*width+px]==0)continue;
+     const double ux=box.x0+(px+0.5)/sx-e;
+     const double uy=box.y1-(py+0.5)/sy-f;
+     const double u=(d*ux-cx*uy)/det;
+     const double v=(-bx*ux+a*uy)/det;
+     if(u<0||u>=1||v<0||v>=1)continue;
+     const unsigned ix=std::min(im.width-1,unsigned(u*im.width));
+     const unsigned iy=std::min(im.height-1,unsigned((1-v)*im.height));
+     const size_t source=(size_t(iy)*im.width+ix)*im.channels;
+     const size_t target=size_t(py)*stride+size_t(px)*4;
+     rgba[target]=im.pixels[source];
+     rgba[target+1]=im.pixels[source+(im.channels==3?1:0)];
+     rgba[target+2]=im.pixels[source+(im.channels==3?2:0)];
+     rgba[target+3]=255;
+    }
+    continue;
    }
    if(in_text&&pending_font.empty()&&stack.empty()){
     pending_font=token.value;
