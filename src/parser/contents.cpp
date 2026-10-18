@@ -199,6 +199,8 @@ struct Reader {
       bool sampled_tint=false;
       std::vector<uint8_t> tint_samples;
       std::vector<unsigned> tint_sizes;
+      std::vector<double> tint_encode,tint_decode;
+      unsigned tint_sample_bits=8;
       unsigned tint_channels=0;
       double tint_c0[4]{0,0,0,0},tint_c1[4]{1,1,1,1},tint_n=1;
       unsigned calibrated=0;
@@ -343,8 +345,7 @@ struct Reader {
        };
        if(!type||type->kind!=Value::Kind::Integer)return false;
        if(type->integer==0){
-        // Eight-bit sampled functions: bounded multidimensional table,
-        // nearest-neighbor selection pending linear interpolation support.
+        // Bounded sampled functions with multilinear interpolation.
         if(cs->array[3].kind!=Value::Kind::Reference)return false;
         const XrefEntry* entry_ptr=nullptr;
         if(!entry(cs->array[3],entry_ptr))return false;
@@ -354,13 +355,17 @@ struct Reader {
         const Value* sizes=get(function_range.dictionary,"Size");
         const Value* bps=get(function_range.dictionary,"BitsPerSample");
         const Value* range=get(function_range.dictionary,"Range");
+        const Value* encode=get(function_range.dictionary,"Encode");
+        const Value* decode=get(function_range.dictionary,"Decode");
         if(!sizes||sizes->kind!=Value::Kind::Array||
            sizes->array.size()!=device_inputs||
-           !bps||bps->kind!=Value::Kind::Integer||bps->integer!=8||
+           !bps||bps->kind!=Value::Kind::Integer||
+           (bps->integer!=8&&bps->integer!=16)||
            !range||range->kind!=Value::Kind::Array||
            range->array.size()!=tint_channels*2||
            !domain||domain->kind!=Value::Kind::Array||
            domain->array.size()!=device_inputs*2)return false;
+        tint_sample_bits=unsigned(bps->integer);
         size_t sample_count=tint_channels;
         for(unsigned i=0;i<device_inputs;++i){
          const Value& v=sizes->array[i];
@@ -380,8 +385,30 @@ struct Reader {
             !number(range->array[2*c+1],b)||a!=0||b!=1)
           return false;
         }
-        if(!decode_stream(data,size,function_range,tint_samples,sample_count)||
-           tint_samples.size()!=sample_count)return false;
+        tint_encode.resize(device_inputs*2);
+        tint_decode.resize(tint_channels*2);
+        if(encode&&(encode->kind!=Value::Kind::Array||
+                    encode->array.size()!=device_inputs*2))return false;
+        if(decode&&(decode->kind!=Value::Kind::Array||
+                    decode->array.size()!=tint_channels*2))return false;
+        for(unsigned i=0;i<device_inputs;++i){
+         tint_encode[i*2]=0;
+         tint_encode[i*2+1]=double(tint_sizes[i]-1);
+         if(encode&&(!number(encode->array[2*i],tint_encode[2*i])||
+                     !number(encode->array[2*i+1],tint_encode[2*i+1])))
+          return false;
+        }
+        for(unsigned c=0;c<tint_channels;++c){
+         tint_decode[2*c]=0;tint_decode[2*c+1]=1;
+         if(decode&&(!number(decode->array[2*c],tint_decode[2*c])||
+                     !number(decode->array[2*c+1],tint_decode[2*c+1])))
+          return false;
+        }
+        const size_t bytes_per_sample=tint_sample_bits/8;
+        if(sample_count>4*1024*1024/bytes_per_sample)return false;
+        const size_t byte_count=sample_count*bytes_per_sample;
+        if(!decode_stream(data,size,function_range,tint_samples,byte_count)||
+           tint_samples.size()!=byte_count)return false;
         sampled_tint=true;
        }else if(type->integer==2){
         if(device_inputs!=1||!domain||domain->kind!=Value::Kind::Array||
@@ -601,9 +628,11 @@ struct Reader {
          double fraction[4]{};
          size_t stride=1;
          for(unsigned dimension=0;dimension<device_inputs;++dimension){
-          const double position=
-           double(image.pixels[i*device_inputs+dimension])/255*
-           double(tint_sizes[dimension]-1);
+          const double sample=double(image.pixels[i*device_inputs+dimension])/255;
+          const double position=std::clamp(
+           tint_encode[2*dimension]+sample*
+             (tint_encode[2*dimension+1]-tint_encode[2*dimension]),
+           0.0,double(tint_sizes[dimension]-1));
           lower[dimension]=size_t(position);
           fraction[dimension]=position-double(lower[dimension]);
           if(lower[dimension]>=tint_sizes[dimension]-1){
@@ -624,9 +653,16 @@ struct Reader {
                   strides[dimension];
            weight*=upper?fraction[dimension]:1-fraction[dimension];
           }
-          for(unsigned c=0;c<tint_channels;++c)
-           values[c]+=weight*
-              (double(tint_samples[index*tint_channels+c])/255);
+          for(unsigned c=0;c<tint_channels;++c){
+           const size_t sample_index=index*tint_channels+c;
+           const double raw=tint_sample_bits==8?
+             double(tint_samples[sample_index])/255:
+             double((unsigned(tint_samples[2*sample_index])<<8)|
+                     tint_samples[2*sample_index+1])/65535;
+           const double decoded=tint_decode[2*c]+raw*
+              (tint_decode[2*c+1]-tint_decode[2*c]);
+           values[c]+=weight*std::clamp(decoded,0.0,1.0);
+          }
          }
         }else{
          const double tint=std::pow(double(image.pixels[i])/255,tint_n);
