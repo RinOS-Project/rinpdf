@@ -363,7 +363,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
    if(!in_text||stack.size()!=6)return false;
    text_a=stack[0];text_b=stack[1];text_c=stack[2];text_d=stack[3];
    text_x=line_x=stack[4];text_y=line_y=stack[5];stack.clear();
-  }else if(word=="'"||word=="\\\\\\\""){
+   }else if(word=="'"||(word.size()==1&&word[0]==34)){
    // Quote text-show operators are T* followed by Tj. Double quote
    // additionally sets Tw and Tc before moving to the next line.
    // Render embedded TrueType glyphs rather than merely accepting input.
