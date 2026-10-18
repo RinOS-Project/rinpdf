@@ -574,7 +574,29 @@ bool compile_calculator_function(const std::vector<uint8_t>& source,
   if(it==operators.end())return false;
   codes.emplace(token,uint8_t(it-operators.begin()));
  }
+ std::vector<CalculatorInstruction> instructions;
+ instructions.reserve(tokens.size());
+ for(const auto& token:tokens){
+  CalculatorInstruction instruction;
+  if(token=="{")instruction.kind=2;
+  else if(token=="}")instruction.kind=3;
+  else if(token=="true"||token=="false"){
+   instruction.kind=1;
+   instruction.number=token=="true"?1.0:0.0;
+  }else if(const auto hit=constants.find(token);hit!=constants.end()){
+   instruction.kind=0;
+   instruction.number=hit->second.first;
+   instruction.numeric_kind=hit->second.second;
+  }else{
+   const auto hit=codes.find(token);
+   if(hit==codes.end())return false;
+   instruction.kind=4;
+   instruction.opcode=hit->second;
+  }
+  instructions.push_back(instruction);
+ }
  output.tokens=std::move(tokens);
+ output.instructions=std::move(instructions);
  output.numeric_constants=std::move(constants);
  output.operator_codes=std::move(codes);
  return true;
