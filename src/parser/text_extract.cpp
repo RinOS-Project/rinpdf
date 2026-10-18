@@ -67,6 +67,27 @@ bool cid_text_advance(const std::string& bytes,const PageFont& font,
  advance=units*hz;
  return std::isfinite(advance)&&std::abs(advance)<=1e12;
 }
+// Identity-V advances along the vertical writing axis using W2/DW2.
+// Return a positive downward distance; v1x/v1y locate the glyph origin
+// and must not be mistaken for an additional text advance.
+bool cid_vertical_advance(const std::string& bytes,const PageFont& font,
+ double font_size,double tc,double& advance){
+ if(font.subtype!="Type0"||font.encoding!="Identity-V"||
+    bytes.size()%2||font_size<=0||!std::isfinite(font_size)||
+    !std::isfinite(tc))return false;
+ double total=0;
+ for(size_t i=0;i<bytes.size();i+=2){
+  const uint16_t cid=(uint16_t(uint8_t(bytes[i]))<<8)|uint8_t(bytes[i+1]);
+  CIDVerticalMetric metrics;
+  if(!cid_vertical_metric(font.vertical_metrics,font.cid_widths,cid,metrics)||
+     !std::isfinite(metrics.w1y)||!std::isfinite(metrics.v1x)||
+     !std::isfinite(metrics.v1y))return false;
+  total+=(-metrics.w1y)*font_size/1000.0+tc;
+  if(!std::isfinite(total)||std::abs(total)>1e12)return false;
+ }
+ advance=total;
+ return true;
+}
 bool text_advance(const std::string& bytes,const PageFont& font,
  double font_size,double tc,double tw,double hz,double& advance);
 // Calculate advances only when explicit PDF widths are available.
@@ -225,6 +246,8 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
  double pending_tj_adjustment=0;
  double text_cursor=0;
  bool text_cursor_known=true;
+ double vertical_cursor=0;
+ bool vertical_cursor_known=true;
  bool text_run_emitted=false;
  bool object_glyph_emitted=false;
  double horizontal_scale=1;
@@ -272,6 +295,18 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
   was_known=text_cursor_known;
   if(!decode_run(bytes,font,decoded))return false;
   if(decoded.empty())return true;
+  if(font.subtype=="Type0"&&font.encoding=="Identity-V"){
+   double vertical_advance=0;
+   if(vertical_cursor_known&&cid_vertical_advance(bytes,font,font_size,
+       character_spacing,vertical_advance)){
+    vertical_cursor+=vertical_advance;
+    if(!std::isfinite(vertical_cursor)||
+       std::abs(vertical_cursor)>1e12)return false;
+   }else vertical_cursor_known=false;
+   // Vertical glyph placement is not a horizontal advance.
+   text_cursor_known=false;
+   return true;
+  }
   double advance=0;
   if(text_cursor_known&&text_advance(bytes,font,font_size,
       character_spacing,word_spacing,horizontal_scale,advance)){
@@ -512,7 +547,8 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
     }
    }
    if(operands[1]!=0&&!suppressed)new_line_pending=true;
-   text_cursor=0;text_cursor_known=true;text_run_emitted=false;
+   text_cursor=0;text_cursor_known=true;
+   vertical_cursor=0;vertical_cursor_known=true;text_run_emitted=false;
    if(t.value=="TD")text_leading=-operands[1];
    // Td/TD operate in the current text-line coordinate system.
    const double dx=operands[0],dy=operands[1];
@@ -588,7 +624,8 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
     }
    }
    cross_object_pending=false;
-   text_cursor=0;text_cursor_known=true;text_run_emitted=false;
+   text_cursor=0;text_cursor_known=true;
+   vertical_cursor=0;vertical_cursor_known=true;text_run_emitted=false;
    text_line_x=next_x;text_line_y=next_y;
    line_axis_x=operands[0]/next_length;
    line_axis_y=operands[1]/next_length;
@@ -601,13 +638,15 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
    text=true;object_glyph_emitted=false;operands.clear();has_line_origin=false;
    pending_tj_adjustment=0;text_run_emitted=false;
    text_cursor=0;text_cursor_known=true;
+   vertical_cursor=0;vertical_cursor_known=true;
    text_line_x=0;text_line_y=0;line_axis_x=1;line_axis_y=0;
    line_a=1;line_b=0;line_c=0;line_d=1;
    cross_object_pending=previous_end_valid;continue;}
   if(t.value=="T*"&&text){
    if(have_pending||!operands.empty())return false;
    // Move to the next line's origin, not the prior line's glyph cursor.
-   text_cursor=0;text_cursor_known=true;text_run_emitted=false;
+   text_cursor=0;text_cursor_known=true;
+   vertical_cursor=0;vertical_cursor_known=true;text_run_emitted=false;
    text_line_x-=line_c*text_leading;
    text_line_y-=line_d*text_leading;
    if(!std::isfinite(text_line_x)||!std::isfinite(text_line_y)||
@@ -660,6 +699,7 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
     pending_tj_adjustment=0;
     text_run_emitted=false;
     text_cursor=0;text_cursor_known=true;
+   vertical_cursor=0;vertical_cursor_known=true;
     if(!suppressed)new_line_pending=true;
    }
    if(!suppressed){
