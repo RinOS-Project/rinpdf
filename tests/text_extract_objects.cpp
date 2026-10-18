@@ -11,7 +11,7 @@ static std::string make_pdf(const std::string& content,bool missing_b_width=fals
   pdf+=std::to_string(id)+" 0 obj\n"+body+"\nendobj\n";
  };
  obj(1,"<< /Type /Catalog /Pages 2 0 R >>");
- obj(2,"<< /Type /Pages /Count 1 /Kids [3 0 R] /Resources << /Font << /F1 4 0 R >> >> >>");
+ obj(2,"<< /Type /Pages /Count 1 /Kids [3 0 R] /Resources << /Font << /F1 4 0 R /F2 4 0 R >> >> >>");
  obj(3,"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 5 0 R >>");
  obj(4,missing_b_width?
   "<< /Type /Font /Subtype /TrueType /BaseFont /Example /Encoding /WinAnsiEncoding /FirstChar 65 /LastChar 65 /Widths [600] /ToUnicode 6 0 R >>":
@@ -94,5 +94,13 @@ int main(){
  if(extract_page_text(reinterpret_cast<const uint8_t*>(overflowing.data()),
       overflowing.size(),0,retained))return 15;
  if(retained!="unchanged")return 16;
+ // Changing fonts within a text object must retain glyph advances and
+ // classify TJ spacing using the position before the following glyph.
+ if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm <41> Tj "
+           "/F2 20 Tf [ -600 <42>] TJ ET","A B"))return 17;
+ if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm <41> Tj "
+           "/F2 20 Tf [ -300 <42>] TJ ET","AB"))return 18;
+ if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm <41> Tj "
+           "/F2 20 Tf [ -600 <42>] TJ <41> Tj ET","A BA"))return 19;
  return 0;
 }
