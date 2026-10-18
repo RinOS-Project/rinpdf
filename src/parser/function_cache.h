@@ -1,5 +1,6 @@
 #pragma once
 #include "value.h"
+#include "function.h"
 #include "stream_object.h"
 #include <array>
 #include <cstddef>
@@ -19,11 +20,7 @@ struct CachedStitch {
  std::vector<double> bounds;
  std::vector<double> encode;
 };
-struct CachedExponent {
- double exponent=1;
- std::array<double,4> c0{{0,0,0,0}};
- std::array<double,4> c1{{1,1,1,1}};
-};
+using CachedExponent = ExponentialFunction;
 struct CachedSample {
  size_t count=0;
  unsigned bits=0;
