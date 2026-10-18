@@ -334,13 +334,15 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      const unsigned iy=std::min(im.height-1,unsigned((1-v)*im.height));
      const size_t source=(size_t(iy)*im.width+ix)*im.channels;
      const size_t target=size_t(py)*stride+size_t(px)*4;
-     const unsigned opacity=im.alpha.empty()?255:
-       im.alpha[size_t(iy)*im.width+ix];
+     const unsigned opacity=im.stencil?
+       im.pixels[size_t(iy)*im.width+ix]:
+       (im.alpha.empty()?255:im.alpha[size_t(iy)*im.width+ix]);
      if(!opacity)continue;
      // Source-over on the renderer's opaque page buffer.
      for(unsigned channel=0;channel<3;++channel){
-      const unsigned src=im.pixels[source+
-         (im.channels==3?channel:0)];
+      const unsigned src=im.stencil?
+         unsigned(std::lround((channel==0?red:channel==1?green:blue)*255)):
+         im.pixels[source+(im.channels==3?channel:0)];
       const unsigned dst=rgba[target+channel];
       rgba[target+channel]=uint8_t(
         (src*opacity+dst*(255-opacity)+127)/255);
