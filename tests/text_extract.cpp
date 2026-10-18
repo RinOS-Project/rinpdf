@@ -249,6 +249,24 @@ int main(){
       same_line_td.size(),0,result))return 77;
  if(result!=spaced_expected)return 78;
  result=previous;
+ // Two identity-matrix Tm positions on the same baseline can have
+ // a visible gap even when no TJ displacement is present.
+ std::string same_line_tm=pdf;
+ const std::string td_before="0 -16 Td";
+ const std::string td_after="0   0 Td";
+ const std::string tm_before="1 0 0 1 0 30 Tm";
+ const std::string tm_after="1 0 0 1 90 0 Tm";
+ static_assert(sizeof("0 -16 Td")==sizeof("0   0 Td"));
+ static_assert(sizeof("1 0 0 1 0 30 Tm")==sizeof("1 0 0 1 90 0 Tm"));
+ const auto td_at=same_line_tm.find(td_before);
+ const auto tm_at=same_line_tm.find(tm_before);
+ if(td_at==std::string::npos||tm_at==std::string::npos)return 79;
+ same_line_tm.replace(td_at,td_before.size(),td_after);
+ same_line_tm.replace(tm_at,tm_before.size(),tm_after);
+ if(!extract_page_text(reinterpret_cast<const uint8_t*>(same_line_tm.data()),
+      same_line_tm.size(),0,result))return 80;
+ if(result.find("ABB\\nBB B\\n")==std::string::npos)return 81;
+ result=previous;
  // The UTF-16BE ActualText payload must reject lone low surrogates.
  // Replace equal-length hex digits so all xref offsets remain valid.
  std::string unpaired_low=pdf;
