@@ -985,6 +985,42 @@ struct Reader {
      if(!std::isfinite(value)||stack.size()>=64)return false;
      stack.push_back(value);continue;
     }
+    if(token=="true"||token=="false"){
+     if(stack.size()>=64)return false;
+     stack.push_back(token=="true"?1.0:0.0);continue;
+    }
+    if(token=="copy"){
+     if(stack.empty())return false;
+     const double n=stack.back();stack.pop_back();
+     if(n<0||n!=std::floor(n)||n>double(stack.size())||
+        stack.size()+size_t(n)>64)return false;
+     const size_t count=size_t(n);
+     stack.insert(stack.end(),stack.end()-count,stack.end());
+     continue;
+    }
+    if(token=="index"){
+     if(stack.empty())return false;
+     const double n=stack.back();stack.pop_back();
+     if(n<0||n!=std::floor(n)||n>=double(stack.size())||
+        stack.size()>=64)return false;
+     stack.push_back(stack[stack.size()-1-size_t(n)]);
+     continue;
+    }
+    if(token=="roll"){
+     if(stack.size()<2)return false;
+     const double shift=stack.back();stack.pop_back();
+     const double n=stack.back();stack.pop_back();
+     if(n<0||n!=std::floor(n)||n>double(stack.size())||
+        shift!=std::trunc(shift)||!std::isfinite(shift))return false;
+     const size_t count=size_t(n);
+     if(count){
+      const long long distance=static_cast<long long>(std::fmod(
+         shift,double(count)));
+      const size_t right=size_t((distance+long long(count))%long long(count));
+      std::rotate(stack.end()-count,stack.end()-right,stack.end());
+     }
+     continue;
+    }
     if(token=="dup"){
      if(stack.empty()||stack.size()>=64)return false;
      stack.push_back(stack.back());continue;
@@ -1019,6 +1055,24 @@ struct Reader {
       lhs/=rhs;
      }else if(token=="min")lhs=std::min(lhs,rhs);
      else lhs=std::max(lhs,rhs);
+    }else if(token=="eq"||token=="ne"||token=="gt"||
+             token=="ge"||token=="lt"||token=="le"||
+             token=="and"||token=="or"||token=="xor"){
+     if(stack.size()<2)return false;
+     const double rhs=stack.back();stack.pop_back();
+     double& lhs=stack.back();
+     if(token=="eq")lhs=lhs==rhs;
+     else if(token=="ne")lhs=lhs!=rhs;
+     else if(token=="gt")lhs=lhs>rhs;
+     else if(token=="ge")lhs=lhs>=rhs;
+     else if(token=="lt")lhs=lhs<rhs;
+     else if(token=="le")lhs=lhs<=rhs;
+     else if(token=="and")lhs=(lhs!=0&&rhs!=0);
+     else if(token=="or")lhs=(lhs!=0||rhs!=0);
+     else lhs=(lhs!=0)!=(rhs!=0);
+    }else if(token=="not"){
+     if(stack.empty())return false;
+     stack.back()=stack.back()==0?1:0;
     }else return false;
     if(stack.empty()||!std::isfinite(stack.back())||
        std::abs(stack.back())>1e12)return false;
