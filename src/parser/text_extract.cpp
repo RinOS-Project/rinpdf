@@ -447,7 +447,21 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
     else text_leading=v;
    }else{
     if(v<0||v>1000)return false;
-    horizontal_scale=v/100.0;
+    const double next_scale=v/100.0;
+    // A trailing TJ gap was applied at the previous horizontal scale.
+    // Keep its physical displacement when changing Tz. Zero scaling
+    // cannot represent a finite gap in em units, so discard inference.
+    if(pending_tj_adjustment!=0){
+     if(next_scale==0||horizontal_scale==0)
+      pending_tj_adjustment=0;
+     else{
+      const double adjusted=pending_tj_adjustment*
+                            horizontal_scale/next_scale;
+      if(!std::isfinite(adjusted)||std::abs(adjusted)>1e12)return false;
+      pending_tj_adjustment=adjusted;
+     }
+    }
+    horizontal_scale=next_scale;
    }
    operands.clear();continue;
   }
