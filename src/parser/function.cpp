@@ -28,11 +28,29 @@ bool evaluate_exponential_function(const ExponentialFunction& function,
  return true;
 }
 
+// Local cubic interpolation on the sampled grid. Endpoints are extended
+// by replication to avoid reads outside the declared sample table.
+static void sample_kernel(unsigned order,double t,double* weights) noexcept {
+ if(order==1){weights[0]=1-t;weights[1]=t;return;}
+ const double t2=t*t,t3=t2*t;
+ weights[0]=-0.5*t+t2-0.5*t3;
+ weights[1]=1-2.5*t2+1.5*t3;
+ weights[2]=0.5*t+2*t2-1.5*t3;
+ weights[3]=-0.5*t2+0.5*t3;
+}
+static size_t sample_neighbor(size_t base,unsigned offset,size_t count,
+                              unsigned order) noexcept {
+ if(order==1)return std::min(base+size_t(offset),count-1);
+ if(offset==0)return base?base-1:0;
+ return std::min(base+size_t(offset-1),count-1);
+}
+
 bool evaluate_sampled_function(const SampledFunction& function,
                                const std::vector<uint8_t>& samples,
                                double input,double* result) noexcept {
  const unsigned bits=function.bits, outputs=function.outputs;
  if(!result||outputs<1||outputs>4||function.count<2||
+    (function.order!=1&&function.order!=3)||
     (bits!=1&&bits!=2&&bits!=4&&bits!=8&&bits!=12&&
      bits!=16&&bits!=24&&bits!=32)||
     !std::isfinite(input)||!std::isfinite(function.domain[0])||
@@ -70,8 +88,13 @@ bool evaluate_sampled_function(const SampledFunction& function,
   const double d0=function.decode[2*j],d1=function.decode[2*j+1];
   if(!std::isfinite(lo)||!std::isfinite(hi)||lo>hi||
      !std::isfinite(d0)||!std::isfinite(d1))return false;
-  const double v=(1-fraction)*sample_at(index*outputs+j)+
-                 fraction*sample_at(next*outputs+j);
+  double weights[4]{};
+  sample_kernel(function.order,fraction,weights);
+  double v=0;
+  for(unsigned k=0;k<(function.order==3?4u:2u);++k){
+   const size_t neighbor=sample_neighbor(index,k,function.count,function.order);
+   v+=weights[k]*sample_at(neighbor*outputs+j);
+  }
   computed[j]=std::clamp(d0+v*(d1-d0),lo,hi);
   if(!std::isfinite(computed[j]))return false;
  }
@@ -84,7 +107,7 @@ bool evaluate_multidimensional_sampled_function(
  const std::vector<uint8_t>& samples,const double* inputs,
  double* result) noexcept {
  if(!inputs||!result||f.inputs<1||f.inputs>4||
-    f.outputs<1||f.outputs>4||
+    f.outputs<1||f.outputs>4||(f.order!=1&&f.order!=3)||
     (f.bits!=1&&f.bits!=2&&f.bits!=4&&f.bits!=8&&
      f.bits!=12&&f.bits!=16&&f.bits!=24&&f.bits!=32))return false;
  size_t grid=1;
@@ -114,14 +137,21 @@ bool evaluate_multidimensional_sampled_function(
  if(total_bits/8>samples.size()||((total_bits+7)/8)>samples.size())
   return false;
  std::array<double,4> computed{};
- for(unsigned corner=0;corner<(1u<<f.inputs);++corner){
+ const unsigned taps=f.order==3?4:2;
+ double weights[4][4]{};
+ for(unsigned d=0;d<f.inputs;++d)
+  sample_kernel(f.order,fraction[d],weights[d]);
+ unsigned corners=1;
+ for(unsigned d=0;d<f.inputs;++d)corners*=taps;
+ for(unsigned corner=0;corner<corners;++corner){
   size_t index=0;
   double weight=1;
   for(unsigned d=0;d<f.inputs;++d){
-   const bool upper=(corner&(1u<<d))!=0;
-   const bool advance=upper&&lower[d]+1<f.sizes[d];
-   index+=(lower[d]+size_t(advance))*stride[d];
-   weight*=upper?fraction[d]:1-fraction[d];
+   unsigned tap=corner;
+   for(unsigned j=0;j<d;++j)tap/=taps;
+   tap%=taps;
+   index+=sample_neighbor(lower[d],tap,f.sizes[d],f.order)*stride[d];
+   weight*=weights[d][tap];
   }
   if(weight==0)continue;
   for(unsigned c=0;c<f.outputs;++c){
@@ -744,7 +774,8 @@ bool compile_multidimensional_pdf_function(
  const MultidimensionalSampledFunction& parameters,
  const std::vector<uint8_t>& decoded_samples,PdfFunction& output) {
  if(parameters.inputs<1||parameters.inputs>4||
-    parameters.outputs<1||parameters.outputs>4)return false;
+    parameters.outputs<1||parameters.outputs>4||
+    (parameters.order!=1&&parameters.order!=3))return false;
  size_t count=1;
  for(unsigned i=0;i<parameters.inputs;++i){
   if(parameters.sizes[i]<2||parameters.sizes[i]>4096||
@@ -785,7 +816,8 @@ bool compile_sampled_pdf_function(const SampledFunction& parameters,
                                   const std::vector<uint8_t>& decoded_samples,
                                   PdfFunction& output) {
  if(!pdf_function_limits(parameters.outputs,parameters.domain[0],
-                         parameters.domain[1],parameters.range))return false;
+                         parameters.domain[1],parameters.range)||
+    (parameters.order!=1&&parameters.order!=3))return false;
  size_t bytes=0;
  if(parameters.count<2||parameters.count>4096||
     !sampled_byte_count(parameters.count,parameters.outputs,
