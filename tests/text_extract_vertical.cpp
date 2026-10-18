@@ -4,7 +4,7 @@
 #include <string>
 using namespace rinpdf::parser;
 int main(){
- const std::string content="BT /F1 10 Tf [<0041> -200 <0042>] TJ ET";
+ const std::string content="BT /F1 10 Tf [<0041> -200] TJ 1 0 0 1 20 0 Tm <0042> Tj ET";
  const std::string cmap="2 beginbfchar <0041> <65E5> <0042> <672C> endbfchar";
  std::string pdf="%PDF-1.5\n";
  size_t offsets[8]{};
@@ -41,6 +41,6 @@ int main(){
  std::string extracted;
  if(!extract_page_text(reinterpret_cast<const uint8_t*>(pdf.data()),
       pdf.size(),0,extracted))return 4;
- if(extracted!="日本")return 5;
+ if(extracted!="日\n本")return 5;
  return 0;
 }
