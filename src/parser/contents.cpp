@@ -396,7 +396,7 @@ struct Reader {
          subtype->kind!=Value::Kind::Name||base->kind!=Value::Kind::Name){
        return false;
       }
-      PageFont out{base->text,subtype->text,"",{}};
+      out=PageFont{base->text,subtype->text,"",{}};
       if(!parse_font_encoding(font,out)){return false;}
       if(out.subtype!="Type0"){
        const Value* first=get(font,"FirstChar");
