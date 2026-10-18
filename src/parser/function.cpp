@@ -75,4 +75,27 @@ bool evaluate_sampled_function(const SampledFunction& function,
  return true;
 }
 
+bool map_stitching_input(const std::vector<double>& bounds,
+                         const std::vector<double>& encode,
+                         double input,size_t& segment,
+                         double& mapped_input) noexcept {
+ if(!std::isfinite(input)||bounds.size()<2||bounds.size()>33||
+    encode.size()!=(bounds.size()-1)*2)return false;
+ for(size_t i=0;i<bounds.size();++i){
+  if(!std::isfinite(bounds[i])||(i>0&&bounds[i]<=bounds[i-1]))
+   return false;
+ }
+ for(double v:encode)if(!std::isfinite(v))return false;
+ const double clamped=std::clamp(input,bounds.front(),bounds.back());
+ const auto it=std::upper_bound(bounds.begin()+1,bounds.end()-1,clamped);
+ const size_t selected=size_t(it-(bounds.begin()+1));
+ const double left=bounds[selected],right=bounds[selected+1];
+ const double e0=encode[2*selected],e1=encode[2*selected+1];
+ const double mapped=e0+(clamped-left)/(right-left)*(e1-e0);
+ if(!std::isfinite(mapped))return false;
+ segment=selected;
+ mapped_input=mapped;
+ return true;
+}
+
 } // namespace rinpdf::parser
