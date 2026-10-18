@@ -23,10 +23,10 @@ struct PageFont {
  CIDVerticalMetrics vertical_metrics;
  std::string language;
 };
-struct PageForm {std::vector<uint8_t> content; double bbox[4]{0,0,0,0}; double matrix[6]{1,0,0,1,0,0}; bool own_resources=false; std::map<std::string,std::string> xobject_aliases; std::map<std::string,PageForm> local_forms;};
+struct PageImage {unsigned width=0,height=0,channels=0;std::vector<uint8_t> pixels;std::vector<uint8_t> alpha;};
+struct PageForm {std::vector<uint8_t> content; double bbox[4]{0,0,0,0}; double matrix[6]{1,0,0,1,0,0}; bool own_resources=false; std::map<std::string,std::string> xobject_aliases; std::map<std::string,PageForm> local_forms; std::map<std::string,PageImage> local_images;};
 bool read_page_forms(const uint8_t* data,size_t size,size_t page_index,
  std::map<std::string,PageForm>& forms);
-struct PageImage {unsigned width=0,height=0,channels=0;std::vector<uint8_t> pixels;std::vector<uint8_t> alpha;};
 bool read_page_images(const uint8_t* data,size_t size,size_t page_index,
  std::map<std::string,PageImage>& images);
 struct PageProperty {std::string language; std::string actual_text; bool has_actual_text=false;};
