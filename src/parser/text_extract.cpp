@@ -469,6 +469,27 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
        (next_y-text_line_y)*line_axis_x/old_length;
    if(has_line_origin&&std::abs(displacement_normal)>0.001&&!suppressed)
     new_line_pending=true;
+   // A new identity Tm can move to the right of the previous glyph
+   // endpoint without a TJ gap. Compare absolute line positions.
+   if(!suppressed&&has_line_origin&&text_run_emitted&&text_cursor_known&&
+      !new_line_pending&&font_size>0&&horizontal_scale>0&&
+      line_a==1&&line_b==0&&line_c==0&&line_d==1&&
+      operands[0]==1&&operands[1]==0&&
+      operands[2]==0&&operands[3]==1&&
+      std::abs(next_y-text_line_y)<=0.001&&
+      !output.empty()&&output.back()!=' '&&output.back()!='\n'){
+    const auto font_it=fonts.find(selected);
+    if(font_it!=fonts.end()){
+     const double threshold=font_size*horizontal_scale*
+        tj_space_threshold(font_it->second)/1000.0;
+     const double gap=next_x-(text_line_x+text_cursor);
+     if(std::isfinite(gap)&&std::isfinite(threshold)&&threshold>0&&
+        gap>=threshold){
+      if(output.size()>=4*1024*1024)return false;
+      output+=' ';
+     }
+    }
+   }
    text_line_x=next_x;text_line_y=next_y;
    line_axis_x=operands[0]/next_length;
    line_axis_y=operands[1]/next_length;
