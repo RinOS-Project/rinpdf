@@ -208,6 +208,7 @@ struct Reader {
       bool separation=false;
       unsigned device_inputs=1;
       bool sampled_tint=false;
+      PdfFunction compiled_tint;
       bool recursive_stitch=false;
       Value stitch_function;
       struct StitchPart {
@@ -435,7 +436,26 @@ struct Reader {
         if(!decode_stream(data,size,function_range,tint_samples,
                           size_t(byte_count))||
            tint_samples.size()!=size_t(byte_count))return false;
-        sampled_tint=true;
+        MultidimensionalSampledFunction sampled_parameters;
+       sampled_parameters.inputs=device_inputs;
+       sampled_parameters.outputs=tint_channels;
+       sampled_parameters.bits=tint_sample_bits;
+       for(unsigned d=0;d<device_inputs;++d){
+        sampled_parameters.sizes[d]=tint_sizes[d];
+        sampled_parameters.domain[2*d]=tint_domain[2*d];
+        sampled_parameters.domain[2*d+1]=tint_domain[2*d+1];
+        sampled_parameters.encode[2*d]=tint_encode[2*d];
+        sampled_parameters.encode[2*d+1]=tint_encode[2*d+1];
+       }
+       for(unsigned c=0;c<tint_channels;++c){
+        sampled_parameters.decode[2*c]=tint_decode[2*c];
+        sampled_parameters.decode[2*c+1]=tint_decode[2*c+1];
+        sampled_parameters.range[2*c]=tint_range[2*c];
+        sampled_parameters.range[2*c+1]=tint_range[2*c+1];
+       }
+       if(!compile_multidimensional_pdf_function(
+            sampled_parameters,tint_samples,compiled_tint))return false;
+       sampled_tint=true;
        }else if(type->integer==4){
         if(device_inputs!=1)return false;
         double probe[4]{};
@@ -665,28 +685,11 @@ struct Reader {
        for(size_t i=0;i<size_t(image.width)*image.height;++i){
         double values[4]{};
         if(sampled_tint){
-         MultidimensionalSampledFunction function;
-         function.inputs=device_inputs;
-         function.outputs=tint_channels;
-         function.bits=tint_sample_bits;
-         for(unsigned d=0;d<device_inputs;++d){
-          function.sizes[d]=tint_sizes[d];
-          function.domain[2*d]=tint_domain[2*d];
-          function.domain[2*d+1]=tint_domain[2*d+1];
-          function.encode[2*d]=tint_encode[2*d];
-          function.encode[2*d+1]=tint_encode[2*d+1];
-         }
-         for(unsigned c=0;c<tint_channels;++c){
-          function.decode[2*c]=tint_decode[2*c];
-          function.decode[2*c+1]=tint_decode[2*c+1];
-          function.range[2*c]=tint_range[2*c];
-          function.range[2*c+1]=tint_range[2*c+1];
-         }
          double inputs[4]{};
          for(unsigned d=0;d<device_inputs;++d)
           inputs[d]=double(image.pixels[i*device_inputs+d])/255;
-         if(!evaluate_multidimensional_sampled_function(
-                function,tint_samples,inputs,values))return false;
+         if(!evaluate_pdf_function_inputs(
+                compiled_tint,inputs,device_inputs,values))return false;
         }else if(recursive_stitch){
          if(!eval_tint_function(stitch_function,
               double(image.pixels[i])/255,tint_channels,values))
