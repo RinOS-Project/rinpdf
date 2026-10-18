@@ -107,5 +107,17 @@ int main(){
  if(!extract_page_text(reinterpret_cast<const uint8_t*>(line_move.data()),
       line_move.size(),0,line_text))return 12;
  if(line_text!="日本")return 13;
+ // Unlike the in-column movement above, a Td perpendicular to the
+ // Identity-V writing axis starts another column.
+ std::string other_column=pdf;
+ const std::string column_move="20 0 Td         ";
+ static_assert(sizeof("1 0 0 1 20 0 Tm")==sizeof("20 0 Td         "));
+ const auto column_at=other_column.find(from);
+ if(column_at==std::string::npos)return 14;
+ other_column.replace(column_at,from.size(),column_move);
+ std::string column_text;
+ if(!extract_page_text(reinterpret_cast<const uint8_t*>(other_column.data()),
+      other_column.size(),0,column_text))return 15;
+ if(column_text!="日\n本")return 16;
  return 0;
 }
