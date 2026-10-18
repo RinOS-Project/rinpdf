@@ -234,6 +234,17 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      const auto& fm=form->second;
      auto number_text=[](double value){return std::to_string(value);};
      std::string stream="q ";
+     // Form XObjects inherit the caller's graphics state. The recursive
+     // renderer starts fresh, so serialize supported state explicitly.
+     for(double v:{red,green,blue})stream+=number_text(v)+" ";
+     stream+="rg ";
+     for(double v:{stroke_red,stroke_green,stroke_blue})
+      stream+=number_text(v)+" ";
+     stream+="RG ";
+     stream+=number_text(line_width)+" w ";
+     stream+=std::to_string(line_cap)+" J ";
+     stream+=std::to_string(line_join)+" j ";
+     stream+=number_text(miter_limit)+" M ";
      for(double v:{a,bx,cx,d,e,f})stream+=number_text(v)+" ";
      stream+="cm ";
      for(double v:fm.matrix)stream+=number_text(v)+" ";
