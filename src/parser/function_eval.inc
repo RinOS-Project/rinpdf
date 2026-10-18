@@ -62,94 +62,62 @@
      high<=low)return false;
   x=std::clamp(x,low,high);
   if(type->integer==0){
-   // Sampled subfunctions inside stitching functions have one input.
-   // Decode packed samples and interpolate the two neighboring entries.
-   if(!has_sampled_stream)return false;
-   const Value* sizes=get(function,"Size");
-   const Value* bits=get(function,"BitsPerSample");
-   const Value* encode=get(function,"Encode");
-   const Value* decode=get(function,"Decode");
-   const Value* range=get(function,"Range");
-   if(!sizes||sizes->kind!=Value::Kind::Array||sizes->array.size()!=1||
-      sizes->array[0].kind!=Value::Kind::Integer||
-      sizes->array[0].integer<2||sizes->array[0].integer>4096||
-      !bits||bits->kind!=Value::Kind::Integer||
-      (bits->integer!=1&&bits->integer!=2&&bits->integer!=4&&
-       bits->integer!=8&&bits->integer!=12&&bits->integer!=16&&
-       bits->integer!=24&&bits->integer!=32)||
-      !range||range->kind!=Value::Kind::Array||
-      range->array.size()!=2*outputs)return false;
-   const size_t count=size_t(sizes->array[0].integer);
-   const unsigned bps=unsigned(bits->integer);
-   const size_t bytes=(count*outputs*bps+7)/8;
-   if(bytes>4*1024*1024)return false;
-   // Keep decoded sample grids across evaluations, including non-byte-
-   // aligned inputs reached through stitching functions.
-   if(reference.kind!=Value::Kind::Reference)return false;
-   const auto sample_key=std::make_pair(reference.integer,reference.generation);
-   const std::vector<uint8_t>* samples=nullptr;
-   std::vector<uint8_t> uncached_samples;
-   auto hit=sampled_function_cache.find(sample_key);
-   if(hit!=sampled_function_cache.end()){
-    if(hit->second.size()!=bytes)return false;
-    samples=&hit->second;
-   }else{
-    if(!decode_stream(data,size,sampled_stream,uncached_samples,bytes)||
-       uncached_samples.size()!=bytes)return false;
-    if(bytes<=8*1024*1024-sampled_function_cache_bytes&&
-       sampled_function_cache.size()<64){
-     sampled_function_cache_bytes+=bytes;
-     auto inserted=sampled_function_cache.emplace(
-       sample_key,std::move(uncached_samples));
-     samples=&inserted.first->second;
-    }else samples=&uncached_samples;
-   }
-   CachedSample local_params;
-   const CachedSample* params=nullptr;
-   const auto param_key=std::make_tuple(reference.integer,
-                                        reference.generation,outputs);
-   const auto found=sample_parameter_cache.find(param_key);
-   if(found!=sample_parameter_cache.end()){
-    params=&found->second;
-   }else{
-    local_params.count=count;
-    local_params.bits=bps;
-    local_params.encode[0]=0;
-    local_params.encode[1]=double(count-1);
+   if(!has_sampled_stream||reference.kind!=Value::Kind::Reference)return false;
+   const auto key=std::make_tuple(reference.integer,reference.generation,outputs);
+   PdfFunction local;
+   const PdfFunction* compiled=nullptr;
+   const auto hit=compiled_sample_cache.find(key);
+   if(hit!=compiled_sample_cache.end())compiled=&hit->second;
+   else{
+    const Value* sizes=get(function,"Size");
+    const Value* bits=get(function,"BitsPerSample");
+    const Value* encode=get(function,"Encode");
+    const Value* decode=get(function,"Decode");
+    const Value* range=get(function,"Range");
+    if(!sizes||sizes->kind!=Value::Kind::Array||sizes->array.size()!=1||
+       sizes->array[0].kind!=Value::Kind::Integer||
+       sizes->array[0].integer<2||sizes->array[0].integer>4096||
+       !bits||bits->kind!=Value::Kind::Integer||
+       (bits->integer!=1&&bits->integer!=2&&bits->integer!=4&&
+        bits->integer!=8&&bits->integer!=12&&bits->integer!=16&&
+        bits->integer!=24&&bits->integer!=32)||
+       !range||range->kind!=Value::Kind::Array||
+       range->array.size()!=outputs*2)return false;
+    SampledFunction parameters;
+    parameters.count=size_t(sizes->array[0].integer);
+    parameters.bits=unsigned(bits->integer);
+    parameters.outputs=outputs;
+    parameters.domain[0]=low;parameters.domain[1]=high;
+    parameters.encode[0]=0;
+    parameters.encode[1]=double(parameters.count-1);
     if(encode){
      if(encode->kind!=Value::Kind::Array||encode->array.size()!=2||
-        !number(encode->array[0],local_params.encode[0])||
-        !number(encode->array[1],local_params.encode[1]))return false;
+        !number(encode->array[0],parameters.encode[0])||
+        !number(encode->array[1],parameters.encode[1]))return false;
     }
     if(decode&&(decode->kind!=Value::Kind::Array||
                 decode->array.size()!=outputs*2))return false;
-    for(unsigned c=0;c<outputs;++c){
-     double r0=0,r1=0;
-     if(!number(range->array[2*c],r0)||
-        !number(range->array[2*c+1],r1)||r0>r1)return false;
-     local_params.range[2*c]=r0;
-     local_params.range[2*c+1]=r1;
-     local_params.decode[2*c]=r0;
-     local_params.decode[2*c+1]=r1;
-     if(decode&&(!number(decode->array[2*c],local_params.decode[2*c])||
-                 !number(decode->array[2*c+1],local_params.decode[2*c+1])))
+    for(unsigned j=0;j<outputs;++j){
+     if(!number(range->array[2*j],parameters.range[2*j])||
+        !number(range->array[2*j+1],parameters.range[2*j+1])||
+        parameters.range[2*j]>parameters.range[2*j+1])return false;
+     parameters.decode[2*j]=parameters.range[2*j];
+     parameters.decode[2*j+1]=parameters.range[2*j+1];
+     if(decode&&(!number(decode->array[2*j],parameters.decode[2*j])||
+                 !number(decode->array[2*j+1],parameters.decode[2*j+1])))
       return false;
     }
-    if(sample_parameter_cache.size()<128)
-     params=&sample_parameter_cache.emplace(param_key,local_params).first->second;
-    else params=&local_params;
+    const size_t byte_count=(parameters.count*outputs*parameters.bits+7)/8;
+    if(byte_count>4*1024*1024)return false;
+    std::vector<uint8_t> samples;
+    if(!decode_stream(data,size,sampled_stream,samples,byte_count)||
+       samples.size()!=byte_count||
+       !compile_sampled_pdf_function(parameters,samples,local))return false;
+    if(compiled_sample_cache.size()<64)
+     compiled=&compiled_sample_cache.emplace(key,std::move(local)).first->second;
+    else compiled=&local;
    }
-   SampledFunction sampled;
-   sampled.count=params->count;
-   sampled.bits=params->bits;
-   sampled.outputs=outputs;
-   sampled.domain[0]=low;
-   sampled.domain[1]=high;
-   sampled.encode[0]=params->encode[0];
-   sampled.encode[1]=params->encode[1];
-   sampled.decode=params->decode;
-   sampled.range=params->range;
-   if(!evaluate_sampled_function(sampled,*samples,x,result))return false;
+   if(!evaluate_pdf_function(*compiled,x,result))return false;
   }else if(type->integer==4){
    // Compile Type 4 once per object and output arity, then reuse the
    // common PdfFunction evaluation path across all image pixels.
