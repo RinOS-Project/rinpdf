@@ -81,5 +81,10 @@ int main(){
  if(!extract_page_text(reinterpret_cast<const uint8_t*>(reset_pdf.data()),
       reset_pdf.size(),0,reset_result))return 12;
  if(reset_result!="A BA")return 13;
+ // Position-only Tm commands before the first glyph should not create
+ // a newline, even if the final baseline has sub-glyph positioning jitter.
+ if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm <41> Tj ET "
+           "BT /F1 10 Tf 1 0 0 1 8 0 Tm "
+           "1 0 0 1 8 0.5 Tm <42> Tj ET","AB"))return 14;
  return 0;
 }
