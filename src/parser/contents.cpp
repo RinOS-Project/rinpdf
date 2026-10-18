@@ -195,6 +195,8 @@ struct Reader {
       bool indexed=false;
       unsigned icc_channels=0;
       unsigned calibrated=0;
+      bool lab=false;
+      double lab_range[4]{-100,100,-100,100};
       double cal_gamma[3]{1,1,1};
       double cal_matrix[9]{1,0,0,0,1,0,0,0,1};
       // Initially support D65-calibrated spaces with the default zero
@@ -250,6 +252,44 @@ struct Reader {
         // CalRGB identity is XYZ, not device RGB. It is converted below.
        }
       }
+      if(cs->kind==Value::Kind::Array&&cs->array.size()==2&&
+         cs->array[0].kind==Value::Kind::Name&&cs->array[0].text=="Lab"){
+       if(cs->array[1].kind!=Value::Kind::Dictionary)return false;
+       const Value& info=cs->array[1];
+       auto number=[](const Value& v,double& out){
+        if(v.kind==Value::Kind::Integer)out=double(v.integer);
+        else if(v.kind==Value::Kind::Real)out=v.real;
+        else return false;
+        return std::isfinite(out);
+       };
+       const Value* wp=get(info,"WhitePoint");
+       if(!wp||wp->kind!=Value::Kind::Array||wp->array.size()!=3)
+        return false;
+       const double d65[3]{0.95047,1,1.08883};
+       for(unsigned i=0;i<3;++i){
+        double v=0;
+        if(!number(wp->array[i],v)||std::abs(v-d65[i])>0.002)
+         return false;
+       }
+       if(const Value* bp=get(info,"BlackPoint")){
+        if(bp->kind!=Value::Kind::Array||bp->array.size()!=3)
+         return false;
+        for(const auto& v:bp->array){
+         double value=0;
+         if(!number(v,value)||std::abs(value)>1e-8)return false;
+        }
+       }
+       if(const Value* range=get(info,"Range")){
+        if(range->kind!=Value::Kind::Array||range->array.size()!=4)
+         return false;
+        for(unsigned i=0;i<4;++i)
+         if(!number(range->array[i],lab_range[i])||
+            std::abs(lab_range[i])>1000)return false;
+        if(lab_range[0]>=lab_range[1]||lab_range[2]>=lab_range[3])
+         return false;
+       }
+       lab=true;
+      }
       std::string palette;
       unsigned maximum_index=0;
       unsigned palette_channels=0;
@@ -277,7 +317,7 @@ struct Reader {
        std::vector<uint8_t> profile;
        if(!decode_stream(data,size,icc_range,profile,4*1024*1024)||
           profile.size()<128)return false;
-      }else if(cs->kind==Value::Kind::Array&&!calibrated){
+      }else if(cs->kind==Value::Kind::Array&&!calibrated&&!lab){
        if(cs->array.size()!=4||cs->array[0].kind!=Value::Kind::Name||
           cs->array[0].text!="Indexed"||
           cs->array[1].kind!=Value::Kind::Name||
@@ -304,7 +344,7 @@ struct Reader {
       if(!indexed&&bits->integer!=8&&bits->integer!=1)return false;
       if(indexed&&unsigned(maximum_index)>=(1u<<unsigned(bits->integer)))
        return false;
-      const unsigned channels=indexed?1:calibrated?calibrated:icc_channels?icc_channels:
+      const unsigned channels=indexed?1:lab?3:calibrated?calibrated:icc_channels?icc_channels:
         cs->text=="DeviceGray"?1:cs->text=="DeviceRGB"?3:
         cs->text=="DeviceCMYK"?4:0;
       if(!channels||get(range.dictionary,"Mask")||
@@ -385,7 +425,7 @@ struct Reader {
         (filter->text=="DCTDecode"||filter->text=="DCT");
       if(dct){
        // The JPEG backend only decodes native Gray/RGB samples.
-       if(indexed||calibrated||channels==4)return false;
+       if(indexed||calibrated||lab||channels==4)return false;
        // JPEG image data is compressed independently of PDF Flate filters.
        // DecodeParms predictors are not valid for this path.
        if(get(range.dictionary,"DecodeParms")||
@@ -433,6 +473,33 @@ struct Reader {
         for(unsigned c=0;c<3;++c)
          rgb[3*i+c]=uint8_t(palette[index*palette_channels+
                                      (palette_channels==1?0:c)]);
+       }
+       image.pixels=std::move(rgb);image.channels=3;
+      }else if(lab){
+       std::vector<uint8_t> rgb(size_t(image.width)*image.height*3);
+       auto convert=[](double linear){
+        linear=std::clamp(linear,0.0,1.0);
+        const double value=linear<=0.0031308?12.92*linear:
+          1.055*std::pow(linear,1.0/2.4)-0.055;
+        return uint8_t(std::lround(255*std::clamp(value,0.0,1.0)));
+       };
+       auto inverse_lab=[](double t){
+        const double delta=6.0/29.0;
+        return t>delta?t*t*t:3*delta*delta*(t-4.0/29.0);
+       };
+       for(size_t i=0;i<size_t(image.width)*image.height;++i){
+        const double L=100*double(image.pixels[3*i])/255;
+        const double aa=lab_range[0]+
+          (lab_range[1]-lab_range[0])*double(image.pixels[3*i+1])/255;
+        const double bb=lab_range[2]+
+          (lab_range[3]-lab_range[2])*double(image.pixels[3*i+2])/255;
+        const double fy=(L+16)/116;
+        const double X=0.95047*inverse_lab(fy+aa/500);
+        const double Y=inverse_lab(fy);
+        const double Z=1.08883*inverse_lab(fy-bb/200);
+        rgb[3*i]=convert(3.2406*X-1.5372*Y-0.4986*Z);
+        rgb[3*i+1]=convert(-0.9689*X+1.8758*Y+0.0415*Z);
+        rgb[3*i+2]=convert(0.0557*X-0.2040*Y+1.0570*Z);
        }
        image.pixels=std::move(rgb);image.channels=3;
       }else if(calibrated){
