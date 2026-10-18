@@ -594,15 +594,11 @@
      compiled=&stitch_function_cache.emplace(key,std::move(local)).first->second;
     else compiled=&local;
    }
-   const auto it=std::upper_bound(compiled->bounds.begin()+1,
-                                  compiled->bounds.end()-1,x);
-   const size_t segment=size_t(it-(compiled->bounds.begin()+1));
-   if(segment>=compiled->functions.size())return false;
-   const double left=compiled->bounds[segment];
-   const double right=compiled->bounds[segment+1];
-   const double e0=compiled->encode[2*segment];
-   const double e1=compiled->encode[2*segment+1];
-   const double mapped=e0+(x-left)/(right-left)*(e1-e0);
+   size_t segment=0;
+   double mapped=0;
+   if(!map_stitching_input(compiled->bounds,compiled->encode,
+                           x,segment,mapped)||
+      segment>=compiled->functions.size())return false;
    if(!eval_tint_function(compiled->functions[segment],mapped,outputs,
                           result,depth+1))return false;
   }else return false;
