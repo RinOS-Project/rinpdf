@@ -60,8 +60,17 @@ bool tokenize_calculator_function(const std::vector<uint8_t>& program,
                                   std::vector<std::string>& tokens);
 
 // An immutable, tokenized Type 4 calculator program, reusable per document.
+struct CalculatorInstruction {
+ // 0 numeric literal, 1 boolean, 2 procedure open, 3 procedure close,
+ // 4 operator.
+ uint8_t kind=0;
+ uint8_t opcode=0;
+ uint8_t numeric_kind=0;
+ double number=0;
+};
 struct CalculatorProgram {
  std::vector<std::string> tokens;
+ std::vector<CalculatorInstruction> instructions;
  // Parsed numeric constants keyed by their literal text, reused in branches.
  std::map<std::string,std::pair<double,uint8_t>> numeric_constants;
  // Prevalidated operator spellings; unsupported names are rejected at compile time.
