@@ -370,19 +370,7 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
      if(run.bytes.empty())continue;
      std::string decoded;
      if(!decode_run(run.bytes,fonts.at(selected),decoded))return false;
-     // An empty ToUnicode replacement still represents positioned glyphs.
-     // Advance the cursor even when the decoded output has no characters.
-     if(decoded.empty()){
-      double silent_advance=0;
-      if(text_cursor_known&&text_advance(run.bytes,active_font,
-          font_size,character_spacing,word_spacing,horizontal_scale,
-          silent_advance)){
-       text_cursor+=silent_advance;
-       if(!std::isfinite(text_cursor)||std::abs(text_cursor)>1e12)return false;
-      }else text_cursor_known=false;
-      net_adjustment=0;
-      continue;
-     }
+     if(decoded.empty())continue;
      double run_advance=0;
      if(text_cursor_known&&text_advance(run.bytes,active_font,
          font_size,character_spacing,word_spacing,horizontal_scale,run_advance)){
@@ -479,7 +467,8 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
    if(std::abs(dx)>1e12||std::abs(dy)>1e12)return false;
    text_line_x+=line_a*dx+line_c*dy;
    text_line_y+=line_b*dx+line_d*dy;
-   if(!std::isfinite(text_line_x)||!std::isfinite(text_line_y))return false;
+   if(!std::isfinite(text_line_x)||!std::isfinite(text_line_y)||
+      std::abs(text_line_x)>1e12||std::abs(text_line_y)>1e12)return false;
    has_line_origin=true;
    operands.clear();continue;
   }
@@ -569,7 +558,8 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
    text_cursor=0;text_cursor_known=true;text_run_emitted=false;
    text_line_x-=line_c*text_leading;
    text_line_y-=line_d*text_leading;
-   if(!std::isfinite(text_line_x)||!std::isfinite(text_line_y))return false;
+   if(!std::isfinite(text_line_x)||!std::isfinite(text_line_y)||
+      std::abs(text_line_x)>1e12||std::abs(text_line_y)>1e12)return false;
    has_line_origin=true;
    if(!suppressed)new_line_pending=true;
    continue;
@@ -612,7 +602,8 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
     // Quote operators include T*: advance by the current text leading.
     text_line_x-=line_c*text_leading;
     text_line_y-=line_d*text_leading;
-    if(!std::isfinite(text_line_x)||!std::isfinite(text_line_y))return false;
+    if(!std::isfinite(text_line_x)||!std::isfinite(text_line_y)||
+      std::abs(text_line_x)>1e12||std::abs(text_line_y)>1e12)return false;
     has_line_origin=true;
     pending_tj_adjustment=0;
     text_run_emitted=false;
