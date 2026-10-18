@@ -68,6 +68,8 @@ struct CalculatorInstruction {
  uint8_t opcode=0;
  uint8_t numeric_kind=0;
  double number=0;
+ // Matching brace instruction index, or SIZE_MAX for non-braces.
+ size_t matching_brace=SIZE_MAX;
 };
 struct CalculatorProgram {
  std::vector<std::string> tokens;
