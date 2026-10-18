@@ -211,6 +211,7 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
  double text_cursor=0;
  bool text_cursor_known=true;
  bool text_run_emitted=false;
+ bool object_glyph_emitted=false;
  double horizontal_scale=1;
  std::vector<double> operands;
  double text_line_x=0,text_line_y=0;
@@ -394,6 +395,7 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
      output+=decoded;
      emitted_run=true;
      text_run_emitted=true;
+     object_glyph_emitted=true;
      net_adjustment=0;
     }
     pending_tj_adjustment=net_adjustment;
@@ -540,7 +542,7 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
    operands.clear();continue;
   }
   if(t.value=="BT"){if(text||have_pending||!operands.empty())return false;
-   text=true;operands.clear();has_line_origin=false;
+   text=true;object_glyph_emitted=false;operands.clear();has_line_origin=false;
    pending_tj_adjustment=0;text_run_emitted=false;
    text_cursor=0;text_cursor_known=true;
    text_line_x=0;text_line_y=0;line_axis_x=1;line_axis_y=0;
@@ -558,8 +560,8 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
    continue;
   }
   if(t.value=="ET"){if(!text||have_pending||!operands.empty())return false;
-   if(text_run_emitted){
-    if(has_line_origin&&text_cursor_known){
+   if(object_glyph_emitted){
+    if(text_run_emitted&&has_line_origin&&text_cursor_known){
      previous_end_x=text_line_x+line_a*text_cursor;
      previous_end_y=text_line_y+line_b*text_cursor;
      previous_a=line_a;previous_b=line_b;
@@ -634,6 +636,7 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
       if(!std::isfinite(text_cursor)||std::abs(text_cursor)>1e12)return false;
      }else text_cursor_known=false;
      text_run_emitted=true;
+     object_glyph_emitted=true;
      pending_tj_adjustment=0;
     }
    }
