@@ -195,6 +195,10 @@ struct Reader {
       bool indexed=false;
       unsigned icc_channels=0;
       bool separation=false;
+      unsigned device_inputs=1;
+      bool sampled_tint=false;
+      std::vector<uint8_t> tint_samples;
+      std::vector<unsigned> tint_sizes;
       unsigned tint_channels=0;
       double tint_c0[4]{0,0,0,0},tint_c1[4]{1,1,1,1},tint_n=1;
       unsigned calibrated=0;
@@ -298,13 +302,14 @@ struct Reader {
          cs->array[0].kind==Value::Kind::Name&&
          (cs->array[0].text=="Separation"||
           cs->array[0].text=="DeviceN")){
-       // A Type 2 exponential function has precisely one input.
-       // Thus only single-component DeviceN is representable here.
        const bool device_n=cs->array[0].text=="DeviceN";
        if(device_n){
         if(cs->array[1].kind!=Value::Kind::Array||
-           cs->array[1].array.size()!=1||
-           cs->array[1].array[0].kind!=Value::Kind::Name)return false;
+           cs->array[1].array.empty()||
+           cs->array[1].array.size()>4)return false;
+        device_inputs=unsigned(cs->array[1].array.size());
+        for(const Value& name:cs->array[1].array)
+         if(name.kind!=Value::Kind::Name)return false;
         if(cs->array.size()==5&&
            cs->array[4].kind!=Value::Kind::Dictionary)return false;
        }else if(cs->array.size()!=4||
@@ -330,23 +335,66 @@ struct Reader {
         else return false;
         return std::isfinite(out)&&std::abs(out)<=100000;
        };
-       if(!type||type->kind!=Value::Kind::Integer||type->integer!=2||
-          !domain||domain->kind!=Value::Kind::Array||
-          domain->array.size()!=2||!exponent||
-          !number(*exponent,tint_n)||tint_n<=0||tint_n>100)
-        return false;
-       double d0=0,d1=0;
-       if(!number(domain->array[0],d0)||!number(domain->array[1],d1)||
-          d0!=0||d1!=1)return false;
-       for(const auto& setting:std::initializer_list<std::pair<const Value*,double*>>{
-             {c0,tint_c0},{c1,tint_c1}}){
-        if(!setting.first)continue;
-        if(setting.first->kind!=Value::Kind::Array||
-           setting.first->array.size()!=tint_channels)return false;
-        for(unsigned c=0;c<tint_channels;++c)
-         if(!number(setting.first->array[c],setting.second[c])||
-            setting.second[c]<0||setting.second[c]>1)return false;
-       }
+       if(!type||type->kind!=Value::Kind::Integer)return false;
+       if(type->integer==0){
+        // Eight-bit sampled functions: bounded multidimensional table,
+        // nearest-neighbor selection pending linear interpolation support.
+        if(cs->array[3].kind!=Value::Kind::Reference)return false;
+        const XrefEntry* entry_ptr=nullptr;
+        if(!entry(cs->array[3],entry_ptr))return false;
+        StreamRange function_range;
+        if(!locate_indirect_stream(data,size,*entry_ptr,xref,function_range))
+         return false;
+        const Value* sizes=get(function_range.dictionary,"Size");
+        const Value* bps=get(function_range.dictionary,"BitsPerSample");
+        const Value* range=get(function_range.dictionary,"Range");
+        if(!sizes||sizes->kind!=Value::Kind::Array||
+           sizes->array.size()!=device_inputs||
+           !bps||bps->kind!=Value::Kind::Integer||bps->integer!=8||
+           !range||range->kind!=Value::Kind::Array||
+           range->array.size()!=tint_channels*2||
+           !domain||domain->kind!=Value::Kind::Array||
+           domain->array.size()!=device_inputs*2)return false;
+        size_t sample_count=tint_channels;
+        for(unsigned i=0;i<device_inputs;++i){
+         const Value& v=sizes->array[i];
+         if(v.kind!=Value::Kind::Integer||v.integer<2||v.integer>64)
+          return false;
+         tint_sizes.push_back(unsigned(v.integer));
+         if(sample_count>4*1024*1024/unsigned(v.integer))return false;
+         sample_count*=unsigned(v.integer);
+         double d0=0,d1=0;
+         if(!number(domain->array[2*i],d0)||
+            !number(domain->array[2*i+1],d1)||d0!=0||d1!=1)
+          return false;
+        }
+        for(unsigned c=0;c<tint_channels;++c){
+         double a=0,b=0;
+         if(!number(range->array[2*c],a)||
+            !number(range->array[2*c+1],b)||a!=0||b!=1)
+          return false;
+        }
+        if(!decode_stream(data,size,function_range,tint_samples,sample_count)||
+           tint_samples.size()!=sample_count)return false;
+        sampled_tint=true;
+       }else if(type->integer==2){
+        if(device_inputs!=1||!domain||domain->kind!=Value::Kind::Array||
+           domain->array.size()!=2||!exponent||
+           !number(*exponent,tint_n)||tint_n<=0||tint_n>100)
+         return false;
+        double d0=0,d1=0;
+        if(!number(domain->array[0],d0)||!number(domain->array[1],d1)||
+           d0!=0||d1!=1)return false;
+        for(const auto& setting:std::initializer_list<std::pair<const Value*,double*>>{
+              {c0,tint_c0},{c1,tint_c1}}){
+         if(!setting.first)continue;
+         if(setting.first->kind!=Value::Kind::Array||
+            setting.first->array.size()!=tint_channels)return false;
+         for(unsigned c=0;c<tint_channels;++c)
+          if(!number(setting.first->array[c],setting.second[c])||
+             setting.second[c]<0||setting.second[c]>1)return false;
+        }
+       }else return false;
        // Both Separation and one-colorant DeviceN share the same
        // one-input Type 2 tint evaluation into the alternate space.
        separation=true;
@@ -405,7 +453,7 @@ struct Reader {
       if(!indexed&&bits->integer!=8&&bits->integer!=1)return false;
       if(indexed&&unsigned(maximum_index)>=(1u<<unsigned(bits->integer)))
        return false;
-      const unsigned channels=indexed?1:separation?1:lab?3:calibrated?calibrated:icc_channels?icc_channels:
+      const unsigned channels=indexed?1:separation?device_inputs:lab?3:calibrated?calibrated:icc_channels?icc_channels:
         cs->text=="DeviceGray"?1:cs->text=="DeviceRGB"?3:
         cs->text=="DeviceCMYK"?4:0;
       if(!channels||get(range.dictionary,"Mask")||
@@ -539,10 +587,23 @@ struct Reader {
       }else if(separation){
        std::vector<uint8_t> rgb(size_t(image.width)*image.height*3);
        for(size_t i=0;i<size_t(image.width)*image.height;++i){
-        const double tint=std::pow(double(image.pixels[i])/255,tint_n);
         double values[4]{};
-        for(unsigned c=0;c<tint_channels;++c)
-         values[c]=tint_c0[c]+tint*(tint_c1[c]-tint_c0[c]);
+        if(sampled_tint){
+         size_t offset=0,multiplier=1;
+         for(unsigned dimension=0;dimension<device_inputs;++dimension){
+          const double x=double(image.pixels[i*device_inputs+dimension])/255;
+          const size_t sample=size_t(std::lround(
+             x*double(tint_sizes[dimension]-1)));
+          offset+=sample*multiplier;
+          multiplier*=tint_sizes[dimension];
+         }
+         for(unsigned c=0;c<tint_channels;++c)
+          values[c]=double(tint_samples[offset*tint_channels+c])/255;
+        }else{
+         const double tint=std::pow(double(image.pixels[i])/255,tint_n);
+         for(unsigned c=0;c<tint_channels;++c)
+          values[c]=tint_c0[c]+tint*(tint_c1[c]-tint_c0[c]);
+        }
         for(unsigned c=0;c<3;++c){
          double v=tint_channels==1?values[0]:
                   tint_channels==3?values[c]:
