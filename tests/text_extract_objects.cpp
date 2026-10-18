@@ -153,5 +153,15 @@ int main(){
  // The same pair without enough displacement must stay contiguous.
  if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm "
            "[<41> -300] TJ <42> Tj ET","AB"))return 34;
+ // Character spacing changes the gap threshold identically for
+ // a trailing TJ adjustment and an in-array TJ adjustment.
+ if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm 2 Tc "
+           "[<41> -700] TJ <42> Tj ET","AB"))return 35;
+ if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm 2 Tc "
+           "[<41> -700 <42>] TJ ET","AB"))return 36;
+ if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm 2 Tc "
+           "[<41> -900] TJ <42> Tj ET","A B"))return 37;
+ if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm 2 Tc "
+           "[<41> -900 <42>] TJ ET","A B"))return 38;
  return 0;
 }
