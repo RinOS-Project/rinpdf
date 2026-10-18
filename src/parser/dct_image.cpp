@@ -1,6 +1,7 @@
 #include "dct_image.h"
 #include <csetjmp>
 #include <cstring>
+#include <utility>
 #if defined(RINPDF_HAVE_JPEG)
 #include <jpeglib.h>
 #endif
