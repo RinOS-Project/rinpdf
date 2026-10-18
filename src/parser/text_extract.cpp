@@ -427,7 +427,9 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
         std::isfinite(physical_gap)&&physical_gap>=physical_space):
        (std::isfinite(gap_threshold)&&gap_threshold>0&&
         net_adjustment<=-gap_threshold);
-     if(!append_extracted(decoded,emitted_run&&font_size>0&&
+     if(!append_extracted(decoded,
+          !(active_font.subtype=="Type0"&&active_font.encoding=="Identity-V")&&
+          emitted_run&&font_size>0&&
                             horizontal_scale>0&&gap_is_space))return false;
      emitted_run=true;
      text_run_emitted=true;
@@ -675,7 +677,9 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
      const auto& active_font=fonts.at(selected);
      const double threshold=text_gap_threshold(active_font,font_size,
                                                character_spacing,word_spacing);
-     if(!append_extracted(decoded,text_run_emitted&&font_size>0&&
+     if(!append_extracted(decoded,
+          !(active_font.subtype=="Type0"&&active_font.encoding=="Identity-V")&&
+          text_run_emitted&&font_size>0&&
           horizontal_scale>0&&std::isfinite(threshold)&&threshold>0&&
           pending_tj_adjustment<=-threshold))return false;
      text_run_emitted=true;
