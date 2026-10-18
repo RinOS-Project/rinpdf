@@ -139,28 +139,17 @@
      params=&sample_parameter_cache.emplace(param_key,local_params).first->second;
     else params=&local_params;
    }
-   const double e0=params->encode[0],e1=params->encode[1];
-   const double position=std::clamp(e0+(x-low)/(high-low)*(e1-e0),
-                                    0.0,double(count-1));
-   const size_t index=size_t(position);
-   const size_t next=std::min(index+1,count-1);
-   const double blend=position-double(index);
-   auto read_sample=[&](size_t sample_index)->double{
-    const size_t start=sample_index*bps;
-    uint64_t value=0;
-    for(unsigned bit=0;bit<bps;++bit){
-     const size_t p=start+bit;
-     value=(value<<1)|(((*samples)[p/8]>>(7-(p%8)))&1u);
-    }
-    return double(value)/double((uint64_t(1)<<bps)-1);
-   };
-   for(unsigned c=0;c<outputs;++c){
-    const double r0=params->range[2*c],r1=params->range[2*c+1];
-    const double d0=params->decode[2*c],d1=params->decode[2*c+1];
-    const double sample=(1-blend)*read_sample(index*outputs+c)+
-                        blend*read_sample(next*outputs+c);
-    result[c]=std::clamp(d0+sample*(d1-d0),r0,r1);
-   }
+   SampledFunction sampled;
+   sampled.count=params->count;
+   sampled.bits=params->bits;
+   sampled.outputs=outputs;
+   sampled.domain[0]=low;
+   sampled.domain[1]=high;
+   sampled.encode[0]=params->encode[0];
+   sampled.encode[1]=params->encode[1];
+   sampled.decode=params->decode;
+   sampled.range=params->range;
+   if(!evaluate_sampled_function(sampled,*samples,x,result))return false;
   }else if(type->integer==4){
    // Bounded numeric calculator with executable procedures and branches.
    // Unsupported operators and malformed procedure nesting fail closed.
