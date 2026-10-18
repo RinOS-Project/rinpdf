@@ -39,6 +39,7 @@ static bool box_value(const Value& value,MediaBox& box){
 struct Reader {
  const uint8_t *data;size_t size;const std::vector<XrefEntry>& xref;const std::vector<XrefStreamEntry>& compressed;
  mutable std::map<size_t,Value> compressed_cache;
+ mutable std::map<std::pair<int64_t,int64_t>,std::vector<std::string>> calculator_token_cache;
  bool entry(const Value& ref,const XrefEntry*& out) const {
   if(ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
   auto it=std::find_if(xref.begin(),xref.end(),[&](const XrefEntry& e){
@@ -951,11 +952,19 @@ struct Reader {
    const Value* output_range=get(function,"Range");
    if(!output_range||output_range->kind!=Value::Kind::Array||
       output_range->array.size()!=outputs*2)return false;
-   std::vector<uint8_t> program;
-   if(!decode_stream(data,size,sampled_stream,program,16384))return false;
+   // Cache bounded decoded calculator programs for this document so image
+   // pixels do not repeatedly decompress and tokenize the same function.
+   if(reference.kind!=Value::Kind::Reference)return false;
+   const auto cache_key=std::make_pair(reference.integer,reference.generation);
+   std::vector<std::string> tokens;
+   auto cached=calculator_token_cache.find(cache_key);
+   if(cached!=calculator_token_cache.end()){
+    tokens=cached->second;
+   }else{
+    std::vector<uint8_t> program;
+    if(!decode_stream(data,size,sampled_stream,program,16384))return false;
    // Lex calculator source as PDF/PostScript tokens. Percent starts a
    // comment through end-of-line; braces delimit procedures even when adjacent.
-   std::vector<std::string> tokens;
    std::string token;
    auto emit=[&]()->bool{
     if(token.empty())return true;
@@ -990,6 +999,9 @@ struct Reader {
     return false;
    tokens.erase(tokens.begin());
    tokens.pop_back();
+    if(calculator_token_cache.size()<64)
+     calculator_token_cache.emplace(cache_key,tokens);
+   }
    struct CalcValue { double number; uint8_t kind; size_t procedure; };
    // kind: 0 real, 1 boolean, 2 integer, 3 procedure.
    std::vector<CalcValue> stack{{x,0,0}};
