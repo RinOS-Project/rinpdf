@@ -139,6 +139,136 @@ struct Reader {
   visiting.erase(size_t(ref.integer));
   return true;
  }
+ bool decode_page_image(const StreamRange& range,PageImage& image) const {
+      const Value* w=get(range.dictionary,"Width");
+      const Value* h=get(range.dictionary,"Height");
+      const Value* bits=get(range.dictionary,"BitsPerComponent");
+      const Value* cs=get(range.dictionary,"ColorSpace");
+      if(!w||!h||!bits||!cs||
+         w->kind!=Value::Kind::Integer||h->kind!=Value::Kind::Integer||
+         bits->kind!=Value::Kind::Integer||bits->integer!=8||
+         w->integer<=0||h->integer<=0||
+         w->integer>4096||h->integer>4096||
+         cs->kind!=Value::Kind::Name){return false;}
+      const unsigned channels=cs->text=="DeviceGray"?1:
+                              cs->text=="DeviceRGB"?3:0;
+      if(!channels||get(range.dictionary,"Mask")||
+         get(range.dictionary,"Decode")){return false;}
+      const size_t expected=size_t(w->integer)*size_t(h->integer)*channels;
+      if(expected>32*1024*1024){return false;}
+      PageImage image;
+      image.width=unsigned(w->integer);image.height=unsigned(h->integer);
+      image.channels=channels;
+      // Support a same-size, 8-bit grayscale SMask image. Restrict the
+      // initial implementation to raw/Flate data without predictors.
+      if(const Value* smask=get(range.dictionary,"SMask")){
+       if(smask->kind!=Value::Kind::Reference){return false;}
+       const XrefEntry* mask_entry=nullptr;
+       if(!entry(*smask,mask_entry)){return false;}
+       StreamRange mask_range;
+       if(!locate_indirect_stream(data,size,*mask_entry,xref,mask_range)){
+        return false;
+       }
+       const Value* ms=get(mask_range.dictionary,"Subtype");
+       const Value* mw=get(mask_range.dictionary,"Width");
+       const Value* mh=get(mask_range.dictionary,"Height");
+       const Value* mb=get(mask_range.dictionary,"BitsPerComponent");
+       const Value* mc=get(mask_range.dictionary,"ColorSpace");
+       if(!ms||ms->kind!=Value::Kind::Name||ms->text!="Image"||
+          !mw||mw->kind!=Value::Kind::Integer||mw->integer!=w->integer||
+          !mh||mh->kind!=Value::Kind::Integer||mh->integer!=h->integer||
+          !mb||mb->kind!=Value::Kind::Integer||mb->integer!=8||
+          !mc||mc->kind!=Value::Kind::Name||mc->text!="DeviceGray"||
+          get(mask_range.dictionary,"SMask")||
+          get(mask_range.dictionary,"Mask")||
+          get(mask_range.dictionary,"Decode")||
+          get(mask_range.dictionary,"DecodeParms")||
+          !decode_stream(data,size,mask_range,image.alpha,
+                         size_t(w->integer)*size_t(h->integer))||
+          image.alpha.size()!=size_t(w->integer)*size_t(h->integer)){
+        return false;
+       }
+      }
+      const Value* filter=get(range.dictionary,"Filter");
+      const bool dct=filter&&filter->kind==Value::Kind::Name&&
+        (filter->text=="DCTDecode"||filter->text=="DCT");
+      if(dct){
+       // JPEG image data is compressed independently of PDF Flate filters.
+       // DecodeParms predictors are not valid for this path.
+       if(get(range.dictionary,"DecodeParms")||
+          range.offset>size||range.length>size-range.offset||
+          !decode_dct_image(data+range.offset,range.length,
+             unsigned(w->integer),unsigned(h->integer),channels,
+             image.pixels)){return false;}
+       return true;
+      }
+      // PDF Flate image predictors operate on complete scanlines.
+      // Undo the predictor before exposing samples to the renderer.
+      unsigned predictor=1;
+      if(const Value* parms=get(range.dictionary,"DecodeParms")){
+       if(parms->kind!=Value::Kind::Dictionary){return false;}
+       auto parameter=[&](const char* key,unsigned fallback,unsigned& out){
+        const Value* v=get(*parms,key);
+        if(!v){out=fallback;return true;}
+        if(v->kind!=Value::Kind::Integer||v->integer<0||
+           v->integer>100000)return false;
+        out=unsigned(v->integer);return true;
+       };
+       unsigned columns=0,colors=0,bpc=0;
+       if(!parameter("Predictor",1,predictor)||
+          !parameter("Columns",1,columns)||
+          !parameter("Colors",1,colors)||
+          !parameter("BitsPerComponent",8,bpc)||
+          columns!=unsigned(w->integer)||colors!=channels||bpc!=8||
+          !(predictor==1||predictor==2||
+            (predictor>=10&&predictor<=15))){return false;}
+      }
+      const size_t rowbytes=size_t(w->integer)*channels;
+      const size_t row_count=size_t(h->integer);
+      const size_t encoded_size=expected+
+         ((predictor>=10&&predictor<=15)?row_count:0);
+      if(encoded_size>32*1024*1024+4096){return false;}
+      std::vector<uint8_t> decoded;
+      if(!decode_stream(data,size,range,decoded,encoded_size)||
+         decoded.size()!=encoded_size){return false;}
+      if(predictor==2){
+       for(size_t row=0;row<row_count;++row)
+        for(size_t col=channels;col<rowbytes;++col){
+         const size_t offset=row*rowbytes+col;
+         decoded[offset]=uint8_t(decoded[offset]+decoded[offset-channels]);
+        }
+      }else if(predictor>=10&&predictor<=15){
+       std::vector<uint8_t> raw(expected);
+       for(size_t row=0;row<row_count;++row){
+        const size_t source=row*(rowbytes+1);
+        const unsigned filter=decoded[source];
+        if(filter>4||(predictor!=15&&filter!=predictor-10)){
+         return false;
+        }
+        for(size_t col=0;col<rowbytes;++col){
+         const unsigned left=col>=channels?raw[row*rowbytes+col-channels]:0;
+         const unsigned up=row?raw[(row-1)*rowbytes+col]:0;
+         const unsigned upper_left=row&&col>=channels?
+           raw[(row-1)*rowbytes+col-channels]:0;
+         unsigned prediction=0;
+         if(filter==1)prediction=left;
+         else if(filter==2)prediction=up;
+         else if(filter==3)prediction=(left+up)/2;
+         else if(filter==4){
+          const int p=int(left)+int(up)-int(upper_left);
+          const int a=std::abs(p-int(left));
+          const int b=std::abs(p-int(up));
+          const int c=std::abs(p-int(upper_left));
+          prediction=(a<=b&&a<=c)?left:(b<=c?up:upper_left);
+         }
+         raw[row*rowbytes+col]=uint8_t(decoded[source+1+col]+prediction);
+        }
+       }
+       decoded=std::move(raw);
+      }
+      image.pixels=std::move(decoded);
+      return true;
+ }
  bool walk_images(const Value& ref,size_t depth,size_t& current,size_t target,
   std::set<size_t>& active,const Value* inherited,
   std::map<std::string,PageImage>& output) const {
@@ -177,134 +307,8 @@ struct Reader {
       if(!subtype||subtype->kind!=Value::Kind::Name){active.erase(id);return false;}
       if(subtype->text=="Form")continue;
       if(subtype->text!="Image"){active.erase(id);return false;}
-      const Value* w=get(range.dictionary,"Width");
-      const Value* h=get(range.dictionary,"Height");
-      const Value* bits=get(range.dictionary,"BitsPerComponent");
-      const Value* cs=get(range.dictionary,"ColorSpace");
-      if(!w||!h||!bits||!cs||
-         w->kind!=Value::Kind::Integer||h->kind!=Value::Kind::Integer||
-         bits->kind!=Value::Kind::Integer||bits->integer!=8||
-         w->integer<=0||h->integer<=0||
-         w->integer>4096||h->integer>4096||
-         cs->kind!=Value::Kind::Name){active.erase(id);return false;}
-      const unsigned channels=cs->text=="DeviceGray"?1:
-                              cs->text=="DeviceRGB"?3:0;
-      if(!channels||get(range.dictionary,"Mask")||
-         get(range.dictionary,"Decode")){active.erase(id);return false;}
-      const size_t expected=size_t(w->integer)*size_t(h->integer)*channels;
-      if(expected>32*1024*1024){active.erase(id);return false;}
       PageImage image;
-      image.width=unsigned(w->integer);image.height=unsigned(h->integer);
-      image.channels=channels;
-      // Support a same-size, 8-bit grayscale SMask image. Restrict the
-      // initial implementation to raw/Flate data without predictors.
-      if(const Value* smask=get(range.dictionary,"SMask")){
-       if(smask->kind!=Value::Kind::Reference){active.erase(id);return false;}
-       const XrefEntry* mask_entry=nullptr;
-       if(!entry(*smask,mask_entry)){active.erase(id);return false;}
-       StreamRange mask_range;
-       if(!locate_indirect_stream(data,size,*mask_entry,xref,mask_range)){
-        active.erase(id);return false;
-       }
-       const Value* ms=get(mask_range.dictionary,"Subtype");
-       const Value* mw=get(mask_range.dictionary,"Width");
-       const Value* mh=get(mask_range.dictionary,"Height");
-       const Value* mb=get(mask_range.dictionary,"BitsPerComponent");
-       const Value* mc=get(mask_range.dictionary,"ColorSpace");
-       if(!ms||ms->kind!=Value::Kind::Name||ms->text!="Image"||
-          !mw||mw->kind!=Value::Kind::Integer||mw->integer!=w->integer||
-          !mh||mh->kind!=Value::Kind::Integer||mh->integer!=h->integer||
-          !mb||mb->kind!=Value::Kind::Integer||mb->integer!=8||
-          !mc||mc->kind!=Value::Kind::Name||mc->text!="DeviceGray"||
-          get(mask_range.dictionary,"SMask")||
-          get(mask_range.dictionary,"Mask")||
-          get(mask_range.dictionary,"Decode")||
-          get(mask_range.dictionary,"DecodeParms")||
-          !decode_stream(data,size,mask_range,image.alpha,
-                         size_t(w->integer)*size_t(h->integer))||
-          image.alpha.size()!=size_t(w->integer)*size_t(h->integer)){
-        active.erase(id);return false;
-       }
-      }
-      const Value* filter=get(range.dictionary,"Filter");
-      const bool dct=filter&&filter->kind==Value::Kind::Name&&
-        (filter->text=="DCTDecode"||filter->text=="DCT");
-      if(dct){
-       // JPEG image data is compressed independently of PDF Flate filters.
-       // DecodeParms predictors are not valid for this path.
-       if(get(range.dictionary,"DecodeParms")||
-          range.offset>size||range.length>size-range.offset||
-          !decode_dct_image(data+range.offset,range.length,
-             unsigned(w->integer),unsigned(h->integer),channels,
-             image.pixels)){active.erase(id);return false;}
-       output.emplace(name,std::move(image));
-       continue;
-      }
-      // PDF Flate image predictors operate on complete scanlines.
-      // Undo the predictor before exposing samples to the renderer.
-      unsigned predictor=1;
-      if(const Value* parms=get(range.dictionary,"DecodeParms")){
-       if(parms->kind!=Value::Kind::Dictionary){active.erase(id);return false;}
-       auto parameter=[&](const char* key,unsigned fallback,unsigned& out){
-        const Value* v=get(*parms,key);
-        if(!v){out=fallback;return true;}
-        if(v->kind!=Value::Kind::Integer||v->integer<0||
-           v->integer>100000)return false;
-        out=unsigned(v->integer);return true;
-       };
-       unsigned columns=0,colors=0,bpc=0;
-       if(!parameter("Predictor",1,predictor)||
-          !parameter("Columns",1,columns)||
-          !parameter("Colors",1,colors)||
-          !parameter("BitsPerComponent",8,bpc)||
-          columns!=unsigned(w->integer)||colors!=channels||bpc!=8||
-          !(predictor==1||predictor==2||
-            (predictor>=10&&predictor<=15))){active.erase(id);return false;}
-      }
-      const size_t rowbytes=size_t(w->integer)*channels;
-      const size_t row_count=size_t(h->integer);
-      const size_t encoded_size=expected+
-         ((predictor>=10&&predictor<=15)?row_count:0);
-      if(encoded_size>32*1024*1024+4096){active.erase(id);return false;}
-      std::vector<uint8_t> decoded;
-      if(!decode_stream(data,size,range,decoded,encoded_size)||
-         decoded.size()!=encoded_size){active.erase(id);return false;}
-      if(predictor==2){
-       for(size_t row=0;row<row_count;++row)
-        for(size_t col=channels;col<rowbytes;++col){
-         const size_t offset=row*rowbytes+col;
-         decoded[offset]=uint8_t(decoded[offset]+decoded[offset-channels]);
-        }
-      }else if(predictor>=10&&predictor<=15){
-       std::vector<uint8_t> raw(expected);
-       for(size_t row=0;row<row_count;++row){
-        const size_t source=row*(rowbytes+1);
-        const unsigned filter=decoded[source];
-        if(filter>4||(predictor!=15&&filter!=predictor-10)){
-         active.erase(id);return false;
-        }
-        for(size_t col=0;col<rowbytes;++col){
-         const unsigned left=col>=channels?raw[row*rowbytes+col-channels]:0;
-         const unsigned up=row?raw[(row-1)*rowbytes+col]:0;
-         const unsigned upper_left=row&&col>=channels?
-           raw[(row-1)*rowbytes+col-channels]:0;
-         unsigned prediction=0;
-         if(filter==1)prediction=left;
-         else if(filter==2)prediction=up;
-         else if(filter==3)prediction=(left+up)/2;
-         else if(filter==4){
-          const int p=int(left)+int(up)-int(upper_left);
-          const int a=std::abs(p-int(left));
-          const int b=std::abs(p-int(up));
-          const int c=std::abs(p-int(upper_left));
-          prediction=(a<=b&&a<=c)?left:(b<=c?up:upper_left);
-         }
-         raw[row*rowbytes+col]=uint8_t(decoded[source+1+col]+prediction);
-        }
-       }
-       decoded=std::move(raw);
-      }
-      image.pixels=std::move(decoded);
+      if(!decode_page_image(range,image)){active.erase(id);return false;}
       output.emplace(name,std::move(image));
      }
     }
@@ -385,42 +389,8 @@ struct Reader {
       if(page!=page_names.end()){
        form.xobject_aliases.emplace(alias,page->second);
       }else{
-       // Independently referenced Form image: support bounded opaque 8-bit
-       // grayscale/RGB streams. Unhandled masks/predictors fail closed.
-       const Value* width=get(child_range.dictionary,"Width");
-       const Value* height=get(child_range.dictionary,"Height");
-       const Value* bits=get(child_range.dictionary,"BitsPerComponent");
-       const Value* colorspace=get(child_range.dictionary,"ColorSpace");
-       if(!width||!height||!bits||!colorspace||
-          width->kind!=Value::Kind::Integer||
-          height->kind!=Value::Kind::Integer||
-          bits->kind!=Value::Kind::Integer||bits->integer!=8||
-          width->integer<=0||height->integer<=0||
-          width->integer>4096||height->integer>4096||
-          colorspace->kind!=Value::Kind::Name||
-          get(child_range.dictionary,"SMask")||
-          get(child_range.dictionary,"Mask")||
-          get(child_range.dictionary,"Decode")||
-          get(child_range.dictionary,"DecodeParms"))return false;
        PageImage image;
-       image.width=unsigned(width->integer);
-       image.height=unsigned(height->integer);
-       image.channels=colorspace->text=="DeviceGray"?1:
-                      colorspace->text=="DeviceRGB"?3:0;
-       if(!image.channels)return false;
-       const size_t expected=size_t(image.width)*image.height*image.channels;
-       if(expected>32*1024*1024)return false;
-       const Value* filter=get(child_range.dictionary,"Filter");
-       const bool dct=filter&&filter->kind==Value::Kind::Name&&
-         (filter->text=="DCTDecode"||filter->text=="DCT");
-       if(dct){
-        if(child_range.offset>size||
-           child_range.length>size-child_range.offset||
-           !decode_dct_image(data+child_range.offset,child_range.length,
-              image.width,image.height,image.channels,image.pixels))
-         return false;
-       }else if(!decode_stream(data,size,child_range,image.pixels,expected)||
-                image.pixels.size()!=expected)return false;
+       if(!decode_page_image(child_range,image))return false;
        form.local_images.emplace(alias,std::move(image));
       }
      }else if(child_type->text=="Form"){
