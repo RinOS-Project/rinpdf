@@ -39,6 +39,10 @@ int main(){
  if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm <41> Tj ET "
            "BT /F1 10 Tf 1 0 0 1 8 0 Tm <42> Tj ET","AB"))return 2;
  if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm <41> Tj ET "
-           "BT /F1 10 Tf 1 0 0 1 20 15 Tm <42> Tj ET","AB"))return 3;
+           "BT /F1 10 Tf 1 0 0 1 20 15 Tm <42> Tj ET","A\nB"))return 3;
+ if(!check("BT /F1 10 Tf 0 1 -1 0 0 0 Tm <41> Tj ET "
+           "BT /F1 10 Tf 0 1 -1 0 15 20 Tm <42> Tj ET","A\nB"))return 4;
+ if(!check("BT /F1 10 Tf 0 1 -1 0 0 0 Tm <41> Tj ET "
+           "BT /F1 10 Tf 0 1 -1 0 0 20 Tm <42> Tj ET","A B"))return 5;
  return 0;
 }
