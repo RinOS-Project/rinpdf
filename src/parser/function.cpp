@@ -2,6 +2,10 @@
 #include <cmath>
 #include <algorithm>
 #include <limits>
+#include <charconv>
+#include <string>
+#include <cstdint>
+#include <utility>
 
 namespace rinpdf::parser {
 
