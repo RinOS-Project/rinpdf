@@ -158,7 +158,7 @@ int main(){
  if(const int error=reject_boundary("<41> Tj ET EMC","<41> Tj BT EMC",36,37,38))
   return error;
  // T* does not accept operands. Preserve the PDF stream byte count.
- if(const int error=reject_boundary("T* <42> Tj","1 T*<42> Tj",
+ if(const int error=reject_boundary("T* <42> Tj","1 T*<42>Tj",
       39,40,41))return error;
  // TL sets leading while leaving the existing text runs unchanged.
  // Same-length PDF mutations preserve /Length and classic xref offsets.
