@@ -389,6 +389,81 @@ struct Reader {
   out.encoding=base->text;
   return true;
  }
+ bool parse_font_dictionary(const Value& font,const Value* scope,
+                           PageFont& out) const {
+      const Value* subtype=get(font,"Subtype"),*base=get(font,"BaseFont");
+      if(font.kind!=Value::Kind::Dictionary||!subtype||!base||
+         subtype->kind!=Value::Kind::Name||base->kind!=Value::Kind::Name){
+       return false;
+      }
+      PageFont out{base->text,subtype->text,"",{}};
+      if(!parse_font_encoding(font,out)){return false;}
+      if(out.subtype!="Type0"){
+       const Value* first=get(font,"FirstChar");
+       const Value* last=get(font,"LastChar");
+       const Value* widths=get(font,"Widths");
+       if(first||last||widths){
+        if(!first||!last||!widths||
+           first->kind!=Value::Kind::Integer||
+           last->kind!=Value::Kind::Integer||
+           first->integer<0||last->integer>255||
+           first->integer>last->integer){return false;}
+        Value width_array;
+        if(widths->kind==Value::Kind::Reference){
+         if(!object(*widths,width_array)){return false;}
+        }else width_array=*widths;
+        if(width_array.kind!=Value::Kind::Array||
+           width_array.array.size()!=size_t(last->integer-first->integer+1)){
+         return false;
+        }
+        for(size_t i=0;i<width_array.array.size();++i){
+         double width=0;
+         const Value& value=width_array.array[i];
+         if(value.kind==Value::Kind::Integer)width=double(value.integer);
+         else if(value.kind==Value::Kind::Real)width=value.real;
+         else{return false;}
+         if(!std::isfinite(width)||width<0||width>100000){
+          return false;
+         }
+         out.simple_widths.emplace(static_cast<uint8_t>(first->integer+static_cast<long long>(i)),width);
+        }
+       }
+      }
+      // Type0 fonts select a descendant CIDFont; CIDToGIDMap is distinct
+      // from the ToUnicode extraction map and must not be confused with it.
+      if(out.subtype=="Type0"){
+       const Value* descendants=get(font,"DescendantFonts");
+       if(!descendants||descendants->kind!=Value::Kind::Array||
+          descendants->array.size()!=1){return false;}
+       const Value& reference=descendants->array.front();
+       Value descendant;
+       if(reference.kind==Value::Kind::Reference){
+        if(!object(reference,descendant)){return false;}
+       }else descendant=reference;
+       if(!parse_cid_descendant(descendant,out)){
+        return false;
+       }
+       if(const Value* child_descriptor=get(descendant,"FontDescriptor")){
+        if(!parse_font_descriptor(*child_descriptor,out)){
+         return false;
+        }
+       }
+      }
+      if(const Value* descriptor=get(font,"FontDescriptor")){
+       if(!parse_font_descriptor(*descriptor,out)){
+        return false;
+       }
+      }
+      if(const Value* cmap=get(font,"ToUnicode")){
+       std::set<size_t> visiting;
+       std::string cmap_name;
+       if(!resolve_unicode_cmap(*cmap,0,visiting,out.unicode_sequences,
+            out.unicode_codespaces,cmap_name,scope)){
+        return false;
+       }
+      }
+  return true;
+ }
  bool load_local_form(const Value& ref,unsigned depth,std::set<size_t>& visiting,
                      const std::map<std::pair<int64_t,int64_t>,std::string>& page_names,
                      PageForm& form) const {
@@ -443,54 +518,10 @@ struct Reader {
      if(reference.kind==Value::Kind::Reference){
       if(!object(reference,font))return false;
      }else font=reference;
-     const Value* subtype=get(font,"Subtype");
-     const Value* base=get(font,"BaseFont");
-     const Value* encoding=get(font,"Encoding");
-     const Value* descriptor=get(font,"FontDescriptor");
-     if(!subtype||subtype->kind!=Value::Kind::Name||
-        !base||base->kind!=Value::Kind::Name||!encoding)return false;
      PageFont local;
-     local.base_font=base->text;
-     local.subtype=subtype->text;
-     if(!parse_font_encoding(font,local))return false;
-     Value desc;
-     if(local.subtype=="Type0"){
-      if(local.encoding!="Identity-H"&&local.encoding!="Identity-V")
-       return false;
-      const Value* descendants=get(font,"DescendantFonts");
-      if(!descendants||descendants->kind!=Value::Kind::Array||
-         descendants->array.size()!=1)return false;
-      const Value& child_ref=descendants->array[0];
-      Value child;
-      if(child_ref.kind==Value::Kind::Reference){
-       if(!object(child_ref,child))return false;
-      }else child=child_ref;
-      if(!parse_cid_descendant(child,local))return false;
-      const Value* child_desc=get(child,"FontDescriptor");
-      if(!child_desc)return false;
-      if(child_desc->kind==Value::Kind::Reference){
-       if(!object(*child_desc,desc))return false;
-      }else desc=*child_desc;
-     }else if(local.subtype=="TrueType"){
-      if(local.encoding!="WinAnsiEncoding"&&
-         local.encoding!="MacRomanEncoding"&&
-         local.encoding!="StandardEncoding")return false;
-      const Value* descriptor=get(font,"FontDescriptor");
-      if(!descriptor)return false;
-      if(descriptor->kind==Value::Kind::Reference){
-       if(!object(*descriptor,desc))return false;
-      }else desc=*descriptor;
-     }else return false;
-     if(!parse_font_descriptor(desc,local)||
+     if(!parse_font_dictionary(font,&scope,local)||
+        (local.subtype!="Type0"&&local.subtype!="TrueType")||
         local.embedded_truetype.empty())return false;
-     if(const Value* cmap=get(font,"ToUnicode")){
-      if(cmap->kind!=Value::Kind::Reference)return false;
-      std::set<size_t> cmap_visiting;
-      std::string cmap_name;
-      if(!resolve_unicode_cmap(*cmap,0,cmap_visiting,
-           local.unicode_sequences,local.unicode_codespaces,
-           cmap_name,&scope))return false;
-     }
      form.local_fonts.emplace(alias,std::move(local));
     }
    }
@@ -691,76 +722,9 @@ struct Reader {
       if(entry.kind==Value::Kind::Reference){
        if(!object(entry,font)){active.erase(id);return false;}
       }else font=entry;
-      const Value* subtype=get(font,"Subtype"),*base=get(font,"BaseFont");
-      if(font.kind!=Value::Kind::Dictionary||!subtype||!base||
-         subtype->kind!=Value::Kind::Name||base->kind!=Value::Kind::Name){
+      PageFont resource;
+      if(!parse_font_dictionary(font,inherited,resource)){
        active.erase(id);return false;
-      }
-      PageFont resource{base->text,subtype->text,"",{}};
-      if(!parse_font_encoding(font,resource)){active.erase(id);return false;}
-      if(resource.subtype!="Type0"){
-       const Value* first=get(font,"FirstChar");
-       const Value* last=get(font,"LastChar");
-       const Value* widths=get(font,"Widths");
-       if(first||last||widths){
-        if(!first||!last||!widths||
-           first->kind!=Value::Kind::Integer||
-           last->kind!=Value::Kind::Integer||
-           first->integer<0||last->integer>255||
-           first->integer>last->integer){active.erase(id);return false;}
-        Value width_array;
-        if(widths->kind==Value::Kind::Reference){
-         if(!object(*widths,width_array)){active.erase(id);return false;}
-        }else width_array=*widths;
-        if(width_array.kind!=Value::Kind::Array||
-           width_array.array.size()!=size_t(last->integer-first->integer+1)){
-         active.erase(id);return false;
-        }
-        for(size_t i=0;i<width_array.array.size();++i){
-         double width=0;
-         const Value& value=width_array.array[i];
-         if(value.kind==Value::Kind::Integer)width=double(value.integer);
-         else if(value.kind==Value::Kind::Real)width=value.real;
-         else{active.erase(id);return false;}
-         if(!std::isfinite(width)||width<0||width>100000){
-          active.erase(id);return false;
-         }
-         resource.simple_widths.emplace(static_cast<uint8_t>(first->integer+static_cast<long long>(i)),width);
-        }
-       }
-      }
-      // Type0 fonts select a descendant CIDFont; CIDToGIDMap is distinct
-      // from the ToUnicode extraction map and must not be confused with it.
-      if(resource.subtype=="Type0"){
-       const Value* descendants=get(font,"DescendantFonts");
-       if(!descendants||descendants->kind!=Value::Kind::Array||
-          descendants->array.size()!=1){active.erase(id);return false;}
-       const Value& reference=descendants->array.front();
-       Value descendant;
-       if(reference.kind==Value::Kind::Reference){
-        if(!object(reference,descendant)){active.erase(id);return false;}
-       }else descendant=reference;
-       if(!parse_cid_descendant(descendant,resource)){
-        active.erase(id);return false;
-       }
-       if(const Value* child_descriptor=get(descendant,"FontDescriptor")){
-        if(!parse_font_descriptor(*child_descriptor,resource)){
-         active.erase(id);return false;
-        }
-       }
-      }
-      if(const Value* descriptor=get(font,"FontDescriptor")){
-       if(!parse_font_descriptor(*descriptor,resource)){
-        active.erase(id);return false;
-       }
-      }
-      if(const Value* cmap=get(font,"ToUnicode")){
-       std::set<size_t> visiting;
-       std::string cmap_name;
-       if(!resolve_unicode_cmap(*cmap,0,visiting,resource.unicode_sequences,
-            resource.unicode_codespaces,cmap_name,inherited)){
-        active.erase(id);return false;
-       }
       }
       resource.language=catalog_language;
       if(const Value* lang=get(node,"Lang")){
