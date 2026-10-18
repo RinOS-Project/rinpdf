@@ -285,7 +285,7 @@ bool decode_stream(const uint8_t *data,size_t size,const StreamRange& range,std:
  // aligned with the Filter array. Null entries mean default parameters.
  const auto parms=range.dictionary.dictionary.find("DecodeParms");
  std::vector<const Value*> parameters(filters.size(),nullptr);
- if(parameter){
+ if(parms!=range.dictionary.dictionary.end()){
   const Value& p=parms->second;
   if(p.kind==Value::Kind::Dictionary){
    if(filters.size()!=1)return false;
@@ -324,7 +324,7 @@ bool decode_stream(const uint8_t *data,size_t size,const StreamRange& range,std:
   if(parameter&&
      (name=="FlateDecode"||name=="Fl"||
       name=="LZWDecode"||name=="LZW")&&
-     parms->second.kind==Value::Kind::Dictionary){
+     parameter->kind==Value::Kind::Dictionary){
    const auto& d=parameter->dictionary;
    const auto it=d.find("Predictor");
    if(it!=d.end()&&it->second.kind==Value::Kind::Integer&&
