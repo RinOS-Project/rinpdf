@@ -110,8 +110,8 @@ int main(){
  // Unlike the in-column movement above, a Td perpendicular to the
  // Identity-V writing axis starts another column.
  std::string other_column=pdf;
- const std::string column_move="20 0 Td         ";
- static_assert(sizeof("1 0 0 1 20 0 Tm")==sizeof("20 0 Td         "));
+ const std::string column_move="20 0 Td        ";
+ static_assert(sizeof("1 0 0 1 20 0 Tm")==sizeof("20 0 Td        "));
  const auto column_at=other_column.find(from);
  if(column_at==std::string::npos)return 14;
  other_column.replace(column_at,from.size(),column_move);
