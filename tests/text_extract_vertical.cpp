@@ -42,5 +42,18 @@ int main(){
  if(!extract_page_text(reinterpret_cast<const uint8_t*>(pdf.data()),
       pdf.size(),0,extracted))return 4;
  if(extracted!="日\n本")return 5;
+ // Same-column Td must not create a newline. Replace the Tm command
+ // with an equal-length Td plus whitespace to retain all xref offsets.
+ std::string same_column=pdf;
+ const std::string from="1 0 0 1 20 0 Tm";
+ const std::string to="0 -5 Td        ";
+ static_assert(sizeof("1 0 0 1 20 0 Tm")==sizeof("0 -5 Td        "));
+ const auto at=same_column.find(from);
+ if(at==std::string::npos)return 6;
+ same_column.replace(at,from.size(),to);
+ std::string same_column_text;
+ if(!extract_page_text(reinterpret_cast<const uint8_t*>(same_column.data()),
+      same_column.size(),0,same_column_text))return 7;
+ if(same_column_text!="日本")return 8;
  return 0;
 }
