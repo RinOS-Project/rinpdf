@@ -227,7 +227,9 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
   if(token.kind==parser::TokenKind::String||
      token.kind==parser::TokenKind::HexString){
    if(compatibility_depth>0)continue;
-   if(!in_text||has_pending_text||!stack.empty())return false;
+   // The double-quote operator has two numeric operands before its string.
+   if(!in_text||has_pending_text||
+      (!stack.empty()&&stack.size()!=2))return false;
    pending_text=token.value;has_pending_text=true;
    continue;
   }
@@ -361,10 +363,27 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
    if(!in_text||stack.size()!=6)return false;
    text_a=stack[0];text_b=stack[1];text_c=stack[2];text_d=stack[3];
    text_x=line_x=stack[4];text_y=line_y=stack[5];stack.clear();
-  }else if(word=="TJ"||
-            word=="'"||word=="\\\"" ){
-   // Font and glyph interpretation is not yet implemented.
-   return false;
+  }else if(word=="'"||word=="\\\\\\\""){
+   // Quote text-show operators are T* followed by Tj. Double quote
+   // additionally sets Tw and Tc before moving to the next line.
+   // Render embedded TrueType glyphs rather than merely accepting input.
+   const bool double_quote=word!="'";
+   if(!in_text||!has_pending_text||selected_font.empty()||
+      (!double_quote&&!stack.empty())||
+      (double_quote&&stack.size()!=2))return false;
+   const auto it=fonts.find(selected_font);
+   if(it==fonts.end()||it->second.embedded_truetype.empty())return false;
+   const double nx=line_x-text_c*text_leading;
+   const double ny=line_y-text_d*text_leading;
+   if(!std::isfinite(nx)||!std::isfinite(ny)||
+      std::abs(nx)>10000000||std::abs(ny)>10000000)return false;
+   if(double_quote){
+    word_spacing=stack[0];char_spacing=stack[1];
+   }
+   stack.clear();
+   line_x=text_x=nx;line_y=text_y=ny;
+   if(!truetype_show({{false,pending_text,0}}))return false;
+   pending_text.clear();has_pending_text=false;
   }else if(word=="i"){
    // The graphics-state flatness parameter is device dependent.
    // Store and validate it, while retaining adaptive curve tessellation.
