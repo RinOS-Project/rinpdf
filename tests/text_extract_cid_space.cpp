@@ -76,5 +76,38 @@ int main(){
  if(!extract_page_text(reinterpret_cast<const uint8_t*>(regular_gap_pdf.data()),
       regular_gap_pdf.size(),0,regular_gap_result))return 11;
  if(regular_gap_result!="AB\nA")return 12;
+ // One Identity-H CID may decode to two Unicode characters, but it
+ // still has exactly one CID advance. Rebuild offsets for the longer CMap.
+ const std::string multi_content=
+  "BT /F1 10 Tf 1 0 0 1 0 0 Tm <0041> Tj "
+  "1 0 0 1 15 0 Tm <0042> Tj ET";
+ const std::string multi_cmap=
+  "2 beginbfchar <0041> <65E5672C> <0042> <0042> endbfchar";
+ std::string multi_pdf="%PDF-1.5\n";
+ size_t multi_offsets[8]{};
+ auto add_multi=[&](unsigned id,const std::string& body){
+  multi_offsets[id]=multi_pdf.size();
+  multi_pdf+=std::to_string(id)+" 0 obj\n"+body+"\nendobj\n";
+ };
+ add_multi(1,"<< /Type /Catalog /Pages 2 0 R >>");
+ add_multi(2,"<< /Type /Pages /Count 1 /Kids [3 0 R] /Resources << /Font << /F1 4 0 R >> >> >>");
+ add_multi(3,"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Contents 6 0 R >>");
+ add_multi(4,"<< /Type /Font /Subtype /Type0 /BaseFont /Example /Encoding /Identity-H /DescendantFonts [5 0 R] /ToUnicode 7 0 R >>");
+ add_multi(5,"<< /Type /Font /Subtype /CIDFontType2 /BaseFont /Example /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> /CIDToGIDMap /Identity /DW 1000 /W [65 [500]] >>");
+ add_multi(6,"<< /Length "+std::to_string(multi_content.size())+" >>\nstream\n"+multi_content+"\nendstream");
+ add_multi(7,"<< /Length "+std::to_string(multi_cmap.size())+" >>\nstream\n"+multi_cmap+"\nendstream");
+ const size_t multi_xref=multi_pdf.size();
+ multi_pdf+="xref\n0 8\n0000000000 65535 f \n";
+ for(unsigned id=1;id<=7;++id){
+  char row[32];
+  std::snprintf(row,sizeof(row),"%010zu 00000 n \n",multi_offsets[id]);
+  multi_pdf+=row;
+ }
+ multi_pdf+="trailer\n<< /Root 1 0 R /Size 8 >>\nstartxref\n"+
+            std::to_string(multi_xref)+"\n%%EOF\n";
+ std::string multi_result;
+ if(!extract_page_text(reinterpret_cast<const uint8_t*>(multi_pdf.data()),
+      multi_pdf.size(),0,multi_result))return 13;
+ if(multi_result!="日本 B")return 14;
  return 0;
 }
