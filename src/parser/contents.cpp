@@ -1184,7 +1184,10 @@ struct Reader {
      const bool rb=stack.back().kind==1;
      const bool logic=token=="and"||token=="or"||token=="xor";
      const bool equality=token=="eq"||token=="ne";
-     if((logic&&(!lb||!rb))||(equality&&lb!=rb)||
+     const bool integers=stack.back().kind==2&&
+                         stack[stack.size()-2].kind==2;
+     if((logic&&!((lb&&rb)||integers))||
+        (equality&&lb!=rb)||
         (!logic&&!equality&&(lb||rb)))return false;
      const double rhs=stack.back().number;stack.pop_back();
      double& lhs=stack.back().number;
@@ -1194,14 +1197,30 @@ struct Reader {
      else if(token=="ge")lhs=lhs>=rhs;
      else if(token=="lt")lhs=lhs<rhs;
      else if(token=="le")lhs=lhs<=rhs;
-     else if(token=="and")lhs=lhs!=0&&rhs!=0;
+     else if(integers){
+      if(lhs< -2147483648.0||lhs>2147483647.0||
+         rhs< -2147483648.0||rhs>2147483647.0)return false;
+      const uint32_t a=uint32_t(int32_t(lhs));
+      const uint32_t b=uint32_t(int32_t(rhs));
+      const uint32_t bits=token=="and"?(a&b):
+                          token=="or"?(a|b):(a^b);
+      lhs=bits>=0x80000000u?double(int64_t(bits)-4294967296LL):
+                             double(bits);
+     }else if(token=="and")lhs=lhs!=0&&rhs!=0;
      else if(token=="or")lhs=lhs!=0||rhs!=0;
      else lhs=(lhs!=0)!=(rhs!=0);
-     stack.back().kind=1;
+     stack.back().kind=logic&&integers?2:1;
     }else if(token=="not"){
      if(stack.empty())return false;
-     if(stack.back().kind!=1)return false;
-     stack.back().number=stack.back().number==0?1:0;
+     if(stack.back().kind==1)
+      stack.back().number=stack.back().number==0?1:0;
+     else if(stack.back().kind==2){
+      const double n=stack.back().number;
+      if(n< -2147483648.0||n>2147483647.0)return false;
+      const uint32_t bits=~uint32_t(int32_t(n));
+      stack.back().number=bits>=0x80000000u?
+           double(int64_t(bits)-4294967296LL):double(bits);
+     }else return false;
     }else return false;
     if(stack.empty()||!std::isfinite(stack.back().number)||
        std::abs(stack.back().number)>1e12)return false;
