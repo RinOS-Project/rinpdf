@@ -973,7 +973,7 @@ struct Reader {
    tokens.erase(tokens.begin());
    tokens.pop_back();
    std::vector<double> stack{x};
-   std::vector<uint8_t> is_bool{0}; // Type 4 boolean values are not numbers.
+   std::vector<uint8_t> is_bool{0}; // 0: real, 1: boolean, 2: integer.
    std::vector<std::vector<std::string>> procedures;
    size_t operations=0;
    for(size_t pc=0;pc<tokens.size();++pc){
@@ -997,7 +997,7 @@ struct Reader {
     if(token=="if"||token=="ifelse"){
      const size_t required=token=="if"?1:2;
      if(procedures.size()<required||stack.empty())return false;
-     if(!is_bool.back())return false;
+     if(is_bool.back()!=1)return false;
      const bool condition=stack.back()!=0;
      stack.pop_back();is_bool.pop_back();
      std::vector<std::string> chosen;
@@ -1019,7 +1019,10 @@ struct Reader {
     if(parsed.ec==std::errc()&&
        parsed.ptr==token.data()+token.size()){
      if(!std::isfinite(value)||stack.size()>=64)return false;
-     stack.push_back(value);is_bool.push_back(0);continue;
+     stack.push_back(value);
+     const bool integer_literal=token.find_first_of(".eE")==std::string::npos&&
+       value>=-2147483648.0&&value<=2147483647.0;
+     is_bool.push_back(integer_literal?2:0);continue;
     }
     if(token=="true"||token=="false"){
      if(stack.size()>=64)return false;
@@ -1027,7 +1030,7 @@ struct Reader {
     }
     if(token=="copy"){
      if(stack.empty())return false;
-     if(is_bool.back())return false;
+     if(is_bool.back()==1)return false;
      const double n=stack.back();stack.pop_back();is_bool.pop_back();
      if(n<0||n!=std::floor(n)||n>double(stack.size())||
         stack.size()+size_t(n)>64)return false;
@@ -1049,7 +1052,7 @@ struct Reader {
     }
     if(token=="roll"){
      if(stack.size()<2)return false;
-     if(is_bool.back()||is_bool[is_bool.size()-2])return false;
+     if(is_bool.back()==1||is_bool[is_bool.size()-2]==1)return false;
      const double shift=stack.back();stack.pop_back();is_bool.pop_back();
      const double n=stack.back();stack.pop_back();is_bool.pop_back();
      if(n<0||n!=std::floor(n)||n>double(stack.size())||
@@ -1081,7 +1084,7 @@ struct Reader {
        token=="ceiling"||token=="round"||token=="truncate"||
        token=="ln"||token=="log"||token=="sin"||token=="cos"){
      if(stack.empty())return false;
-     if(is_bool.back())return false;
+     if(is_bool.back()==1)return false;
      double& value=stack.back();
      if(token=="cvi"||token=="truncate")value=std::trunc(value);
      else if(token=="floor")value=std::floor(value);
@@ -1095,15 +1098,21 @@ struct Reader {
       value=token=="sin"?std::sin(radians):std::cos(radians);
      }
      if(!std::isfinite(value)||std::abs(value)>1e12)return false;
+     if(token=="cvi"){
+      if(value< -2147483648.0||value>2147483647.0)return false;
+      is_bool.back()=2;
+     }else if(token=="cvr"||token=="ln"||token=="log"||
+              token=="sin"||token=="cos")is_bool.back()=0;
      continue;
     }
     if(token=="idiv"||token=="mod"||token=="exp"||
        token=="atan"||token=="bitshift"){
      if(stack.size()<2)return false;
-     if(is_bool.back()||is_bool[is_bool.size()-2])return false;
+     if(is_bool.back()==1||is_bool[is_bool.size()-2]==1)return false;
      const double rhs=stack.back();stack.pop_back();is_bool.pop_back();
      double& lhs=stack.back();
      if(token=="idiv"||token=="mod"){
+      if(is_bool.back()!=2||rhs!=std::trunc(rhs)||rhs==0)return false;
       if(rhs==0||lhs!=std::trunc(lhs)||rhs!=std::trunc(rhs)||
          std::abs(lhs)>2147483647||std::abs(rhs)>2147483647)return false;
       if(token=="idiv")lhs=std::trunc(lhs/rhs);
@@ -1115,19 +1124,22 @@ struct Reader {
       lhs=std::atan2(lhs,rhs)*(180.0/3.14159265358979323846);
       if(lhs<0)lhs+=360.0;
      }else{
-      if(lhs!=std::trunc(lhs)||rhs!=std::trunc(rhs)||
+      if(is_bool.back()!=2||rhs!=std::trunc(rhs)||
+         lhs!=std::trunc(lhs)||
          std::abs(lhs)>2147483647||std::abs(rhs)>31)return false;
       const uint32_t n=uint32_t(int32_t(lhs));
       const int shift=int(rhs);
       lhs=double(int32_t(shift>=0?(n<<shift):(n>>(-shift))));
      }
      if(!std::isfinite(lhs)||std::abs(lhs)>1e12)return false;
+     is_bool.back()=(token=="idiv"||token=="mod"||token=="bitshift")?2:0;
      continue;
     }
     if(token=="neg"||token=="abs"||token=="sqrt"){
      if(stack.empty())return false;
-     if(is_bool.back())return false;
+     if(is_bool.back()==1)return false;
      double& top=stack.back();
+     if(token=="sqrt")is_bool.back()=0;
      if(token=="neg")top=-top;
      else if(token=="abs")top=std::abs(top);
      else{
@@ -1137,7 +1149,9 @@ struct Reader {
     }else if(token=="add"||token=="sub"||token=="mul"||
              token=="div"||token=="min"||token=="max"){
      if(stack.size()<2)return false;
-     const double rhs=stack.back();stack.pop_back();
+     if(is_bool.back()==1||is_bool[is_bool.size()-2]==1)return false;
+     const bool integer_pair=is_bool.back()==2&&is_bool[is_bool.size()-2]==2;
+     const double rhs=stack.back();stack.pop_back();is_bool.pop_back();
      double& lhs=stack.back();
      if(token=="add")lhs+=rhs;
      else if(token=="sub")lhs-=rhs;
@@ -1147,12 +1161,15 @@ struct Reader {
       lhs/=rhs;
      }else if(token=="min")lhs=std::min(lhs,rhs);
      else lhs=std::max(lhs,rhs);
+     const bool keep_integer=integer_pair&&token!="div"&&
+       lhs==std::trunc(lhs)&&lhs>=-2147483648.0&&lhs<=2147483647.0;
+     is_bool.back()=keep_integer?2:0;
     }else if(token=="eq"||token=="ne"||token=="gt"||
              token=="ge"||token=="lt"||token=="le"||
              token=="and"||token=="or"||token=="xor"){
      if(stack.size()<2)return false;
-     const bool lb=is_bool[is_bool.size()-2]!=0;
-     const bool rb=is_bool.back()!=0;
+     const bool lb=is_bool[is_bool.size()-2]==1;
+     const bool rb=is_bool.back()==1;
      const bool logic=token=="and"||token=="or"||token=="xor";
      const bool equality=token=="eq"||token=="ne";
      if((logic&&(!lb||!rb))||(equality&&lb!=rb)||
@@ -1171,7 +1188,7 @@ struct Reader {
      is_bool.back()=1;
     }else if(token=="not"){
      if(stack.empty())return false;
-     if(!is_bool.back())return false;
+     if(is_bool.back()!=1)return false;
      stack.back()=stack.back()==0?1:0;
     }else return false;
     if(stack.empty()||!std::isfinite(stack.back())||
@@ -1179,7 +1196,7 @@ struct Reader {
    }
    if(!procedures.empty()||stack.size()!=outputs||
       is_bool.size()!=stack.size())return false;
-   for(uint8_t t:is_bool)if(t)return false;
+   for(uint8_t t:is_bool)if(t==1)return false;
    for(unsigned j=0;j<outputs;++j)result[j]=stack[j];
   }else if(type->integer==2){
    const Value* n=get(function,"N");
