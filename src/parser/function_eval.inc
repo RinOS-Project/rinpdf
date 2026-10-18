@@ -199,6 +199,9 @@
    else{
     const Value* sizes=get(function,"Size");
     const Value* bits=get(function,"BitsPerSample");
+    const Value* order=get(function,"Order");
+    if(order&&(order->kind!=Value::Kind::Integer||order->integer!=1))
+     return false;
     const Value* encode=get(function,"Encode");
     const Value* decode=get(function,"Decode");
     const Value* range=get(function,"Range");
