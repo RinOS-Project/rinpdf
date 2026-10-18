@@ -374,9 +374,9 @@ struct Reader {
         const Value* sizes=get(function_range.dictionary,"Size");
         const Value* bps=get(function_range.dictionary,"BitsPerSample");
         const Value* order=get(function_range.dictionary,"Order");
-        // Cubic interpolation (Order 3) is not yet implemented; do not
-        // silently render it as linear interpolation.
-        if(order&&(order->kind!=Value::Kind::Integer||order->integer!=1))
+        // Reject interpolation orders outside the supported 1 and 3.
+        if(order&&(order->kind!=Value::Kind::Integer||
+                   (order->integer!=1&&order->integer!=3)))
          return false;
         const Value* range=get(function_range.dictionary,"Range");
         const Value* encode=get(function_range.dictionary,"Encode");
@@ -445,6 +445,7 @@ struct Reader {
        sampled_parameters.inputs=device_inputs;
        sampled_parameters.outputs=tint_channels;
        sampled_parameters.bits=tint_sample_bits;
+       sampled_parameters.order=order?unsigned(order->integer):1;
        for(unsigned d=0;d<device_inputs;++d){
         sampled_parameters.sizes[d]=tint_sizes[d];
         sampled_parameters.domain[2*d]=tint_domain[2*d];
