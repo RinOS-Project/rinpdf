@@ -473,4 +473,16 @@ bool tokenize_calculator_function(const std::vector<uint8_t>& program,
    return true;
 }
 
+bool compile_calculator_function(const std::vector<uint8_t>& source,
+                                 CalculatorProgram& output) {
+ std::vector<std::string> tokens;
+ if(!tokenize_calculator_function(source,tokens))return false;
+ output.tokens=std::move(tokens);
+ return true;
+}
+bool evaluate_calculator_function(const CalculatorProgram& program,
+                                  double input,unsigned outputs,double* result) {
+ return evaluate_calculator_tokens(program.tokens,input,outputs,result);
+}
+
 } // namespace rinpdf::parser
