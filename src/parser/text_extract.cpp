@@ -585,9 +585,25 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
        (next_y-text_line_y)*line_axis_x/old_length;
    // Matrix setup alone does not emit glyphs. Do not infer a line break
    // from successive Tm operators before any text has been shown.
-   if(has_line_origin&&text_run_emitted&&
-      std::abs(displacement_normal)>0.001&&!suppressed)
-    new_line_pending=true;
+   if(has_line_origin&&text_run_emitted&&!suppressed){
+    const auto font_it=fonts.find(selected);
+    const bool vertical=font_it!=fonts.end()&&
+      font_it->second.subtype=="Type0"&&
+      font_it->second.encoding=="Identity-V";
+    if(vertical){
+     // Identity-V writes along the negative second column of Tm.
+     // A displacement perpendicular to that axis begins another column.
+     const double axis_length=std::hypot(line_c,line_d);
+     if(!std::isfinite(axis_length)||axis_length<=1e-12)return false;
+     const double dx=next_x-text_line_x;
+     const double dy=next_y-text_line_y;
+     const double cross=(dx*line_d-dy*line_c)/axis_length;
+     const double tolerance=std::max(0.001,font_size*axis_length*0.15);
+     if(!std::isfinite(cross)||!std::isfinite(tolerance))return false;
+     if(std::abs(cross)>tolerance)new_line_pending=true;
+    }else if(std::abs(displacement_normal)>0.001)
+     new_line_pending=true;
+   }
    if(!suppressed&&has_line_origin&&text_run_emitted&&text_cursor_known&&
       !new_line_pending&&operands[0]==line_a&&operands[1]==line_b&&
       operands[2]==line_c&&operands[3]==line_d&&
