@@ -245,6 +245,9 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      stream+=std::to_string(line_cap)+" J ";
      stream+=std::to_string(line_join)+" j ";
      stream+=number_text(miter_limit)+" M ";
+     stream+="[ ";
+     for(double v:dash_pattern)stream+=number_text(v)+" ";
+     stream+="] "+number_text(dash_phase)+" d ";
      for(double v:{a,bx,cx,d,e,f})stream+=number_text(v)+" ";
      stream+="cm ";
      for(double v:fm.matrix)stream+=number_text(v)+" ";
