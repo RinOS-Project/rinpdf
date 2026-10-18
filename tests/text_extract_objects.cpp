@@ -123,5 +123,12 @@ int main(){
  // A larger initial font preserves its gap on a smaller next font.
  if(!check("BT /F1 20 Tf 1 0 0 1 0 0 Tm "
            "[<41> -600] TJ /F2 10 Tf <42> Tj ET","A B"))return 24;
+ // TJ displacements must retain their physical length across Tz changes.
+ if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm "
+           "[<41> -600] TJ 200 Tz <42> Tj ET","AB"))return 25;
+ if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm "
+           "[<41> -1200] TJ 200 Tz <42> Tj ET","A B"))return 26;
+ if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm "
+           "[<41> -600] TJ 50 Tz <42> Tj ET","A B"))return 27;
  return 0;
 }
