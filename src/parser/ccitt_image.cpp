@@ -84,8 +84,9 @@ bool decode_ccitt_image(const uint8_t* data,size_t length,
   if(TIFFReadScanline(decoder,scan.data(),y,0)<0){ok=false;break;}
   for(unsigned x=0;x<width;++x){
    const bool bit=(scan[x/8]>>(7-(x%8)))&1;
-   // MINISWHITE samples: 0 is white, 1 is black.
-   const bool black=black_is_one?!bit:bit;
+   // LibTIFF exposes MINISWHITE bits (0 white, 1 black).
+   // PDF BlackIs1 determines which input sample value denotes black.
+   const bool black=black_is_one?bit:!bit;
    out[size_t(y)*width+x]=black?0:255;
   }
  }
