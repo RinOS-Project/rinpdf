@@ -187,7 +187,8 @@ struct Reader {
       if(!w||!h||!bits||!cs||
          w->kind!=Value::Kind::Integer||h->kind!=Value::Kind::Integer||
          bits->kind!=Value::Kind::Integer||
-         (bits->integer!=8&&bits->integer!=1)||
+         (bits->integer!=8&&bits->integer!=4&&
+          bits->integer!=2&&bits->integer!=1)||
          w->integer<=0||h->integer<=0||
          w->integer>4096||h->integer>4096||
          (cs->kind!=Value::Kind::Name&&cs->kind!=Value::Kind::Array)){return false;}
@@ -210,6 +211,9 @@ struct Reader {
        if(palette.size()!=size_t(maximum_index+1)*palette_channels)return false;
        indexed=true;
       }
+      if(!indexed&&bits->integer!=8&&bits->integer!=1)return false;
+      if(indexed&&unsigned(maximum_index)>=(1u<<unsigned(bits->integer)))
+       return false;
       const unsigned channels=indexed?1:
         cs->text=="DeviceGray"?1:cs->text=="DeviceRGB"?3:
         cs->text=="DeviceCMYK"?4:0;
@@ -224,7 +228,7 @@ struct Reader {
       const bool fax=filter&&filter->kind==Value::Kind::Name&&
         (filter->text=="CCITTFaxDecode"||filter->text=="CCF");
       if(fax){
-       if(bits->integer!=1||channels!=1||
+       if(indexed||bits->integer!=1||channels!=1||
           get(range.dictionary,"SMask")||get(range.dictionary,"Mask")||
           get(range.dictionary,"Decode"))return false;
        const Value* parms=get(range.dictionary,"DecodeParms");
@@ -256,7 +260,7 @@ struct Reader {
              image.pixels))return false;
        return true;
       }
-      if(bits->integer!=8)return false;
+      if(!indexed&&bits->integer!=8)return false;
       // Support a same-size, 8-bit grayscale SMask image. Restrict the
       // initial implementation to raw/Flate data without predictors.
       if(const Value* smask=get(range.dictionary,"SMask")){
@@ -311,10 +315,26 @@ struct Reader {
                         value->integer==expected_value);
        };
        if(!check("Columns",image.width)||!check("Colors",channels)||
-          !check("BitsPerComponent",8))return false;
+          !check("BitsPerComponent",unsigned(bits->integer)))return false;
       }
-      if(!decode_stream(data,size,range,image.pixels,expected)||
-         image.pixels.size()!=expected)return false;
+      const unsigned sample_bits=unsigned(bits->integer);
+      const size_t packed_stride=(size_t(image.width)*sample_bits+7)/8;
+      const size_t decoded_size=indexed&&sample_bits<8?
+         packed_stride*image.height:expected;
+      std::vector<uint8_t> decoded;
+      if(!decode_stream(data,size,range,decoded,decoded_size)||
+         decoded.size()!=decoded_size)return false;
+      if(indexed&&sample_bits<8){
+       image.pixels.resize(size_t(image.width)*image.height);
+       const unsigned sample_mask=(1u<<sample_bits)-1;
+       for(size_t y=0;y<image.height;++y)
+        for(size_t x=0;x<image.width;++x){
+         const size_t bit=x*sample_bits;
+         image.pixels[y*image.width+x]=uint8_t(
+          (decoded[y*packed_stride+bit/8]>>(8-sample_bits-(bit%8)))&
+          sample_mask);
+        }
+      }else image.pixels=std::move(decoded);
       if(indexed){
        std::vector<uint8_t> rgb(size_t(image.width)*image.height*3);
        for(size_t i=0;i<size_t(image.width)*image.height;++i){
