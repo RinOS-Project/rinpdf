@@ -454,6 +454,25 @@ struct Reader {
      if(!renderer::parse_sfnt(local.embedded_truetype.data(),
                               local.embedded_truetype.size(),validated))
       return false;
+     if(const Value* cmap=get(font,"ToUnicode")){
+      if(cmap->kind!=Value::Kind::Reference)return false;
+      std::set<size_t> cmap_visiting;
+      std::string cmap_name;
+      if(!resolve_unicode_cmap(*cmap,0,cmap_visiting,
+           local.unicode_sequences,local.unicode_codespaces,
+           cmap_name,&scope))return false;
+     }
+     if(local.subtype=="TrueType"){
+      if(const Value* missing=get(desc,"MissingWidth")){
+       if(missing->kind==Value::Kind::Integer)
+        local.missing_width=double(missing->integer);
+       else if(missing->kind==Value::Kind::Real)
+        local.missing_width=missing->real;
+       else return false;
+       if(!std::isfinite(local.missing_width)||
+          local.missing_width<0||local.missing_width>100000)return false;
+      }
+     }
      form.local_fonts.emplace(alias,std::move(local));
     }
    }
