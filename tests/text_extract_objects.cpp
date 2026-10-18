@@ -113,5 +113,15 @@ int main(){
  if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm <41> Tj "
            "/F2 10 Tf <42> Tj 1 0 0 1 17 0 Tm <41> Tj ET",
            "ABA"))return 21;
+ // A TJ gap is expressed in the font size active when TJ executes.
+ // Switching to a larger font must not turn a six-unit gap into twelve.
+ if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm "
+           "[<41> -600] TJ /F2 20 Tf <42> Tj ET","AB"))return 22;
+ // A twelve-unit gap remains large enough after the font size change.
+ if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm "
+           "[<41> -1200] TJ /F2 20 Tf <42> Tj ET","A B"))return 23;
+ // A larger initial font preserves its gap on a smaller next font.
+ if(!check("BT /F1 20 Tf 1 0 0 1 0 0 Tm "
+           "[<41> -600] TJ /F2 10 Tf <42> Tj ET","A B"))return 24;
  return 0;
 }
