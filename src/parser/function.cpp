@@ -640,18 +640,13 @@ bool compile_calculator_function(const std::vector<uint8_t>& source,
   }
  }
  if(!openings.empty())return false;
- output.tokens=std::move(tokens);
  output.instructions=std::move(instructions);
- output.numeric_constants=std::move(constants);
- output.operator_codes=std::move(codes);
  return true;
 }
 bool evaluate_calculator_function(const CalculatorProgram& program,
                                   double input,unsigned outputs,double* result) {
  return evaluate_calculator_tokens({},input,outputs,result,
-                                   &program.numeric_constants,
-                                   &program.operator_codes,
-                                   &program.instructions);
+                                   nullptr,nullptr,&program.instructions);
 }
 
 } // namespace rinpdf::parser
