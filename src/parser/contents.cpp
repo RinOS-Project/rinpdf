@@ -322,6 +322,7 @@ struct Reader {
   active.erase(id);return true;
  }
  bool load_local_form(const Value& ref,unsigned depth,std::set<size_t>& visiting,
+                     const std::map<std::pair<int64_t,int64_t>,std::string>& page_names,
                      PageForm& form) const {
   if(depth>=8||ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
   const size_t id=size_t(ref.integer);
@@ -371,11 +372,26 @@ struct Reader {
        children.dictionary.size()>128)return false;
     for(const auto& [alias,child_ref]:children.dictionary){
      if(child_ref.kind!=Value::Kind::Reference)return false;
-     PageForm child;
-     // This path deliberately accepts Form children only. An independently
-     // referenced image needs the image decoder and is not silently ignored.
-     if(!load_local_form(child_ref,depth+1,visiting,child))return false;
-     form.local_forms.emplace(alias,std::move(child));
+     const XrefEntry* child_entry=nullptr;
+     if(!entry(child_ref,child_entry))return false;
+     StreamRange child_range;
+     if(!locate_indirect_stream(data,size,*child_entry,xref,child_range))
+      return false;
+     const Value* child_type=get(child_range.dictionary,"Subtype");
+     if(!child_type||child_type->kind!=Value::Kind::Name)return false;
+     if(child_type->text=="Image"){
+      const auto page=page_names.find({child_ref.integer,
+                                        int64_t(child_ref.generation)});
+      // Page-registered images reuse the already decoded image. An image
+      // solely reachable from this Form needs its own decoder integration.
+      if(page==page_names.end())return false;
+      form.xobject_aliases.emplace(alias,page->second);
+     }else if(child_type->text=="Form"){
+      PageForm child;
+      if(!load_local_form(child_ref,depth+1,visiting,page_names,child))
+       return false;
+      form.local_forms.emplace(alias,std::move(child));
+     }else return false;
     }
    }
   }
@@ -429,7 +445,7 @@ struct Reader {
       if(subtype->text!="Form")continue;
       PageForm form;
       std::set<size_t> visiting;
-      if(!load_local_form(objref,0,visiting,form)){
+      if(!load_local_form(objref,0,visiting,page_names,form)){
        active.erase(id);return false;
       }
       output.emplace(name,std::move(form));
