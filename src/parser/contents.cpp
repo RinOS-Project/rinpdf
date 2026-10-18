@@ -6,6 +6,7 @@
 #include "stream_object.h"
 #include "stream.h"
 #include "dct_image.h"
+#include "ccitt_image.h"
 #include "value.h"
 #include "font_encoding.h"
 #include "tounicode.h"
@@ -146,7 +147,8 @@ struct Reader {
       const Value* cs=get(range.dictionary,"ColorSpace");
       if(!w||!h||!bits||!cs||
          w->kind!=Value::Kind::Integer||h->kind!=Value::Kind::Integer||
-         bits->kind!=Value::Kind::Integer||bits->integer!=8||
+         bits->kind!=Value::Kind::Integer||
+         (bits->integer!=8&&bits->integer!=1)||
          w->integer<=0||h->integer<=0||
          w->integer>4096||h->integer>4096||
          cs->kind!=Value::Kind::Name){return false;}
@@ -159,6 +161,43 @@ struct Reader {
       image=PageImage{};
       image.width=unsigned(w->integer);image.height=unsigned(h->integer);
       image.channels=channels;
+      const Value* filter=get(range.dictionary,"Filter");
+      const bool fax=filter&&filter->kind==Value::Kind::Name&&
+        (filter->text=="CCITTFaxDecode"||filter->text=="CCF");
+      if(fax){
+       if(bits->integer!=1||channels!=1||
+          get(range.dictionary,"SMask")||get(range.dictionary,"Mask")||
+          get(range.dictionary,"Decode"))return false;
+       const Value* parms=get(range.dictionary,"DecodeParms");
+       if(parms&&parms->kind!=Value::Kind::Dictionary)return false;
+       auto number=[&](const char* key,long long fallback,long long& out){
+        const Value* v=parms?get(*parms,key):nullptr;
+        if(!v){out=fallback;return true;}
+        if(v->kind!=Value::Kind::Integer)return false;
+        out=v->integer;return true;
+       };
+       auto boolean=[&](const char* key,bool fallback,bool& out){
+        const Value* v=parms?get(*parms,key):nullptr;
+        if(!v){out=fallback;return true;}
+        if(v->kind!=Value::Kind::Boolean)return false;
+        out=v->boolean;return true;
+       };
+       long long k=0,columns=image.width,rows=image.height,damaged=0;
+       bool byte_align=false,black_is_one=false;
+       if(!number("K",0,k)||!number("Columns",image.width,columns)||
+          !number("Rows",image.height,rows)||
+          !number("DamagedRowsBeforeError",0,damaged)||
+          !boolean("EncodedByteAlign",false,byte_align)||
+          !boolean("BlackIs1",false,black_is_one)||
+          columns!=image.width||rows!=image.height||damaged!=0||
+          (k!=-1&&k!=0)||
+          range.offset>size||range.length>size-range.offset||
+          !decode_ccitt_image(data+range.offset,range.length,
+             image.width,image.height,int(k),byte_align,black_is_one,
+             image.pixels))return false;
+       return true;
+      }
+      if(bits->integer!=8)return false;
       // Support a same-size, 8-bit grayscale SMask image. Restrict the
       // initial implementation to raw/Flate data without predictors.
       if(const Value* smask=get(range.dictionary,"SMask")){
@@ -189,7 +228,6 @@ struct Reader {
         return false;
        }
       }
-      const Value* filter=get(range.dictionary,"Filter");
       const bool dct=filter&&filter->kind==Value::Kind::Name&&
         (filter->text=="DCTDecode"||filter->text=="DCT");
       if(dct){
