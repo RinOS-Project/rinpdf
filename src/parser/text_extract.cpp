@@ -371,6 +371,9 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
      std::string decoded;
      if(!decode_run(run.bytes,fonts.at(selected),decoded))return false;
      if(decoded.empty())continue;
+     // The gap precedes this run: its classification must not depend on
+     // whether this run's glyph widths can be resolved.
+     const bool gap_cursor_known=text_cursor_known;
      double run_advance=0;
      if(text_cursor_known&&text_advance(run.bytes,active_font,
          font_size,character_spacing,word_spacing,horizontal_scale,run_advance)){
@@ -379,7 +382,7 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
      }else text_cursor_known=false;
      const double physical_gap=-net_adjustment*font_size*
                                horizontal_scale/1000.0;
-     const bool gap_is_space=text_cursor_known?
+     const bool gap_is_space=gap_cursor_known?
        (std::isfinite(physical_space)&&physical_space>0&&
         std::isfinite(physical_gap)&&physical_gap>=physical_space):
        (std::isfinite(gap_threshold)&&gap_threshold>0&&
