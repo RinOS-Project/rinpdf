@@ -325,6 +325,25 @@ struct Reader {
   }
   active.erase(id);return true;
  }
+ bool parse_font_encoding(const Value& font,PageFont& out) const {
+  const Value* encoding=get(font,"Encoding");
+  if(!encoding)return true;
+  Value resolved;
+  if(encoding->kind==Value::Kind::Reference){
+   if(!object(*encoding,resolved))return false;
+  }else resolved=*encoding;
+  if(resolved.kind==Value::Kind::Name){
+   out.encoding=resolved.text;
+   return true;
+  }
+  if(resolved.kind!=Value::Kind::Dictionary)return false;
+  const Value* base=get(resolved,"BaseEncoding");
+  const Value* differences=get(resolved,"Differences");
+  if(!base||base->kind!=Value::Kind::Name||!differences||
+     !decode_font_differences(*differences,out.differences))return false;
+  out.encoding=base->text;
+  return true;
+ }
  bool load_local_form(const Value& ref,unsigned depth,std::set<size_t>& visiting,
                      const std::map<std::pair<int64_t,int64_t>,std::string>& page_names,
                      PageForm& form) const {
@@ -388,21 +407,7 @@ struct Reader {
      PageFont local;
      local.base_font=base->text;
      local.subtype=subtype->text;
-     Value resolved_encoding;
-     if(encoding->kind==Value::Kind::Reference){
-      if(!object(*encoding,resolved_encoding))return false;
-     }else resolved_encoding=*encoding;
-     if(resolved_encoding.kind==Value::Kind::Name)
-      local.encoding=resolved_encoding.text;
-     else if(resolved_encoding.kind==Value::Kind::Dictionary){
-      const Value* base_encoding=get(resolved_encoding,"BaseEncoding");
-      const Value* differences=get(resolved_encoding,"Differences");
-      if(!base_encoding||base_encoding->kind!=Value::Kind::Name||
-         !differences||
-         !decode_font_differences(*differences,local.differences))
-       return false;
-      local.encoding=base_encoding->text;
-     }else return false;
+     if(!parse_font_encoding(font,local))return false;
      Value desc;
      if(local.subtype=="Type0"){
       if(local.encoding!="Identity-H"&&local.encoding!="Identity-V")
@@ -679,22 +684,7 @@ struct Reader {
        active.erase(id);return false;
       }
       PageFont resource{base->text,subtype->text,"",{}};
-      if(const Value* encoding=get(font,"Encoding")){
-       Value resolved;
-       if(encoding->kind==Value::Kind::Reference){
-        if(!object(*encoding,resolved)){active.erase(id);return false;}
-       }else resolved=*encoding;
-       if(resolved.kind==Value::Kind::Name)resource.encoding=resolved.text;
-       else if(resolved.kind==Value::Kind::Dictionary){
-        const Value* base_encoding=get(resolved,"BaseEncoding");
-        const Value* differences=get(resolved,"Differences");
-        if(!base_encoding||base_encoding->kind!=Value::Kind::Name||
-           !differences||!decode_font_differences(*differences,resource.differences)){
-         active.erase(id);return false;
-        }
-        resource.encoding=base_encoding->text;
-       }else{active.erase(id);return false;}
-      }
+      if(!parse_font_encoding(font,resource)){active.erase(id);return false;}
       if(resource.subtype!="Type0"){
        const Value* first=get(font,"FirstChar");
        const Value* last=get(font,"LastChar");
