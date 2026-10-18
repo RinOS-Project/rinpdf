@@ -228,7 +228,9 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
     const auto& im=found->second;
     pending_image.clear();
     if((im.channels!=1&&im.channels!=3)||!im.width||!im.height||
-       im.pixels.size()!=size_t(im.width)*im.height*im.channels)return false;
+       im.pixels.size()!=size_t(im.width)*im.height*im.channels||
+       (!im.alpha.empty()&&im.alpha.size()!=size_t(im.width)*im.height))
+     return false;
     const double det=a*d-bx*cx;
     if(!std::isfinite(det)||std::abs(det)<1e-12)return false;
     const Point corners[]={transform(0,0),transform(1,0),
@@ -258,9 +260,17 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      const unsigned iy=std::min(im.height-1,unsigned((1-v)*im.height));
      const size_t source=(size_t(iy)*im.width+ix)*im.channels;
      const size_t target=size_t(py)*stride+size_t(px)*4;
-     rgba[target]=im.pixels[source];
-     rgba[target+1]=im.pixels[source+(im.channels==3?1:0)];
-     rgba[target+2]=im.pixels[source+(im.channels==3?2:0)];
+     const unsigned opacity=im.alpha.empty()?255:
+       im.alpha[size_t(iy)*im.width+ix];
+     if(!opacity)continue;
+     // Source-over on the renderer's opaque page buffer.
+     for(unsigned channel=0;channel<3;++channel){
+      const unsigned src=im.pixels[source+
+         (im.channels==3?channel:0)];
+      const unsigned dst=rgba[target+channel];
+      rgba[target+channel]=uint8_t(
+        (src*opacity+dst*(255-opacity)+127)/255);
+     }
      rgba[target+3]=255;
     }
     continue;
