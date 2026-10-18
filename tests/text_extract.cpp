@@ -295,6 +295,19 @@ int main(){
       short_tm_gap.size(),0,result))return 87;
  if(result.find("ABB\\nBB B")!=std::string::npos)return 88;
  result=previous;
+ // Off-baseline Td moves must not be interpreted as a horizontal gap.
+ // This also exercises the shared projection helper's line separation.
+ std::string different_line_td=pdf;
+ const std::string td_source="0 -16 Td";
+ const std::string td_shift="20 -1 Td";
+ static_assert(sizeof("0 -16 Td")==sizeof("20 -1 Td"));
+ const auto shifted_at=different_line_td.find(td_source);
+ if(shifted_at==std::string::npos)return 89;
+ different_line_td.replace(shifted_at,td_source.size(),td_shift);
+ if(!extract_page_text(reinterpret_cast<const uint8_t*>(different_line_td.data()),
+      different_line_td.size(),0,result))return 90;
+ if(result!=previous)return 91;
+ result=previous;
  // The UTF-16BE ActualText payload must reject lone low surrogates.
  // Replace equal-length hex digits so all xref offsets remain valid.
  std::string unpaired_low=pdf;
