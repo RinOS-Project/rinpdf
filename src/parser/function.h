@@ -52,7 +52,8 @@ bool evaluate_calculator_tokens(const std::vector<std::string>& tokens,
                                 double input,unsigned outputs,
                                 double* result,
                                 const std::map<std::string,std::pair<double,uint8_t>>* constants=nullptr,
-                                const std::map<std::string,uint8_t>* operators=nullptr);
+                                const std::map<std::string,uint8_t>* operators=nullptr,
+                                const std::vector<struct CalculatorInstruction>* instructions=nullptr);
 
 // Lex a decoded PDF Type 4 calculator stream into a validated token program.
 // Output is replaced only on success.
