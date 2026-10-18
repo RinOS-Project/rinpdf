@@ -5,6 +5,7 @@
 #include "object_resolver.h"
 #include "stream_object.h"
 #include "stream.h"
+#include "dct_image.h"
 #include "value.h"
 #include "font_encoding.h"
 #include "tounicode.h"
@@ -192,6 +193,23 @@ struct Reader {
          get(range.dictionary,"Decode")){active.erase(id);return false;}
       const size_t expected=size_t(w->integer)*size_t(h->integer)*channels;
       if(expected>32*1024*1024){active.erase(id);return false;}
+      PageImage image;
+      image.width=unsigned(w->integer);image.height=unsigned(h->integer);
+      image.channels=channels;
+      const Value* filter=get(range.dictionary,"Filter");
+      const bool dct=filter&&filter->kind==Value::Kind::Name&&
+        (filter->text=="DCTDecode"||filter->text=="DCT");
+      if(dct){
+       // JPEG image data is compressed independently of PDF Flate filters.
+       // DecodeParms predictors are not valid for this path.
+       if(get(range.dictionary,"DecodeParms")||
+          range.offset>size||range.length>size-range.offset||
+          !decode_dct_image(data+range.offset,range.length,
+             unsigned(w->integer),unsigned(h->integer),channels,
+             image.pixels)){active.erase(id);return false;}
+       output.emplace(name,std::move(image));
+       continue;
+      }
       // PDF Flate image predictors operate on complete scanlines.
       // Undo the predictor before exposing samples to the renderer.
       unsigned predictor=1;
@@ -256,9 +274,6 @@ struct Reader {
        }
        decoded=std::move(raw);
       }
-      PageImage image;
-      image.width=unsigned(w->integer);image.height=unsigned(h->integer);
-      image.channels=channels;
       image.pixels=std::move(decoded);
       output.emplace(name,std::move(image));
      }
