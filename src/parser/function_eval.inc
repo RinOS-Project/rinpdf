@@ -564,13 +564,8 @@
      compiled=&exponent_function_cache.emplace(key,std::move(local)).first->second;
     else compiled=&local;
    }
-   const double powered=std::pow(x,compiled->exponent);
-   if(!std::isfinite(powered))return false;
-   for(unsigned j=0;j<outputs;++j){
-    result[j]=compiled->c0[j]+powered*
-              (compiled->c1[j]-compiled->c0[j]);
-    if(!std::isfinite(result[j]))return false;
-   }
+   if(!evaluate_exponential_function(*compiled,x,outputs,result))
+    return false;
   }else if(type->integer==3){
    CachedStitch local;
    const CachedStitch* compiled=nullptr;
