@@ -321,6 +321,67 @@ struct Reader {
   }
   active.erase(id);return true;
  }
+ bool load_local_form(const Value& ref,unsigned depth,std::set<size_t>& visiting,
+                     PageForm& form) const {
+  if(depth>=8||ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
+  const size_t id=size_t(ref.integer);
+  if(!visiting.insert(id).second)return false;
+  const XrefEntry* ent=nullptr;
+  if(!entry(ref,ent))return false;
+  StreamRange range;
+  if(!locate_indirect_stream(data,size,*ent,xref,range))return false;
+  const Value* subtype=get(range.dictionary,"Subtype");
+  const Value* form_type=get(range.dictionary,"FormType");
+  if(!subtype||subtype->kind!=Value::Kind::Name||subtype->text!="Form"||
+     get(range.dictionary,"Group")||
+     (form_type&&(form_type->kind!=Value::Kind::Integer||form_type->integer!=1)))
+   return false;
+  const Value* bbox=get(range.dictionary,"BBox");
+  if(!bbox||bbox->kind!=Value::Kind::Array||bbox->array.size()!=4)return false;
+  auto number=[](const Value& value,double& out){
+   if(value.kind==Value::Kind::Integer)out=double(value.integer);
+   else if(value.kind==Value::Kind::Real)out=value.real;
+   else return false;
+   return std::isfinite(out)&&std::abs(out)<=10000000;
+  };
+  for(size_t i=0;i<4;++i)if(!number(bbox->array[i],form.bbox[i]))return false;
+  if(form.bbox[0]>=form.bbox[2]||form.bbox[1]>=form.bbox[3])return false;
+  if(const Value* matrix=get(range.dictionary,"Matrix")){
+   if(matrix->kind!=Value::Kind::Array||matrix->array.size()!=6)return false;
+   for(size_t i=0;i<6;++i)
+    if(!number(matrix->array[i],form.matrix[i]))return false;
+  }
+  if(!decode_stream(data,size,range,form.content,4*1024*1024))return false;
+  if(const Value* resource=get(range.dictionary,"Resources")){
+   form.own_resources=true;
+   Value scope;
+   if(resource->kind==Value::Kind::Reference){
+    if(!object(*resource,scope))return false;
+   }else scope=*resource;
+   if(scope.kind!=Value::Kind::Dictionary||
+      get(scope,"Font")||get(scope,"Properties")||
+      get(scope,"ColorSpace")||get(scope,"ExtGState")||
+      get(scope,"Pattern")||get(scope,"Shading"))return false;
+   if(const Value* x=get(scope,"XObject")){
+    Value children;
+    if(x->kind==Value::Kind::Reference){
+     if(!object(*x,children))return false;
+    }else children=*x;
+    if(children.kind!=Value::Kind::Dictionary||
+       children.dictionary.size()>128)return false;
+    for(const auto& [alias,child_ref]:children.dictionary){
+     if(child_ref.kind!=Value::Kind::Reference)return false;
+     PageForm child;
+     // This path deliberately accepts Form children only. An independently
+     // referenced image needs the image decoder and is not silently ignored.
+     if(!load_local_form(child_ref,depth+1,visiting,child))return false;
+     form.local_forms.emplace(alias,std::move(child));
+    }
+   }
+  }
+  visiting.erase(id);
+  return true;
+ }
  bool walk_forms(const Value& ref,size_t depth,size_t& current,size_t target,
   std::set<size_t>& active,const Value* inherited,
   std::map<std::string,PageForm>& output) const {
@@ -366,67 +427,9 @@ struct Reader {
       const Value* subtype=get(range.dictionary,"Subtype");
       if(!subtype||subtype->kind!=Value::Kind::Name){active.erase(id);return false;}
       if(subtype->text!="Form")continue;
-      const Value* form_type=get(range.dictionary,"FormType");
-      if(form_type&&(form_type->kind!=Value::Kind::Integer||
-                     form_type->integer!=1)){active.erase(id);return false;}
-      // Transparency groups are not composited by this renderer.
-      if(get(range.dictionary,"Group")){active.erase(id);return false;}
-      const Value* bbox=get(range.dictionary,"BBox");
-      if(!bbox||bbox->kind!=Value::Kind::Array||bbox->array.size()!=4){
-       active.erase(id);return false;
-      }
       PageForm form;
-      if(const Value* own=get(range.dictionary,"Resources")){
-       form.own_resources=true;
-       Value scope;
-       if(own->kind==Value::Kind::Reference){
-        if(!object(*own,scope)){active.erase(id);return false;}
-       }else scope=*own;
-       if(scope.kind!=Value::Kind::Dictionary||
-          get(scope,"Font")||get(scope,"Properties")||
-          get(scope,"ColorSpace")||get(scope,"ExtGState")||
-          get(scope,"Pattern")||get(scope,"Shading")){
-        active.erase(id);return false;
-       }
-       if(const Value* own_xobj=get(scope,"XObject")){
-        Value own_entries;
-        if(own_xobj->kind==Value::Kind::Reference){
-         if(!object(*own_xobj,own_entries)){active.erase(id);return false;}
-        }else own_entries=*own_xobj;
-        if(own_entries.kind!=Value::Kind::Dictionary||
-           own_entries.dictionary.size()>256){active.erase(id);return false;}
-        for(const auto& [alias,target]:own_entries.dictionary){
-         if(target.kind!=Value::Kind::Reference){active.erase(id);return false;}
-         const auto found=page_names.find({target.integer,
-                                           int64_t(target.generation)});
-         // Independently referenced child XObjects need recursive resource
-         // resolution; do not silently borrow a same-named page resource.
-         if(found==page_names.end()){active.erase(id);return false;}
-         form.xobject_aliases.emplace(alias,found->second);
-        }
-       }
-      }
-      auto fill=[&](const Value& v,double& result){
-       if(v.kind==Value::Kind::Integer)result=double(v.integer);
-       else if(v.kind==Value::Kind::Real)result=v.real;
-       else return false;
-       return std::isfinite(result)&&std::abs(result)<=10000000;
-      };
-      for(size_t k=0;k<4;++k)if(!fill(bbox->array[k],form.bbox[k])){
-       active.erase(id);return false;
-      }
-      if(form.bbox[0]>=form.bbox[2]||form.bbox[1]>=form.bbox[3]){
-       active.erase(id);return false;
-      }
-      if(const Value* m=get(range.dictionary,"Matrix")){
-       if(m->kind!=Value::Kind::Array||m->array.size()!=6){
-        active.erase(id);return false;
-       }
-       for(size_t k=0;k<6;++k)if(!fill(m->array[k],form.matrix[k])){
-        active.erase(id);return false;
-       }
-      }
-      if(!decode_stream(data,size,range,form.content,4*1024*1024)){
+      std::set<size_t> visiting;
+      if(!load_local_form(objref,0,visiting,form)){
        active.erase(id);return false;
       }
       output.emplace(name,std::move(form));
