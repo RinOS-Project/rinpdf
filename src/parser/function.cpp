@@ -501,8 +501,25 @@ bool compile_calculator_function(const std::vector<uint8_t>& source,
    constants.emplace(token,std::make_pair(value,kind));
   }
  }
+ // Resolve supported operators once. Braces and booleans are literals.
+ static const std::vector<std::string> operators={
+  "if","ifelse","copy","index","roll","dup","exch","pop",
+  "cvi","cvr","floor","ceiling","round","truncate",
+  "ln","log","sin","cos","idiv","mod","exp","atan","bitshift",
+  "neg","abs","sqrt","add","sub","mul","div","min","max",
+  "eq","ne","gt","ge","lt","le","and","or","xor","not"
+ };
+ std::map<std::string,uint8_t> codes;
+ for(const auto& token:tokens){
+  if(token=="{"||token=="}"||token=="true"||token=="false"||
+     constants.find(token)!=constants.end())continue;
+  const auto it=std::find(operators.begin(),operators.end(),token);
+  if(it==operators.end())return false;
+  codes.emplace(token,uint8_t(it-operators.begin()));
+ }
  output.tokens=std::move(tokens);
  output.numeric_constants=std::move(constants);
+ output.operator_codes=std::move(codes);
  return true;
 }
 bool evaluate_calculator_function(const CalculatorProgram& program,
