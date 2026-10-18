@@ -360,7 +360,9 @@ struct Reader {
         if(!sizes||sizes->kind!=Value::Kind::Array||
            sizes->array.size()!=device_inputs||
            !bps||bps->kind!=Value::Kind::Integer||
-           (bps->integer!=8&&bps->integer!=16)||
+           (bps->integer!=1&&bps->integer!=2&&bps->integer!=4&&
+            bps->integer!=8&&bps->integer!=12&&bps->integer!=16&&
+            bps->integer!=24&&bps->integer!=32)||
            !range||range->kind!=Value::Kind::Array||
            range->array.size()!=tint_channels*2||
            !domain||domain->kind!=Value::Kind::Array||
@@ -404,11 +406,12 @@ struct Reader {
                      !number(decode->array[2*c+1],tint_decode[2*c+1])))
           return false;
         }
-        const size_t bytes_per_sample=tint_sample_bits/8;
-        if(sample_count>4*1024*1024/bytes_per_sample)return false;
-        const size_t byte_count=sample_count*bytes_per_sample;
-        if(!decode_stream(data,size,function_range,tint_samples,byte_count)||
-           tint_samples.size()!=byte_count)return false;
+        const uint64_t bit_count=uint64_t(sample_count)*tint_sample_bits;
+        const uint64_t byte_count=(bit_count+7)/8;
+        if(byte_count>4*1024*1024)return false;
+        if(!decode_stream(data,size,function_range,tint_samples,
+                          size_t(byte_count))||
+           tint_samples.size()!=size_t(byte_count))return false;
         sampled_tint=true;
        }else if(type->integer==2){
         if(device_inputs!=1||!domain||domain->kind!=Value::Kind::Array||
@@ -655,10 +658,17 @@ struct Reader {
           }
           for(unsigned c=0;c<tint_channels;++c){
            const size_t sample_index=index*tint_channels+c;
-           const double raw=tint_sample_bits==8?
-             double(tint_samples[sample_index])/255:
-             double((unsigned(tint_samples[2*sample_index])<<8)|
-                     tint_samples[2*sample_index+1])/65535;
+           // FunctionType 0 samples are packed MSB-first, without
+           // per-sample byte padding (including 12/24/32-bit values).
+           const size_t first_bit=sample_index*size_t(tint_sample_bits);
+           uint64_t sample=0;
+           for(unsigned bit=0;bit<tint_sample_bits;++bit){
+            const size_t position=first_bit+bit;
+            sample=(sample<<1)|
+               ((tint_samples[position/8]>>(7-(position%8)))&1u);
+           }
+           const uint64_t maximum=(uint64_t(1)<<tint_sample_bits)-1;
+           const double raw=double(sample)/double(maximum);
            const double decoded=tint_decode[2*c]+raw*
               (tint_decode[2*c+1]-tint_decode[2*c]);
            values[c]+=weight*std::clamp(decoded,0.0,1.0);
