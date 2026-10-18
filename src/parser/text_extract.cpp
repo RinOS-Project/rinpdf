@@ -238,6 +238,19 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
  unsigned suppressed=0;
  size_t tokens=0;
  // Keep UTF-8 decoding and glyph advance updates identical for Tj and TJ.
+ // Centralize output bounds and avoid publishing a partial result.
+ const auto append_extracted=[&](const std::string& decoded,
+     bool infer_space)->bool{
+  if(decoded.size()>4*1024*1024-output.size())return false;
+  if(infer_space&&!output.empty()&&output.back()!=' '&&
+     output.back()!='\n'&&!decoded.empty()&&
+     decoded.front()!=' '&&decoded.front()!='\n'){
+   if(output.size()>=4*1024*1024)return false;
+   output+=' ';
+  }
+  output+=decoded;
+  return true;
+ };
  const auto decode_and_advance=[&](const std::string& bytes,
      const PageFont& font,std::string& decoded,bool& was_known){
   was_known=text_cursor_known;
@@ -404,15 +417,8 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
         std::isfinite(physical_gap)&&physical_gap>=physical_space):
        (std::isfinite(gap_threshold)&&gap_threshold>0&&
         net_adjustment<=-gap_threshold);
-     if(emitted_run&&font_size>0&&horizontal_scale>0&&
-        gap_is_space&&
-        !output.empty()&&output.back()!=' '&&output.back()!='\n'&&
-        decoded.front()!=' '&&decoded.front()!='\n'){
-      if(output.size()>=4*1024*1024)return false;
-      output+=' ';
-     }
-     if(decoded.size()>4*1024*1024-output.size())return false;
-     output+=decoded;
+     if(!append_extracted(decoded,emitted_run&&font_size>0&&
+                            horizontal_scale>0&&gap_is_space))return false;
      emitted_run=true;
      text_run_emitted=true;
      object_glyph_emitted=true;
@@ -659,16 +665,9 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
      const auto& active_font=fonts.at(selected);
      const double threshold=text_gap_threshold(active_font,font_size,
                                                character_spacing,word_spacing);
-     if(text_run_emitted&&font_size>0&&horizontal_scale>0&&
-        std::isfinite(threshold)&&threshold>0&&
-        pending_tj_adjustment<=-threshold&&!output.empty()&&
-        output.back()!=' '&&output.back()!='\n'&&
-        decoded.front()!=' '&&decoded.front()!='\n'){
-      if(output.size()>=4*1024*1024)return false;
-      output+=' ';
-     }
-     if(decoded.size()>4*1024*1024-output.size())return false;
-     output+=decoded;
+     if(!append_extracted(decoded,text_run_emitted&&font_size>0&&
+          horizontal_scale>0&&std::isfinite(threshold)&&threshold>0&&
+          pending_tj_adjustment<=-threshold))return false;
      text_run_emitted=true;
      object_glyph_emitted=true;
      pending_tj_adjustment=0;
