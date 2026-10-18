@@ -144,5 +144,14 @@ int main(){
  // and must not reappear when scaling is restored.
  if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm "
            "[<41> -600] TJ 0 Tz 100 Tz <42> Tj ET","AB"))return 31;
+ // Tj after a trailing TJ displacement and a TJ containing both
+ // strings must yield the same recovered space.
+ if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm "
+           "[<41> -600] TJ <42> Tj ET","A B"))return 32;
+ if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm "
+           "[<41> -600 <42>] TJ ET","A B"))return 33;
+ // The same pair without enough displacement must stay contiguous.
+ if(!check("BT /F1 10 Tf 1 0 0 1 0 0 Tm "
+           "[<41> -300] TJ <42> Tj ET","AB"))return 34;
  return 0;
 }
