@@ -1,6 +1,7 @@
 #include "../src/parser/text_extract.h"
 #include <cstdio>
 #include <map>
+#include <utility>
 #include <string>
 using namespace rinpdf::parser;
 int main(){
@@ -85,8 +86,8 @@ int main(){
        std::to_string(xref_at)+"\n%%EOF\n";
   return doc;
  };
- for(const auto& [x,want]:std::pair<int,const char*>[]{
-      {0,"日本"},{20,"日\n本"}}){
+ const std::pair<int,const char*> cases[]={{0,"日本"},{20,"日\n本"}};
+ for(const auto& [x,want]:cases){
   const auto test_pdf=make_two_objects(x);
   std::string output;
   if(!extract_page_text(reinterpret_cast<const uint8_t*>(test_pdf.data()),
