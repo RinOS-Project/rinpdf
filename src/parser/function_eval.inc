@@ -161,18 +161,21 @@
    // pixels do not repeatedly decompress and tokenize the same function.
    if(reference.kind!=Value::Kind::Reference)return false;
    const auto cache_key=std::make_pair(reference.integer,reference.generation);
-   std::vector<std::string> tokens;
-   auto cached=calculator_token_cache.find(cache_key);
+   CalculatorProgram temporary;
+   const CalculatorProgram* compiled=nullptr;
+   const auto cached=calculator_token_cache.find(cache_key);
    if(cached!=calculator_token_cache.end()){
-    tokens=cached->second;
+    compiled=&cached->second;
    }else{
-    std::vector<uint8_t> program;
-    if(!decode_stream(data,size,sampled_stream,program,16384))return false;
-    if(!tokenize_calculator_function(program,tokens))return false;
+    std::vector<uint8_t> source;
+    if(!decode_stream(data,size,sampled_stream,source,16384)||
+       !compile_calculator_function(source,temporary))return false;
     if(calculator_token_cache.size()<64)
-     calculator_token_cache.emplace(cache_key,tokens);
+     compiled=&calculator_token_cache.emplace(cache_key,
+                                                std::move(temporary)).first->second;
+    else compiled=&temporary;
    }
-   if(!evaluate_calculator_tokens(tokens,x,outputs,result))return false;
+   if(!evaluate_calculator_function(*compiled,x,outputs,result))return false;
   }else if(type->integer==2){
    CachedExponent local;
    const CachedExponent* compiled=nullptr;
