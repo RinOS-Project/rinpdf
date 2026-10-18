@@ -657,7 +657,10 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
         std::isfinite(threshold)&&threshold>0&&
         pending_tj_adjustment<=-threshold&&!output.empty()&&
         output.back()!=' '&&output.back()!='\n'&&
-        decoded.front()!=' '&&decoded.front()!='\n')output+=' ';
+        decoded.front()!=' '&&decoded.front()!='\n'){
+      if(output.size()>=4*1024*1024)return false;
+      output+=' ';
+     }
      if(decoded.size()>4*1024*1024-output.size())return false;
      output+=decoded;
      double run_advance=0;
