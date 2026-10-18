@@ -81,4 +81,22 @@ bool compile_calculator_function(const std::vector<uint8_t>& source,
 bool evaluate_calculator_function(const CalculatorProgram& program,
                                   double input,unsigned outputs,double* result);
 
+// Common, compiled one-input PDF Function representation.
+// Multi-input sampled functions and recursive Type 3 compilation will use
+// separate extensions; unsupported kinds fail closed.
+struct PdfFunction {
+ enum class Kind : uint8_t { Sampled=0, Exponential=2, Calculator=4 };
+ Kind kind=Kind::Exponential;
+ unsigned outputs=0;
+ double domain[2]{0,1};
+ std::array<double,8> range{};
+ ExponentialFunction exponential;
+ SampledFunction sampled;
+ std::vector<uint8_t> samples;
+ CalculatorProgram calculator;
+};
+
+bool evaluate_pdf_function(const PdfFunction& function,
+                           double input,double* result);
+
 } // namespace rinpdf::parser
