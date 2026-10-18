@@ -38,4 +38,11 @@ bool evaluate_sampled_function(const SampledFunction& function,
                                const std::vector<uint8_t>& samples,
                                double input,double* result) noexcept;
 
+// Select a Type 3 stitching segment and map its input into its child domain.
+// Bounds contain the initial and final domain endpoints.
+bool map_stitching_input(const std::vector<double>& bounds,
+                         const std::vector<double>& encode,
+                         double input,size_t& segment,
+                         double& mapped_input) noexcept;
+
 } // namespace rinpdf::parser
