@@ -56,25 +56,25 @@ int main(){
  std::string result;
  if(!extract_page_text(reinterpret_cast<const uint8_t*>(pdf.data()),pdf.size(),0,result))return 1;
  const std::string expected=
-  std::string("\\xe4\\xb8\\x96\\xe6\\x97\\xa5\\xe6\\x9c\\xac")+
-  "ABB\\nB\\nB\\nB\\nB B\\nBB BBBB BBBBBB\\nB\\nB";
+  std::string("\xe4\xb8\x96\xe6\x97\xa5\xe6\x9c\xac")+
+  "ABB\nB\nB\nB\nB B\nBB BBBB BBBBBB\nB\nB";
  if(result!=expected){
   size_t first=0;
   while(first<result.size()&&first<expected.size()&&
         result[first]==expected[first])++first;
   std::fprintf(stderr,
-      "rinpdf-text-extract mismatch at byte %zu (actual %zu, expected %zu)\\n",
+      "rinpdf-text-extract mismatch at byte %zu (actual %zu, expected %zu)\n",
       first,result.size(),expected.size());
   const auto show=[](const char* title,const std::string& bytes){
    std::fprintf(stderr,"%s: ",title);
    for(unsigned char c:bytes){
-    if(c=='\\n')std::fputs("\\\\n",stderr);
-    else if(c=='\\r')std::fputs("\\\\r",stderr);
-    else if(c=='\\t')std::fputs("\\\\t",stderr);
+    if(c=='\n')std::fputs("\\n",stderr);
+    else if(c=='\r')std::fputs("\\r",stderr);
+    else if(c=='\t')std::fputs("\\t",stderr);
     else if(c>=32&&c<127)std::fputc(c,stderr);
-    else std::fprintf(stderr,"\\\\x%02X",unsigned(c));
+    else std::fprintf(stderr,"\\x%02X",unsigned(c));
    }
-   std::fputc('\\n',stderr);
+   std::fputc('\n',stderr);
   };
   show("expected",expected);
   show("actual",result);
