@@ -64,7 +64,8 @@ static size_t sample_neighbor(size_t base,unsigned offset,size_t count,
 
 bool evaluate_sampled_function(const SampledFunction& function,
                                const std::vector<uint8_t>& samples,
-                               double input,double* result) noexcept {
+                               double input,double* result,
+                               const std::vector<double>* expanded) noexcept {
  const unsigned bits=function.bits, outputs=function.outputs;
  if(!result||outputs<1||outputs>4||function.count<2||
     (function.order!=1&&function.order!=3)||
@@ -79,7 +80,8 @@ bool evaluate_sampled_function(const SampledFunction& function,
   return false;
  const size_t total_bits=function.count*outputs*bits;
  const size_t required_bytes=total_bits/8+size_t(total_bits%8!=0);
- if(required_bytes!=samples.size()||required_bytes>4*1024*1024)
+ if(required_bytes!=samples.size()||required_bytes>4*1024*1024||
+    (expanded&&!expanded->empty()&&expanded->size()!=function.count*outputs))
   return false;
  const double clamped=std::clamp(input,function.domain[0],
                                       function.domain[1]);
@@ -95,6 +97,7 @@ bool evaluate_sampled_function(const SampledFunction& function,
  const double fraction=position-double(index);
  auto sample_at=[&](size_t sample_index)->double {
   const size_t first_bit=sample_index*bits;
+  if(expanded&&!expanded->empty())return (*expanded)[sample_index];
   const uint64_t value=unpack_pdf_sample(samples,first_bit,bits);
   return double(value)/double((uint64_t(1)<<bits)-1);
  };
@@ -121,7 +124,7 @@ bool evaluate_sampled_function(const SampledFunction& function,
 bool evaluate_multidimensional_sampled_function(
  const MultidimensionalSampledFunction& f,
  const std::vector<uint8_t>& samples,const double* inputs,
- double* result) noexcept {
+ double* result,const std::vector<double>* expanded) noexcept {
  if(!inputs||!result||f.inputs<1||f.inputs>4||
     f.outputs<1||f.outputs>4||(f.order!=1&&f.order!=3)||
     (f.bits!=1&&f.bits!=2&&f.bits!=4&&f.bits!=8&&
@@ -154,7 +157,8 @@ bool evaluate_multidimensional_sampled_function(
  const size_t total_bits=grid*f.outputs*f.bits;
  // Ceil-divide without adding 7 to a potentially overflowing size_t.
  const size_t required_bytes=total_bits/8+size_t(total_bits%8!=0);
- if(required_bytes!=samples.size())return false;
+ if(required_bytes!=samples.size()||
+    (expanded&&!expanded->empty()&&expanded->size()!=grid*f.outputs))return false;
  // Check every output channel once, even if all interpolation weights
  // for some corner happen to be zero.
  for(unsigned c=0;c<f.outputs;++c){
@@ -214,8 +218,9 @@ bool evaluate_multidimensional_sampled_function(
   const size_t first=(sample_indices[slot]*f.outputs)*f.bits;
   for(unsigned c=0;c<f.outputs;++c){
    const size_t offset=first+size_t(c)*f.bits;
-   const uint64_t value=unpack_pdf_sample(samples,offset,f.bits);
-   const double raw=double(value)/maximum;
+   const double raw=expanded&&!expanded->empty()?
+     (*expanded)[sample_indices[slot]*f.outputs+c]:
+     double(unpack_pdf_sample(samples,offset,f.bits))/maximum;
    const double d0=f.decode[c*2],d1=f.decode[c*2+1];
    computed[c]+=weight*(d0+raw*(d1-d0));
   }
