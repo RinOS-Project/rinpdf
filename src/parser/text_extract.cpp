@@ -237,6 +237,20 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
  bool cross_object_pending=false;
  unsigned suppressed=0;
  size_t tokens=0;
+ // Keep UTF-8 decoding and glyph advance updates identical for Tj and TJ.
+ const auto decode_and_advance=[&](const std::string& bytes,
+     const PageFont& font,std::string& decoded,bool& was_known){
+  was_known=text_cursor_known;
+  if(!decode_run(bytes,font,decoded))return false;
+  if(decoded.empty())return true;
+  double advance=0;
+  if(text_cursor_known&&text_advance(bytes,font,font_size,
+      character_spacing,word_spacing,horizontal_scale,advance)){
+   text_cursor+=advance;
+   if(!std::isfinite(text_cursor)||std::abs(text_cursor)>1e12)return false;
+  }else text_cursor_known=false;
+  return true;
+ };
  while(true){
   if(++tokens>1000000)return false;
   const Token t=lexer.next();
@@ -379,17 +393,10 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
      }
      if(run.bytes.empty())continue;
      std::string decoded;
-     if(!decode_run(run.bytes,fonts.at(selected),decoded))return false;
+     bool gap_cursor_known=false;
+     if(!decode_and_advance(run.bytes,active_font,decoded,
+                            gap_cursor_known))return false;
      if(decoded.empty())continue;
-     // The gap precedes this run: its classification must not depend on
-     // whether this run's glyph widths can be resolved.
-     const bool gap_cursor_known=text_cursor_known;
-     double run_advance=0;
-     if(text_cursor_known&&text_advance(run.bytes,active_font,
-         font_size,character_spacing,word_spacing,horizontal_scale,run_advance)){
-      text_cursor+=run_advance;
-      if(!std::isfinite(text_cursor)||std::abs(text_cursor)>1e12)return false;
-     }else text_cursor_known=false;
      const double physical_gap=-net_adjustment*font_size*
                                horizontal_scale/1000.0;
      const bool gap_is_space=gap_cursor_known?
@@ -645,7 +652,9 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
     }
     if(!pending.empty())new_line_pending=false;
     std::string decoded;
-    if(!decode_run(pending,fonts.at(selected),decoded))return false;
+    bool prior_cursor_known=false;
+    if(!decode_and_advance(pending,fonts.at(selected),decoded,
+                           prior_cursor_known))return false;
     if(!decoded.empty()){
      const auto& active_font=fonts.at(selected);
      const double threshold=text_gap_threshold(active_font,font_size,
@@ -660,12 +669,6 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
      }
      if(decoded.size()>4*1024*1024-output.size())return false;
      output+=decoded;
-     double run_advance=0;
-     if(text_cursor_known&&text_advance(pending,active_font,
-         font_size,character_spacing,word_spacing,horizontal_scale,run_advance)){
-      text_cursor+=run_advance;
-      if(!std::isfinite(text_cursor)||std::abs(text_cursor)>1e12)return false;
-     }else text_cursor_known=false;
      text_run_emitted=true;
      object_glyph_emitted=true;
      pending_tj_adjustment=0;
