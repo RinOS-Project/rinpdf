@@ -995,7 +995,8 @@ struct Reader {
      if(n<0||n!=std::floor(n)||n>double(stack.size())||
         stack.size()+size_t(n)>64)return false;
      const size_t count=size_t(n);
-     stack.insert(stack.end(),stack.end()-count,stack.end());
+     const std::vector<double> copied(stack.end()-count,stack.end());
+     stack.insert(stack.end(),copied.begin(),copied.end());
      continue;
     }
     if(token=="index"){
