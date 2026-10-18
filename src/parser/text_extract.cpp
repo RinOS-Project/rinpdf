@@ -553,7 +553,25 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
      output+=' ';
     }
    }
-   if(operands[1]!=0&&!suppressed)new_line_pending=true;
+   if(!suppressed){
+    const auto selected_font=fonts.find(selected);
+    const bool vertical=selected_font!=fonts.end()&&
+      selected_font->second.subtype=="Type0"&&
+      selected_font->second.encoding=="Identity-V";
+    if(vertical){
+     // Td translations along the vertical writing axis remain in-column.
+     // Only a displacement perpendicular to (c,d) starts another column.
+     const double axis_length=std::hypot(line_c,line_d);
+     if(!std::isfinite(axis_length)||axis_length<=1e-12)return false;
+     const double move_x=line_a*operands[0]+line_c*operands[1];
+     const double move_y=line_b*operands[0]+line_d*operands[1];
+     const double across=(move_x*line_d-move_y*line_c)/axis_length;
+     if(!std::isfinite(across))return false;
+     if(text_run_emitted&&std::abs(across)>
+        std::max(0.001,font_size*axis_length*0.15))
+      new_line_pending=true;
+    }else if(operands[1]!=0)new_line_pending=true;
+   }
    text_cursor=0;text_cursor_known=true;
    vertical_cursor=0;vertical_cursor_known=true;text_run_emitted=false;
    if(t.value=="TD")text_leading=-operands[1];
