@@ -166,13 +166,16 @@ bool evaluate_multidimensional_sampled_function(
     value=(value<<1)|((samples[p/8]>>(7-(p%8)))&1u);
    }
    const double raw=double(value)/double((uint64_t(1)<<f.bits)-1);
-   computed[c]+=weight*std::clamp(d0+raw*(d1-d0),lo,hi);
+   // Interpolate decoded sample values before clipping the result to
+   // /Range. Cubic weights can be negative and may overshoot the range.
+   computed[c]+=weight*(d0+raw*(d1-d0));
   }
  }
  for(unsigned c=0;c<f.outputs;++c){
   if(!std::isfinite(computed[c]))return false;
-  result[c]=computed[c];
+  computed[c]=std::clamp(computed[c],f.range[2*c],f.range[2*c+1]);
  }
+ for(unsigned c=0;c<f.outputs;++c)result[c]=computed[c];
  return true;
 }
 
