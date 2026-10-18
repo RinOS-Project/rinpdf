@@ -293,11 +293,23 @@ struct Reader {
        }
        lab=true;
       }
-      if(cs->kind==Value::Kind::Array&&cs->array.size()==4&&
+      if(cs->kind==Value::Kind::Array&&
+         (cs->array.size()==4||cs->array.size()==5)&&
          cs->array[0].kind==Value::Kind::Name&&
-         cs->array[0].text=="Separation"){
-       if(cs->array[1].kind!=Value::Kind::Name||
-          cs->array[2].kind!=Value::Kind::Name)return false;
+         (cs->array[0].text=="Separation"||
+          cs->array[0].text=="DeviceN")){
+       // A Type 2 exponential function has precisely one input.
+       // Thus only single-component DeviceN is representable here.
+       const bool device_n=cs->array[0].text=="DeviceN";
+       if(device_n){
+        if(cs->array[1].kind!=Value::Kind::Array||
+           cs->array[1].array.size()!=1||
+           cs->array[1].array[0].kind!=Value::Kind::Name)return false;
+        if(cs->array.size()==5&&
+           cs->array[4].kind!=Value::Kind::Dictionary)return false;
+       }else if(cs->array.size()!=4||
+                cs->array[1].kind!=Value::Kind::Name)return false;
+       if(cs->array[2].kind!=Value::Kind::Name)return false;
        const std::string& alternate=cs->array[2].text;
        tint_channels=alternate=="DeviceGray"?1:
                      alternate=="DeviceRGB"?3:
@@ -335,6 +347,8 @@ struct Reader {
          if(!number(setting.first->array[c],setting.second[c])||
             setting.second[c]<0||setting.second[c]>1)return false;
        }
+       // Both Separation and one-colorant DeviceN share the same
+       // one-input Type 2 tint evaluation into the alternate space.
        separation=true;
       }
       std::string palette;
