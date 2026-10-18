@@ -1033,7 +1033,7 @@ struct Reader {
     }
     if(token=="copy"){
      if(stack.empty())return false;
-     if(stack.back().kind==1||stack.back().kind==3)return false;
+     if(stack.back().kind!=2)return false;
      const double n=stack.back().number;stack.pop_back();
      if(n<0||n!=std::floor(n)||n>double(stack.size())||
         stack.size()+size_t(n)>64)return false;
@@ -1053,11 +1053,12 @@ struct Reader {
     }
     if(token=="roll"){
      if(stack.size()<2)return false;
-     if(stack.back().kind==1||stack.back().kind==3||stack[stack.size()-2].kind==1||stack[stack.size()-2].kind==3)return false;
+     if(stack.back().kind!=2||stack[stack.size()-2].kind!=2)return false;
      const double shift=stack.back().number;stack.pop_back();
      const double n=stack.back().number;stack.pop_back();
      if(n<0||n!=std::floor(n)||n>double(stack.size())||
-        shift!=std::trunc(shift)||!std::isfinite(shift))return false;
+        shift!=std::trunc(shift)||!std::isfinite(shift)||
+        std::abs(shift)>2147483647.0)return false;
      const size_t count=size_t(n);
      if(count){
       const long long distance=static_cast<long long>(std::fmod(
@@ -1148,6 +1149,8 @@ struct Reader {
      if(stack.back().kind==1||stack.back().kind==3)return false;
      double& top=stack.back().number;
      if(token=="sqrt")stack.back().kind=0;
+     if(stack.back().kind==2&&top==-2147483648.0&&
+        (token=="neg"||token=="abs"))return false;
      if(token=="neg")top=-top;
      else if(token=="abs")top=std::abs(top);
      else{
