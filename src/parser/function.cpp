@@ -155,6 +155,15 @@ static bool parse_calculator_number(const std::string& token,double& value,uint8
  return true;
 }
 
+enum class CalculatorOp : uint8_t {
+ If, IfElse, copy, index, roll, dup, exch, pop, cvi, cvr, floor, ceiling, round, truncate, ln, log, sin, cos, idiv, mod, exp, atan, bitshIft, neg, abs, sqrt, add, sub, mul, div, min, max, eq, ne, gt, ge, lt, le, and, or, xor, not
+};
+static const std::vector<std::string>& calculator_operator_names(){
+ static const std::vector<std::string> names={
+ "if", "ifelse", "copy", "index", "roll", "dup", "exch", "pop", "cvi", "cvr", "floor", "ceiling", "round", "truncate", "ln", "log", "sin", "cos", "idiv", "mod", "exp", "atan", "bitshift", "neg", "abs", "sqrt", "add", "sub", "mul", "div", "min", "max", "eq", "ne", "gt", "ge", "lt", "le", "and", "or", "xor", "not"
+ };
+ return names;
+}
 bool evaluate_calculator_tokens(const std::vector<std::string>& parsed_tokens,
                                 double input,unsigned outputs,
                                 double* result,
@@ -232,8 +241,19 @@ bool evaluate_calculator_tokens(const std::vector<std::string>& parsed_tokens,
      if(stack.size()>=64)return false;
      stack.push_back({token=="true"?1.0:0.0,1,0});continue;
     }
-    if(operators&&operators->find(token)==operators->end())return false;
-    if(token=="copy"){
+    uint8_t opcode=0;
+    if(operators){
+     const auto hit=operators->find(token);
+     if(hit==operators->end()||hit->second>=calculator_operator_names().size())
+      return false;
+     opcode=hit->second;
+    }else{
+     const auto& names=calculator_operator_names();
+     const auto it=std::find(names.begin(),names.end(),token);
+     if(it==names.end())return false;
+     opcode=uint8_t(it-names.begin());
+    }
+    if(opcode==uint8_t(CalculatorOp::copy)){
      if(stack.empty())return false;
      if(stack.back().kind!=2)return false;
      const double n=stack.back().number;stack.pop_back();
@@ -245,7 +265,7 @@ bool evaluate_calculator_tokens(const std::vector<std::string>& parsed_tokens,
      
      continue;
     }
-    if(token=="index"){
+    if(opcode==uint8_t(CalculatorOp::index)){
      if(stack.empty()||stack.back().kind!=2)return false;
      const double n=stack.back().number;stack.pop_back();
      if(n<0||n!=std::floor(n)||n>=double(stack.size())||
@@ -253,7 +273,7 @@ bool evaluate_calculator_tokens(const std::vector<std::string>& parsed_tokens,
      stack.push_back(stack[stack.size()-1-size_t(n)]);
      continue;
     }
-    if(token=="roll"){
+    if(opcode==uint8_t(CalculatorOp::roll)){
      if(stack.size()<2)return false;
      if(stack.back().kind!=2||stack[stack.size()-2].kind!=2)return false;
      const double shift=stack.back().number;stack.pop_back();
@@ -271,66 +291,66 @@ bool evaluate_calculator_tokens(const std::vector<std::string>& parsed_tokens,
      }
      continue;
     }
-    if(token=="dup"){
+    if(opcode==uint8_t(CalculatorOp::dup)){
      if(stack.empty()||stack.size()>=64)return false;
      stack.push_back(stack.back());continue;
     }
-    if(token=="exch"){
+    if(opcode==uint8_t(CalculatorOp::exch)){
      if(stack.size()<2)return false;
      std::swap(stack[stack.size()-1],stack[stack.size()-2]);
      continue;
     }
-    if(token=="pop"){
+    if(opcode==uint8_t(CalculatorOp::pop)){
      if(stack.empty())return false;
      stack.pop_back();continue;
     }
-    if(token=="cvi"||token=="cvr"||token=="floor"||
-       token=="ceiling"||token=="round"||token=="truncate"||
-       token=="ln"||token=="log"||token=="sin"||token=="cos"){
+    if(opcode==uint8_t(CalculatorOp::cvi)||opcode==uint8_t(CalculatorOp::cvr)||opcode==uint8_t(CalculatorOp::floor)||
+       opcode==uint8_t(CalculatorOp::ceiling)||opcode==uint8_t(CalculatorOp::round)||opcode==uint8_t(CalculatorOp::truncate)||
+       opcode==uint8_t(CalculatorOp::ln)||opcode==uint8_t(CalculatorOp::log)||opcode==uint8_t(CalculatorOp::sin)||opcode==uint8_t(CalculatorOp::cos)){
      if(stack.empty())return false;
      if(stack.back().kind==1||stack.back().kind==3)return false;
      double& value=stack.back().number;
-     if(token=="cvi"){
+     if(opcode==uint8_t(CalculatorOp::cvi)){
       if(value< -2147483648.0||value>2147483647.0)return false;
       value=std::trunc(value);
-     }else if(token=="truncate")value=std::trunc(value);
-     else if(token=="floor")value=std::floor(value);
-     else if(token=="ceiling")value=std::ceil(value);
-     else if(token=="round")
+     }else if(opcode==uint8_t(CalculatorOp::truncate))value=std::trunc(value);
+     else if(opcode==uint8_t(CalculatorOp::floor))value=std::floor(value);
+     else if(opcode==uint8_t(CalculatorOp::ceiling))value=std::ceil(value);
+     else if(opcode==uint8_t(CalculatorOp::round))
       value=value<0? -std::floor(-value+0.5):std::floor(value+0.5);
-     else if(token=="ln"||token=="log"){
+     else if(opcode==uint8_t(CalculatorOp::ln)||opcode==uint8_t(CalculatorOp::log)){
       if(value<=0)return false;
-      value=token=="ln"?std::log(value):std::log10(value);
-     }else if(token=="sin"||token=="cos"){
+      value=opcode==uint8_t(CalculatorOp::ln)?std::log(value):std::log10(value);
+     }else if(opcode==uint8_t(CalculatorOp::sin)||opcode==uint8_t(CalculatorOp::cos)){
       const double radians=value*(3.14159265358979323846/180.0);
-      value=token=="sin"?std::sin(radians):std::cos(radians);
+      value=opcode==uint8_t(CalculatorOp::sin)?std::sin(radians):std::cos(radians);
      }
      if(!std::isfinite(value)||std::abs(value)>1e12)return false;
-     if(token=="cvi"){
+     if(opcode==uint8_t(CalculatorOp::cvi)){
       stack.back().kind=2;
-     }else if(token=="cvr"||token=="ln"||token=="log"||
-              token=="sin"||token=="cos")stack.back().kind=0;
+     }else if(opcode==uint8_t(CalculatorOp::cvr)||opcode==uint8_t(CalculatorOp::ln)||opcode==uint8_t(CalculatorOp::log)||
+              opcode==uint8_t(CalculatorOp::sin)||opcode==uint8_t(CalculatorOp::cos))stack.back().kind=0;
      continue;
     }
-    if(token=="idiv"||token=="mod"||token=="exp"||
-       token=="atan"||token=="bitshift"){
+    if(opcode==uint8_t(CalculatorOp::idiv)||opcode==uint8_t(CalculatorOp::mod)||opcode==uint8_t(CalculatorOp::exp)||
+       opcode==uint8_t(CalculatorOp::atan)||opcode==uint8_t(CalculatorOp::bitshIft)){
      if(stack.size()<2)return false;
      if(stack.back().kind==1||stack.back().kind==3||stack[stack.size()-2].kind==1||stack[stack.size()-2].kind==3)return false;
      const bool rhs_integer=stack.back().kind==2;
      const double rhs=stack.back().number;stack.pop_back();
      double& lhs=stack.back().number;
-     if(token=="idiv"||token=="mod"){
+     if(opcode==uint8_t(CalculatorOp::idiv)||opcode==uint8_t(CalculatorOp::mod)){
       if(stack.back().kind!=2||!rhs_integer||rhs==0)return false;
       if(lhs!=std::trunc(lhs)||rhs!=std::trunc(rhs)||
          lhs< -2147483648.0||lhs>2147483647.0||
          rhs< -2147483648.0||rhs>2147483647.0||
          (lhs==-2147483648.0&&rhs==-1))return false;
-      if(token=="idiv")lhs=std::trunc(lhs/rhs);
+      if(opcode==uint8_t(CalculatorOp::idiv))lhs=std::trunc(lhs/rhs);
       else lhs=std::fmod(lhs,rhs);
-     }else if(token=="exp"){
+     }else if(opcode==uint8_t(CalculatorOp::exp)){
       if(lhs<0&&rhs!=std::trunc(rhs))return false;
       lhs=std::pow(lhs,rhs);
-     }else if(token=="atan"){
+     }else if(opcode==uint8_t(CalculatorOp::atan)){
       if(lhs==0&&rhs==0)return false;
       lhs=std::atan2(lhs,rhs)*(180.0/3.14159265358979323846);
       if(lhs<0)lhs+=360.0;
@@ -348,36 +368,36 @@ bool evaluate_calculator_tokens(const std::vector<std::string>& parsed_tokens,
           double(int64_t(shifted)-4294967296LL):double(shifted);
      }
      if(!std::isfinite(lhs)||std::abs(lhs)>1e12)return false;
-     stack.back().kind=(token=="idiv"||token=="mod"||token=="bitshift")?2:0;
+     stack.back().kind=(opcode==uint8_t(CalculatorOp::idiv)||opcode==uint8_t(CalculatorOp::mod)||opcode==uint8_t(CalculatorOp::bitshIft))?2:0;
      continue;
     }
-    if(token=="neg"||token=="abs"||token=="sqrt"){
+    if(opcode==uint8_t(CalculatorOp::neg)||opcode==uint8_t(CalculatorOp::abs)||opcode==uint8_t(CalculatorOp::sqrt)){
      if(stack.empty())return false;
      if(stack.back().kind==1||stack.back().kind==3)return false;
      double& top=stack.back().number;
      if(stack.back().kind==2&&top==-2147483648.0&&
-        (token=="neg"||token=="abs"))return false;
-     if(token=="sqrt")stack.back().kind=0;
-     if(token=="neg")top=-top;
-     else if(token=="abs")top=std::abs(top);
+        (opcode==uint8_t(CalculatorOp::neg)||opcode==uint8_t(CalculatorOp::abs)))return false;
+     if(opcode==uint8_t(CalculatorOp::sqrt))stack.back().kind=0;
+     if(opcode==uint8_t(CalculatorOp::neg))top=-top;
+     else if(opcode==uint8_t(CalculatorOp::abs))top=std::abs(top);
      else{
       if(top<0)return false;
       top=std::sqrt(top);
      }
-    }else if(token=="add"||token=="sub"||token=="mul"||
-             token=="div"||token=="min"||token=="max"){
+    }else if(opcode==uint8_t(CalculatorOp::add)||opcode==uint8_t(CalculatorOp::sub)||opcode==uint8_t(CalculatorOp::mul)||
+             opcode==uint8_t(CalculatorOp::div)||opcode==uint8_t(CalculatorOp::min)||opcode==uint8_t(CalculatorOp::max)){
      if(stack.size()<2)return false;
      if(stack.back().kind==1||stack.back().kind==3||stack[stack.size()-2].kind==1||stack[stack.size()-2].kind==3)return false;
      const bool integer_pair=stack.back().kind==2&&stack[stack.size()-2].kind==2;
      const double rhs=stack.back().number;stack.pop_back();
      double& lhs=stack.back().number;
-     if(token=="add")lhs+=rhs;
-     else if(token=="sub")lhs-=rhs;
-     else if(token=="mul")lhs*=rhs;
-     else if(token=="div"){
+     if(opcode==uint8_t(CalculatorOp::add))lhs+=rhs;
+     else if(opcode==uint8_t(CalculatorOp::sub))lhs-=rhs;
+     else if(opcode==uint8_t(CalculatorOp::mul))lhs*=rhs;
+     else if(opcode==uint8_t(CalculatorOp::div)){
       if(rhs==0)return false;
       lhs/=rhs;
-     }else if(token=="min")lhs=std::min(lhs,rhs);
+     }else if(opcode==uint8_t(CalculatorOp::min))lhs=std::min(lhs,rhs);
      else lhs=std::max(lhs,rhs);
      const bool in_integer_range=std::isfinite(lhs)&&
        lhs>=-2147483648.0&&lhs<=2147483647.0;
@@ -385,15 +405,15 @@ bool evaluate_calculator_tokens(const std::vector<std::string>& parsed_tokens,
      const bool keep_integer=integer_pair&&token!="div"&&
        lhs==std::trunc(lhs)&&in_integer_range;
      stack.back().kind=keep_integer?2:0;
-    }else if(token=="eq"||token=="ne"||token=="gt"||
-             token=="ge"||token=="lt"||token=="le"||
-             token=="and"||token=="or"||token=="xor"){
+    }else if(opcode==uint8_t(CalculatorOp::eq)||opcode==uint8_t(CalculatorOp::ne)||opcode==uint8_t(CalculatorOp::gt)||
+             opcode==uint8_t(CalculatorOp::ge)||opcode==uint8_t(CalculatorOp::lt)||opcode==uint8_t(CalculatorOp::le)||
+             opcode==uint8_t(CalculatorOp::and)||opcode==uint8_t(CalculatorOp::or)||opcode==uint8_t(CalculatorOp::xor)){
      if(stack.size()<2)return false;
      if(stack.back().kind==3||stack[stack.size()-2].kind==3)return false;
      const bool lb=stack[stack.size()-2].kind==1;
      const bool rb=stack.back().kind==1;
-     const bool logic=token=="and"||token=="or"||token=="xor";
-     const bool equality=token=="eq"||token=="ne";
+     const bool logic=opcode==uint8_t(CalculatorOp::and)||opcode==uint8_t(CalculatorOp::or)||opcode==uint8_t(CalculatorOp::xor);
+     const bool equality=opcode==uint8_t(CalculatorOp::eq)||opcode==uint8_t(CalculatorOp::ne);
      const bool integers=stack.back().kind==2&&
                          stack[stack.size()-2].kind==2;
      if((logic&&!((lb&&rb)||integers))||
@@ -401,26 +421,26 @@ bool evaluate_calculator_tokens(const std::vector<std::string>& parsed_tokens,
         (!logic&&!equality&&(lb||rb)))return false;
      const double rhs=stack.back().number;stack.pop_back();
      double& lhs=stack.back().number;
-     if(token=="eq")lhs=lhs==rhs;
-     else if(token=="ne")lhs=lhs!=rhs;
-     else if(token=="gt")lhs=lhs>rhs;
-     else if(token=="ge")lhs=lhs>=rhs;
-     else if(token=="lt")lhs=lhs<rhs;
-     else if(token=="le")lhs=lhs<=rhs;
+     if(opcode==uint8_t(CalculatorOp::eq))lhs=lhs==rhs;
+     else if(opcode==uint8_t(CalculatorOp::ne))lhs=lhs!=rhs;
+     else if(opcode==uint8_t(CalculatorOp::gt))lhs=lhs>rhs;
+     else if(opcode==uint8_t(CalculatorOp::ge))lhs=lhs>=rhs;
+     else if(opcode==uint8_t(CalculatorOp::lt))lhs=lhs<rhs;
+     else if(opcode==uint8_t(CalculatorOp::le))lhs=lhs<=rhs;
      else if(integers){
       if(lhs< -2147483648.0||lhs>2147483647.0||
          rhs< -2147483648.0||rhs>2147483647.0)return false;
       const uint32_t a=uint32_t(int32_t(lhs));
       const uint32_t b=uint32_t(int32_t(rhs));
-      const uint32_t bits=token=="and"?(a&b):
-                          token=="or"?(a|b):(a^b);
+      const uint32_t bits=opcode==uint8_t(CalculatorOp::and)?(a&b):
+                          opcode==uint8_t(CalculatorOp::or)?(a|b):(a^b);
       lhs=bits>=0x80000000u?double(int64_t(bits)-4294967296LL):
                              double(bits);
-     }else if(token=="and")lhs=lhs!=0&&rhs!=0;
-     else if(token=="or")lhs=lhs!=0||rhs!=0;
+     }else if(opcode==uint8_t(CalculatorOp::and))lhs=lhs!=0&&rhs!=0;
+     else if(opcode==uint8_t(CalculatorOp::or))lhs=lhs!=0||rhs!=0;
      else lhs=(lhs!=0)!=(rhs!=0);
      stack.back().kind=logic&&integers?2:1;
-    }else if(token=="not"){
+    }else if(opcode==uint8_t(CalculatorOp::not)){
      if(stack.empty())return false;
      if(stack.back().kind==1)
       stack.back().number=stack.back().number==0?1:0;
@@ -504,13 +524,7 @@ bool compile_calculator_function(const std::vector<uint8_t>& source,
   }
  }
  // Resolve supported operators once. Braces and booleans are literals.
- static const std::vector<std::string> operators={
-  "if","ifelse","copy","index","roll","dup","exch","pop",
-  "cvi","cvr","floor","ceiling","round","truncate",
-  "ln","log","sin","cos","idiv","mod","exp","atan","bitshift",
-  "neg","abs","sqrt","add","sub","mul","div","min","max",
-  "eq","ne","gt","ge","lt","le","and","or","xor","not"
- };
+ const auto& operators=calculator_operator_names();
  std::map<std::string,uint8_t> codes;
  for(const auto& token:tokens){
   if(token=="{"||token=="}"||token=="true"||token=="false"||
