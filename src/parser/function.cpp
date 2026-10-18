@@ -832,7 +832,13 @@ static bool sampled_byte_count(size_t samples,unsigned outputs,
 static void prepare_sample_grid(const std::vector<uint8_t>& source,
                                 size_t count,unsigned bits,
                                 std::vector<double>& expanded) {
- if(count>65536||count==0)return;
+ // Only expand where a compact normalized grid makes sense. Avoid
+ // multiplying memory for large 24/32-bit tables or tiny packed grids.
+ if(count==0||count>65536||bits==0)return;
+ const size_t packed_bytes=count*size_t(bits)/8+
+                           size_t((count*size_t(bits))%8!=0);
+ if(count*sizeof(double)>512*1024||
+    count*sizeof(double)>packed_bytes*4)return;
  expanded.resize(count);
  const double divisor=double((uint64_t(1)<<bits)-1);
  for(size_t i=0;i<count;++i)
