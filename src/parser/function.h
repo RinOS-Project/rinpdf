@@ -96,6 +96,17 @@ struct PdfFunction {
  CalculatorProgram calculator;
 };
 
+bool compile_exponential_pdf_function(const ExponentialFunction& parameters,
+                                      unsigned outputs,double domain_min,
+                                      double domain_max,
+                                      const std::array<double,8>& range,
+                                      PdfFunction& output);
+bool compile_calculator_pdf_function(const std::vector<uint8_t>& source,
+                                     unsigned outputs,double domain_min,
+                                     double domain_max,
+                                     const std::array<double,8>& range,
+                                     PdfFunction& output);
+
 bool evaluate_pdf_function(const PdfFunction& function,
                            double input,double* result);
 
