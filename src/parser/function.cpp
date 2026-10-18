@@ -103,8 +103,9 @@ bool map_stitching_input(const std::vector<double>& bounds,
 }
 
 static bool parse_calculator_number(const std::string& token,double& value,uint8_t& kind) {
-    const bool numeric_start=token[0]=='+'||token[0]=='-'||
-      token[0]=='.'||(token[0]>='0'&&token[0]<='9');
+    const bool numeric_start=inst?inst->kind==0:
+      token[0]=='+'||token[0]=='-'||token[0]=='.'||
+      (token[0]>='0'&&token[0]<='9');
     if(!numeric_start)return false;
      const char* first=token.data();
      const char* last=first+token.size();
@@ -209,9 +210,13 @@ bool evaluate_calculator_tokens(const std::vector<std::string>& parsed_tokens,
                                 double input,unsigned outputs,
                                 double* result,
                                 const std::map<std::string,std::pair<double,uint8_t>>* constants,
-                                const std::map<std::string,uint8_t>* operators) {
+                                const std::map<std::string,uint8_t>* operators,
+                                const std::vector<CalculatorInstruction>* instructions) {
  if(!result||outputs<1||outputs>4||!std::isfinite(input)||parsed_tokens.size()>4096)return false;
+ if(instructions&&instructions->size()!=parsed_tokens.size())return false;
  std::vector<std::string> tokens=parsed_tokens;
+ std::vector<CalculatorInstruction> program;
+ if(instructions)program=*instructions;
    struct CalcValue { double number; uint8_t kind; size_t procedure; };
    // kind: 0 real, 1 boolean, 2 integer, 3 procedure.
    std::vector<CalcValue> stack{{input,0,0}};
@@ -224,6 +229,8 @@ bool evaluate_calculator_tokens(const std::vector<std::string>& parsed_tokens,
    for(size_t pc=0;pc<tokens.size();++pc){
     token=tokens[pc];
     if(++operations>4096||token.size()>64)return false;
+    const CalculatorInstruction* inst=
+       instructions&&pc<program.size()?&program[pc]:nullptr;
     const uint8_t active_depth=execution_depth[pc];
     if(token=="{"){
      size_t nested=1;
@@ -260,6 +267,27 @@ bool evaluate_calculator_tokens(const std::vector<std::string>& parsed_tokens,
      if(!chosen.empty()){
       if(active_depth>=8||chosen.size()>4096-tokens.size())return false;
       tokens.insert(tokens.begin()+pc+1,chosen.begin(),chosen.end());
+      if(instructions){
+       // Expanded procedure instructions are decoded on demand. Unexpanded
+       // instructions retain their original precompiled representation.
+       program.insert(program.begin()+pc+1,chosen.size(),
+                      CalculatorInstruction{});
+       for(size_t j=0;j<chosen.size();++j){
+        const auto& text=chosen[j];
+        CalculatorInstruction& decoded=program[pc+1+j];
+        if(text=="{")decoded.kind=2;
+        else if(text=="}")decoded.kind=3;
+        else if(text=="true"||text=="false"){
+         decoded.kind=1;decoded.number=text=="true"?1:0;
+        }else if(constants&&constants->count(text)){
+         decoded.kind=0;
+         decoded.number=constants->at(text).first;
+         decoded.numeric_kind=constants->at(text).second;
+        }else if(operators&&operators->count(text)){
+         decoded.kind=4;decoded.opcode=operators->at(text);
+        }else return false;
+       }
+      }
       execution_depth.insert(execution_depth.begin()+pc+1,
                              chosen.size(),uint8_t(active_depth+1));
      }
@@ -269,7 +297,8 @@ bool evaluate_calculator_tokens(const std::vector<std::string>& parsed_tokens,
       token[0]=='.'||(token[0]>='0'&&token[0]<='9');
     if(numeric_start){
      double value=0;uint8_t kind=0;
-     if(constants){
+     if(inst){value=inst->number;kind=inst->numeric_kind;}
+     else if(constants){
       const auto hit=constants->find(token);
       if(hit==constants->end())return false;
       value=hit->second.first;kind=hit->second.second;
@@ -278,12 +307,16 @@ bool evaluate_calculator_tokens(const std::vector<std::string>& parsed_tokens,
      stack.push_back({value,kind,0});
      continue;
     }
-    if(token=="true"||token=="false"){
+    if(inst?inst->kind==1:(token=="true"||token=="false")){
      if(stack.size()>=64)return false;
-     stack.push_back({token=="true"?1.0:0.0,1,0});continue;
+     stack.push_back({inst?inst->number:
+       (token=="true"?1.0:0.0),1,0});continue;
     }
     uint8_t opcode=0;
-    if(operators){
+    if(inst){
+     if(inst->kind!=4)return false;
+     opcode=inst->opcode;
+    }else if(operators){
      const auto hit=operators->find(token);
      if(hit==operators->end()||hit->second>=calculator_operator_names().size())
       return false;
@@ -605,7 +638,8 @@ bool evaluate_calculator_function(const CalculatorProgram& program,
                                   double input,unsigned outputs,double* result) {
  return evaluate_calculator_tokens(program.tokens,input,outputs,result,
                                    &program.numeric_constants,
-                                   &program.operator_codes);
+                                   &program.operator_codes,
+                                   &program.instructions);
 }
 
 } // namespace rinpdf::parser
