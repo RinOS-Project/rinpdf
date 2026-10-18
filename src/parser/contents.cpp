@@ -56,6 +56,12 @@ struct Reader {
   std::vector<double> encode;
  };
  mutable std::map<std::pair<int64_t,int64_t>,CachedStitch> stitch_function_cache;
+ struct CachedExponent {
+  double exponent=1;
+  std::array<double,4> c0{{0,0,0,0}};
+  std::array<double,4> c1{{1,1,1,1}};
+ };
+ mutable std::map<std::tuple<int64_t,int64_t,unsigned>,CachedExponent> exponent_function_cache;
  bool entry(const Value& ref,const XrefEntry*& out) const {
   if(ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
   auto it=std::find_if(xref.begin(),xref.end(),[&](const XrefEntry& e){
@@ -1387,24 +1393,38 @@ struct Reader {
     if(value.kind==1||value.kind==3)return false;
    for(unsigned j=0;j<outputs;++j)result[j]=stack[j].number;
   }else if(type->integer==2){
-   const Value* n=get(function,"N");
-   double exponent=0;
-   if(!n||!number(*n,exponent)||exponent<=0||exponent>100)
-    return false;
-   double c0[4]{0,0,0,0},c1[4]{1,1,1,1};
-   for(const auto& [key,dest]:std::initializer_list<std::pair<const char*,double*>>{
-        {"C0",c0},{"C1",c1}}){
-    if(const Value* values=get(function,key)){
-     if(values->kind!=Value::Kind::Array||
-        values->array.size()!=outputs)return false;
-     for(unsigned j=0;j<outputs;++j)
-      if(!number(values->array[j],dest[j]))return false;
-    }
+   CachedExponent local;
+   const CachedExponent* compiled=nullptr;
+   const bool indirect=reference.kind==Value::Kind::Reference;
+   const auto key=std::make_tuple(reference.integer,reference.generation,
+                                  outputs);
+   if(indirect){
+    const auto hit=exponent_function_cache.find(key);
+    if(hit!=exponent_function_cache.end())compiled=&hit->second;
    }
-   const double exponentiated=std::pow(x,exponent);
-   if(!std::isfinite(exponentiated))return false;
+   if(!compiled){
+    const Value* n=get(function,"N");
+    if(!n||!number(*n,local.exponent)||
+       local.exponent<=0||local.exponent>100)return false;
+    for(const auto& [name,dest]:
+       std::initializer_list<std::pair<const char*,std::array<double,4>*>>{
+        {"C0",&local.c0},{"C1",&local.c1}}){
+     if(const Value* values=get(function,name)){
+      if(values->kind!=Value::Kind::Array||
+         values->array.size()!=outputs)return false;
+      for(unsigned j=0;j<outputs;++j)
+       if(!number(values->array[j],(*dest)[j]))return false;
+     }
+    }
+    if(indirect&&exponent_function_cache.size()<128)
+     compiled=&exponent_function_cache.emplace(key,std::move(local)).first->second;
+    else compiled=&local;
+   }
+   const double powered=std::pow(x,compiled->exponent);
+   if(!std::isfinite(powered))return false;
    for(unsigned j=0;j<outputs;++j){
-    result[j]=c0[j]+exponentiated*(c1[j]-c0[j]);
+    result[j]=compiled->c0[j]+powered*
+              (compiled->c1[j]-compiled->c0[j]);
     if(!std::isfinite(result[j]))return false;
    }
   }else if(type->integer==3){
