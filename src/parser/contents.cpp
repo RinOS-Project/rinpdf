@@ -1135,7 +1135,10 @@ struct Reader {
      if(stack.empty())return false;
      if(stack.back().kind==1||stack.back().kind==3)return false;
      double& value=stack.back().number;
-     if(token=="cvi"||token=="truncate")value=std::trunc(value);
+     if(token=="cvi"){
+      if(value< -2147483648.0||value>2147483647.0)return false;
+      value=std::trunc(value);
+     }else if(token=="truncate")value=std::trunc(value);
      else if(token=="floor")value=std::floor(value);
      else if(token=="ceiling")value=std::ceil(value);
      else if(token=="round")value=std::floor(value+0.5);
@@ -1148,7 +1151,6 @@ struct Reader {
      }
      if(!std::isfinite(value)||std::abs(value)>1e12)return false;
      if(token=="cvi"){
-      if(value< -2147483648.0||value>2147483647.0)return false;
       stack.back().kind=2;
      }else if(token=="cvr"||token=="ln"||token=="log"||
               token=="sin"||token=="cos")stack.back().kind=0;
@@ -1197,9 +1199,9 @@ struct Reader {
      if(stack.empty())return false;
      if(stack.back().kind==1||stack.back().kind==3)return false;
      double& top=stack.back().number;
-     if(token=="sqrt")stack.back().kind=0;
      if(stack.back().kind==2&&top==-2147483648.0&&
         (token=="neg"||token=="abs"))return false;
+     if(token=="sqrt")stack.back().kind=0;
      if(token=="neg")top=-top;
      else if(token=="abs")top=std::abs(top);
      else{
