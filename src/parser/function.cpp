@@ -827,6 +827,18 @@ static bool sampled_byte_count(size_t samples,unsigned outputs,
  return bytes<=4*1024*1024;
 }
 
+// Predecode only small tables: 64 Ki samples / 512 KiB of doubles.
+// Large grids remain packed, avoiding excessive memory amplification.
+static void prepare_sample_grid(const std::vector<uint8_t>& source,
+                                size_t count,unsigned bits,
+                                std::vector<double>& expanded) {
+ if(count>65536||count==0)return;
+ expanded.resize(count);
+ const double divisor=double((uint64_t(1)<<bits)-1);
+ for(size_t i=0;i<count;++i)
+  expanded[i]=double(unpack_pdf_sample(source,i*bits,bits))/divisor;
+}
+
 bool compile_multidimensional_pdf_function(
  const MultidimensionalSampledFunction& parameters,
  const std::vector<uint8_t>& decoded_samples,PdfFunction& output) {
@@ -853,6 +865,8 @@ bool compile_multidimensional_pdf_function(
  compiled.outputs=parameters.outputs;
  compiled.multidimensional=parameters;
  compiled.samples=decoded_samples;
+ prepare_sample_grid(compiled.samples,count*parameters.outputs,
+                     parameters.bits,compiled.expanded_samples);
  output=std::move(compiled);
  return true;
 }
@@ -863,7 +877,8 @@ bool evaluate_pdf_function_inputs(const PdfFunction& function,
  if(function.kind==PdfFunction::Kind::MultiSampled){
   if(count!=function.multidimensional.inputs)return false;
   return evaluate_multidimensional_sampled_function(
-    function.multidimensional,function.samples,inputs,result);
+    function.multidimensional,function.samples,inputs,result,
+    &function.expanded_samples);
  }
  if(count!=1)return false;
  return evaluate_pdf_function(function,inputs[0],result);
@@ -888,6 +903,8 @@ bool compile_sampled_pdf_function(const SampledFunction& parameters,
  compiled.range=parameters.range;
  compiled.sampled=parameters;
  compiled.samples=decoded_samples;
+ prepare_sample_grid(compiled.samples,parameters.count*parameters.outputs,
+                     parameters.bits,compiled.expanded_samples);
  std::array<double,4> probe{};
  if(!evaluate_sampled_function(compiled.sampled,compiled.samples,
                                 compiled.domain[0],probe.data()))return false;
@@ -980,7 +997,7 @@ static bool evaluate_pdf_function_depth(const PdfFunction& function,
       function.sampled.domain[0]!=function.domain[0]||
       function.sampled.domain[1]!=function.domain[1])return false;
    ok=evaluate_sampled_function(function.sampled,function.samples,
-                                 clamped,values.data());
+                                 clamped,values.data(),&function.expanded_samples);
    break;
   case PdfFunction::Kind::Exponential:
    ok=evaluate_exponential_function(function.exponential,clamped,
