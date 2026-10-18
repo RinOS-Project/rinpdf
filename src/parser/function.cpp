@@ -227,13 +227,13 @@ bool evaluate_calculator_tokens(const std::vector<std::string>& parsed_tokens,
   auto& frame=frames.back();
   if(frame.pc>=frame.end){frames.pop_back();continue;}
   const size_t pc=frame.pc++;
-  token=tokens[pc];
-  if(++operations>4096||token.empty()||token.size()>64)return false;
   const CalculatorInstruction* inst=instructions?&(*instructions)[pc]:nullptr;
-  if(token=="{"){
+  if(++operations>4096)return false;
+  if(!inst){token=tokens[pc];if(token.empty()||token.size()>64)return false;}
+  if(inst?inst->kind==2:token=="{"){
    size_t end=SIZE_MAX;
    if(inst&&inst->kind==2&&inst->matching_brace<frame.end&&
-      inst->matching_brace>pc&&tokens[inst->matching_brace]=="}")
+      inst->matching_brace>pc&&(*instructions)[inst->matching_brace].kind==3)
     end=inst->matching_brace;
    else{
     unsigned nested=1;
@@ -249,9 +249,10 @@ bool evaluate_calculator_tokens(const std::vector<std::string>& parsed_tokens,
    frame.pc=end+1;
    continue;
   }
-  if(token=="}")return false;
-  if(token=="if"||token=="ifelse"){
-   const size_t needed=token=="if"?1:2;
+  if(inst?inst->kind==3:token=="}")return false;
+  if(inst?(inst->kind==4&&(inst->opcode==0||inst->opcode==1)):
+     (token=="if"||token=="ifelse")){
+   const size_t needed=(inst?inst->opcode==0:token=="if")?1:2;
    if(stack.size()<needed+1||
       stack[stack.size()-needed-1].kind!=1)return false;
    for(size_t j=0;j<needed;++j)
@@ -267,8 +268,9 @@ bool evaluate_calculator_tokens(const std::vector<std::string>& parsed_tokens,
    frames.push_back({span.begin,span.end,uint8_t(frame.depth+1)});
    continue;
   }
-    const bool numeric_start=token[0]=='+'||token[0]=='-'||
-      token[0]=='.'||(token[0]>='0'&&token[0]<='9');
+    const bool numeric_start=inst?inst->kind==0:
+      token[0]=='+'||token[0]=='-'||token[0]=='.'||
+      (token[0]>='0'&&token[0]<='9');
     if(numeric_start){
      double value=0;uint8_t kind=0;
      if(inst){value=inst->number;kind=inst->numeric_kind;}
