@@ -239,6 +239,19 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
  size_t tokens=0;
  // Keep UTF-8 decoding and glyph advance updates identical for Tj and TJ.
  // Centralize output bounds and avoid publishing a partial result.
+ // ActualText replacements obey the same 4 MiB output budget,
+ // including a newline inferred before the replacement.
+ const auto append_actual_text=[&](const std::string& replacement)->bool{
+  const bool add_newline=new_line_pending&&!output.empty()&&
+      output.back()!='\n';
+  const size_t remaining=4*1024*1024-output.size();
+  if(replacement.size()>remaining||
+      (add_newline&&replacement.size()==remaining))return false;
+  if(add_newline)output+='\n';
+  new_line_pending=false;
+  output+=replacement;
+  return true;
+ };
  const auto append_extracted=[&](const std::string& decoded,
      bool infer_space)->bool{
   const bool add_space=infer_space&&!output.empty()&&
@@ -286,10 +299,7 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
       std::string replacement;
       if(!actual_text(it->second.text,replacement))return false;
       if(!suppressed){
-       if(new_line_pending&&!output.empty()&&output.back()!='\n')output+='\n';
-       new_line_pending=false;
-       if(output.size()+replacement.size()>4*1024*1024)return false;
-       output+=replacement;
+       if(!append_actual_text(replacement))return false;
       }
       replace=true;
      }
@@ -317,10 +327,7 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
       std::string replacement;
       if(!actual_text(property->second.actual_text,replacement))return false;
       if(!suppressed){
-       if(new_line_pending&&!output.empty()&&output.back()!='\n')output+='\n';
-       new_line_pending=false;
-       if(output.size()+replacement.size()>4*1024*1024)return false;
-       output+=replacement;
+       if(!append_actual_text(replacement))return false;
       }
      }
      actual_stack.push_back({});
