@@ -214,112 +214,59 @@ bool evaluate_calculator_tokens(const std::vector<std::string>& parsed_tokens,
                                 const std::vector<CalculatorInstruction>* instructions) {
  if(!result||outputs<1||outputs>4||!std::isfinite(input)||parsed_tokens.size()>4096)return false;
  if(instructions&&instructions->size()!=parsed_tokens.size())return false;
- std::vector<std::string> tokens=parsed_tokens;
- std::vector<CalculatorInstruction> program;
- if(instructions)program=*instructions;
-   struct CalcValue { double number; uint8_t kind; size_t procedure; };
-   // kind: 0 real, 1 boolean, 2 integer, 3 procedure.
-   std::vector<CalcValue> stack{{input,0,0}};
-   std::vector<std::vector<std::string>> procedures;
-   std::string token;
-   size_t operations=0;
-   // Each expanded token carries the procedure-call depth at which it runs.
-   // This bounds nested execution even when branches are expanded iteratively.
-   std::vector<uint8_t> execution_depth(tokens.size(),0);
-   for(size_t pc=0;pc<tokens.size();++pc){
-    token=tokens[pc];
-    if(++operations>4096||token.size()>64)return false;
-    const CalculatorInstruction* inst=
-       instructions&&pc<program.size()?&program[pc]:nullptr;
-    const uint8_t active_depth=execution_depth[pc];
-    if(token=="{"){
-     size_t end=SIZE_MAX;
-     if(inst&&inst->kind==2&&inst->matching_brace<tokens.size()&&
-        inst->matching_brace>pc&&tokens[inst->matching_brace]=="}")
-      end=inst->matching_brace;
-     else{
-      size_t nested=1;
-      for(size_t i=pc+1;i<tokens.size();++i){
-       if(tokens[i]=="{"){
-        if(++nested>8)return false;
-       }else if(tokens[i]=="}"&&--nested==0){
-        end=i;break;
-       }
-      }
-     }
-     if(end==SIZE_MAX||end-pc-1>4096||procedures.size()>=64)return false;
-     std::vector<std::string> procedure(tokens.begin()+pc+1,
-                                         tokens.begin()+end);
-     pc=end;
-     if(stack.size()>=64)return false;
-     procedures.push_back(std::move(procedure));
-     stack.push_back({0,3,procedures.size()});continue;
+ const auto& tokens=parsed_tokens;
+ struct CalcValue { double number; uint8_t kind; size_t procedure; };
+ struct ProcedureSpan { size_t begin,end; };
+ struct ExecutionFrame { size_t pc,end; uint8_t depth; };
+ std::vector<CalcValue> stack{{input,0,0}};
+ std::vector<ProcedureSpan> procedures;
+ std::vector<ExecutionFrame> frames{{0,tokens.size(),0}};
+ size_t operations=0;
+ std::string token;
+ while(!frames.empty()){
+  auto& frame=frames.back();
+  if(frame.pc>=frame.end){frames.pop_back();continue;}
+  const size_t pc=frame.pc++;
+  token=tokens[pc];
+  if(++operations>4096||token.empty()||token.size()>64)return false;
+  const CalculatorInstruction* inst=instructions?&(*instructions)[pc]:nullptr;
+  if(token=="{"){
+   size_t end=SIZE_MAX;
+   if(inst&&inst->kind==2&&inst->matching_brace<frame.end&&
+      inst->matching_brace>pc&&tokens[inst->matching_brace]=="}")
+    end=inst->matching_brace;
+   else{
+    unsigned nested=1;
+    for(size_t i=pc+1;i<frame.end;++i){
+     if(tokens[i]=="{"){if(++nested>8)return false;}
+     else if(tokens[i]=="}"&&--nested==0){end=i;break;}
     }
-    if(token=="}")return false;
-    if(token=="if"||token=="ifelse"){
-     const size_t required=token=="if"?1:2;
-     if(stack.size()<required+1||
-        stack[stack.size()-required-1].kind!=1)return false;
-     for(size_t j=0;j<required;++j)
-      if(stack[stack.size()-required+j].kind!=3)return false;
-     const bool condition=stack[stack.size()-required-1].number!=0;
-     const size_t chosen_id=required==1?stack.back().procedure:
-       stack[stack.size()-(condition?2:1)].procedure;
-     if(chosen_id==0||chosen_id>procedures.size())return false;
-     const std::vector<std::string> chosen=(required==1&&!condition)?
-       std::vector<std::string>{}:procedures[chosen_id-1];
-     for(size_t j=0;j<required+1;++j){
-      stack.pop_back();
-     }
-     if(!chosen.empty()){
-      if(active_depth>=8||chosen.size()>4096-tokens.size())return false;
-      tokens.insert(tokens.begin()+pc+1,chosen.begin(),chosen.end());
-      if(instructions){
-       // Expanded procedure instructions are decoded on demand. Unexpanded
-       // instructions retain their original precompiled representation.
-       const size_t insertion=pc+1;
-       for(auto& instruction:program){
-        if(instruction.matching_brace!=SIZE_MAX&&
-           instruction.matching_brace>=insertion)
-         instruction.matching_brace+=chosen.size();
-       }
-       program.insert(program.begin()+insertion,chosen.size(),
-                      CalculatorInstruction{});
-       for(size_t j=0;j<chosen.size();++j){
-        const auto& text=chosen[j];
-        CalculatorInstruction& decoded=program[pc+1+j];
-        if(text=="{")decoded.kind=2;
-        else if(text=="}")decoded.kind=3;
-        else if(text=="true"||text=="false"){
-         decoded.kind=1;decoded.number=text=="true"?1:0;
-        }else if(constants&&constants->count(text)){
-         decoded.kind=0;
-         decoded.number=constants->at(text).first;
-         decoded.numeric_kind=constants->at(text).second;
-        }else if(operators&&operators->count(text)){
-         decoded.kind=4;decoded.opcode=operators->at(text);
-        }else return false;
-       }
-       std::vector<size_t> open;
-       for(size_t j=0;j<chosen.size();++j){
-        auto& instruction=program[insertion+j];
-        if(instruction.kind==2){
-         if(open.size()>=8)return false;
-         open.push_back(insertion+j);
-        }else if(instruction.kind==3){
-         if(open.empty())return false;
-         const size_t start=open.back();open.pop_back();
-         program[start].matching_brace=insertion+j;
-         instruction.matching_brace=start;
-        }
-       }
-       if(!open.empty())return false;
-      }
-      execution_depth.insert(execution_depth.begin()+pc+1,
-                             chosen.size(),uint8_t(active_depth+1));
-     }
-     continue;
-    }
+   }
+   if(end==SIZE_MAX||end-pc-1>4096||procedures.size()>=64||
+      stack.size()>=64)return false;
+   procedures.push_back({pc+1,end});
+   stack.push_back({0,3,procedures.size()});
+   frame.pc=end+1;
+   continue;
+  }
+  if(token=="}")return false;
+  if(token=="if"||token=="ifelse"){
+   const size_t needed=token=="if"?1:2;
+   if(stack.size()<needed+1||
+      stack[stack.size()-needed-1].kind!=1)return false;
+   for(size_t j=0;j<needed;++j)
+    if(stack[stack.size()-needed+j].kind!=3)return false;
+   const bool condition=stack[stack.size()-needed-1].number!=0;
+   const size_t id=needed==1?stack.back().procedure:
+     stack[stack.size()-(condition?2:1)].procedure;
+   if(id==0||id>procedures.size())return false;
+   const ProcedureSpan span=procedures[id-1];
+   for(size_t j=0;j<needed+1;++j)stack.pop_back();
+   if((needed==1&&!condition)||span.begin==span.end)continue;
+   if(frame.depth>=8||span.end>tokens.size())return false;
+   frames.push_back({span.begin,span.end,uint8_t(frame.depth+1)});
+   continue;
+  }
     const bool numeric_start=token[0]=='+'||token[0]=='-'||
       token[0]=='.'||(token[0]>='0'&&token[0]<='9');
     if(numeric_start){
