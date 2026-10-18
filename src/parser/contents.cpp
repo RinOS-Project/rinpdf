@@ -188,14 +188,43 @@ struct Reader {
          cs->kind!=Value::Kind::Name){active.erase(id);return false;}
       const unsigned channels=cs->text=="DeviceGray"?1:
                               cs->text=="DeviceRGB"?3:0;
-      if(!channels||get(range.dictionary,"SMask")||
-         get(range.dictionary,"Mask")||
+      if(!channels||get(range.dictionary,"Mask")||
          get(range.dictionary,"Decode")){active.erase(id);return false;}
       const size_t expected=size_t(w->integer)*size_t(h->integer)*channels;
       if(expected>32*1024*1024){active.erase(id);return false;}
       PageImage image;
       image.width=unsigned(w->integer);image.height=unsigned(h->integer);
       image.channels=channels;
+      // Support a same-size, 8-bit grayscale SMask image. Restrict the
+      // initial implementation to raw/Flate data without predictors.
+      if(const Value* smask=get(range.dictionary,"SMask")){
+       if(smask->kind!=Value::Kind::Reference){active.erase(id);return false;}
+       const XrefEntry* mask_entry=nullptr;
+       if(!entry(*smask,mask_entry)){active.erase(id);return false;}
+       StreamRange mask_range;
+       if(!locate_indirect_stream(data,size,*mask_entry,xref,mask_range)){
+        active.erase(id);return false;
+       }
+       const Value* ms=get(mask_range.dictionary,"Subtype");
+       const Value* mw=get(mask_range.dictionary,"Width");
+       const Value* mh=get(mask_range.dictionary,"Height");
+       const Value* mb=get(mask_range.dictionary,"BitsPerComponent");
+       const Value* mc=get(mask_range.dictionary,"ColorSpace");
+       if(!ms||ms->kind!=Value::Kind::Name||ms->text!="Image"||
+          !mw||mw->kind!=Value::Kind::Integer||mw->integer!=w->integer||
+          !mh||mh->kind!=Value::Kind::Integer||mh->integer!=h->integer||
+          !mb||mb->kind!=Value::Kind::Integer||mb->integer!=8||
+          !mc||mc->kind!=Value::Kind::Name||mc->text!="DeviceGray"||
+          get(mask_range.dictionary,"SMask")||
+          get(mask_range.dictionary,"Mask")||
+          get(mask_range.dictionary,"Decode")||
+          get(mask_range.dictionary,"DecodeParms")||
+          !decode_stream(data,size,mask_range,image.alpha,
+                         size_t(w->integer)*size_t(h->integer))||
+          image.alpha.size()!=size_t(w->integer)*size_t(h->integer)){
+        active.erase(id);return false;
+       }
+      }
       const Value* filter=get(range.dictionary,"Filter");
       const bool dct=filter&&filter->kind==Value::Kind::Name&&
         (filter->text=="DCTDecode"||filter->text=="DCT");
