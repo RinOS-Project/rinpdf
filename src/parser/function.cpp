@@ -66,10 +66,11 @@ bool evaluate_sampled_function(const SampledFunction& function,
                                       function.domain[1]);
  const double normalized=(clamped-function.domain[0])/
                           (function.domain[1]-function.domain[0]);
- const double position=std::clamp(function.encode[0]+normalized*
-     (function.encode[1]-function.encode[0]),0.0,
-     double(function.count-1));
- if(!std::isfinite(position))return false;
+ if(!std::isfinite(normalized))return false;
+ const double mapped=function.encode[0]+normalized*
+     (function.encode[1]-function.encode[0]);
+ if(!std::isfinite(mapped))return false;
+ const double position=std::clamp(mapped,0.0,double(function.count-1));
  const size_t index=size_t(position);
  const size_t next=std::min(index+1,function.count-1);
  const double fraction=position-double(index);
@@ -124,9 +125,11 @@ bool evaluate_multidimensional_sampled_function(
      grid>SIZE_MAX/f.sizes[d])return false;
   const double x=std::clamp(inputs[d],f.domain[d*2],f.domain[d*2+1]);
   const double t=(x-f.domain[d*2])/(f.domain[d*2+1]-f.domain[d*2]);
-  const double pos=std::clamp(f.encode[d*2]+
-     t*(f.encode[d*2+1]-f.encode[d*2]),0.0,double(f.sizes[d]-1));
-  if(!std::isfinite(pos))return false;
+  if(!std::isfinite(t))return false;
+  const double mapped=f.encode[d*2]+
+     t*(f.encode[d*2+1]-f.encode[d*2]);
+  if(!std::isfinite(mapped))return false;
+  const double pos=std::clamp(mapped,0.0,double(f.sizes[d]-1));
   lower[d]=size_t(pos);
   fraction[d]=pos-double(lower[d]);
   stride[d]=grid;
@@ -134,8 +137,9 @@ bool evaluate_multidimensional_sampled_function(
  }
  if(grid>SIZE_MAX/f.outputs/f.bits)return false;
  const size_t total_bits=grid*f.outputs*f.bits;
- if(total_bits/8>samples.size()||((total_bits+7)/8)>samples.size())
-  return false;
+ // Ceil-divide without adding 7 to a potentially overflowing size_t.
+ const size_t required_bytes=total_bits/8+size_t(total_bits%8!=0);
+ if(required_bytes!=samples.size())return false;
  // Check every output channel once, even if all interpolation weights
  // for some corner happen to be zero.
  for(unsigned c=0;c<f.outputs;++c){
