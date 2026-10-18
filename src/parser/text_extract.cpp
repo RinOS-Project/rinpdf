@@ -419,11 +419,11 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
   }
   if(text&&(t.value=="Td"||t.value=="TD")){
    if(operands.size()!=2||have_pending)return false;
-   // In an identity horizontal text matrix, a same-line Td can
-   // position the next glyph beyond the previous glyph's advance.
+   // Td is relative to the line origin in text coordinates; compare
+   // the next origin with the prior glyph endpoint on any baseline.
    if(!suppressed&&operands[1]==0&&has_line_origin&&
       text_run_emitted&&text_cursor_known&&font_size>0&&
-      line_a==1&&line_b==0&&line_c==0&&line_d==1&&
+      std::hypot(line_a,line_b)>1e-12&&
       horizontal_scale>0&&!new_line_pending&&!output.empty()&&
       output.back()!=' '&&output.back()!='\n'&&
       operands[0]>text_cursor){
@@ -452,7 +452,6 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
   }
   if(text&&t.value=="Tm"){
    if(operands.size()!=6||have_pending)return false;
-   text_cursor=0;text_cursor_known=true;text_run_emitted=false;
    const double next_x=operands[4],next_y=operands[5];
    // Bound the complete matrix, including shear and translation, before
    // propagating it to Td/T*/quote line positions.
@@ -493,6 +492,7 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
      }
     }
    }
+   text_cursor=0;text_cursor_known=true;text_run_emitted=false;
    text_line_x=next_x;text_line_y=next_y;
    line_axis_x=operands[0]/next_length;
    line_axis_y=operands[1]/next_length;
