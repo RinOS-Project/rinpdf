@@ -322,7 +322,13 @@ struct Reader {
        if(!tint_channels)return false;
        Value fn;
        if(cs->array[3].kind==Value::Kind::Reference){
-        if(!object(cs->array[3],fn))return false;
+        const XrefEntry* function_entry=nullptr;
+        if(!entry(cs->array[3],function_entry))return false;
+        StreamRange function_stream;
+        if(locate_indirect_stream(data,size,*function_entry,xref,
+                                  function_stream))
+         fn=function_stream.dictionary;
+        else if(!object(cs->array[3],fn))return false;
        }else fn=cs->array[3];
        const Value* type=get(fn,"FunctionType");
        const Value* domain=get(fn,"Domain");
