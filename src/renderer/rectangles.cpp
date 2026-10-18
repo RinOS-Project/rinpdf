@@ -293,7 +293,9 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
    dash_values.clear();dash_array_ready=false;stack.clear();
   }else if(word=="BT"){
    if(in_text||!stack.empty()||!path.empty()||!polygons.empty())return false;
-   in_text=true;text_x=text_y=text_leading=0;
+   // BT resets the text and line matrices, not the persistent text-state
+   // parameters (TL, Tc, Tw, Tz, or the selected font).
+   in_text=true;text_x=text_y=0;
    line_x=line_y=0;
    pending_font.clear();
    text_a=text_d=1;text_b=text_c=0;
