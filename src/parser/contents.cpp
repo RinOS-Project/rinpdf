@@ -47,7 +47,7 @@ struct Reader {
  mutable size_t sampled_function_cache_bytes=0;
  mutable std::map<std::pair<int64_t,int64_t>,CachedFunction> function_dictionary_cache;
  mutable std::map<std::pair<int64_t,int64_t>,CachedStitch> stitch_function_cache;
- mutable std::map<std::tuple<int64_t,int64_t,unsigned>,CachedExponent> exponent_function_cache;
+ mutable std::map<std::tuple<int64_t,int64_t,unsigned>,PdfFunction> compiled_exponent_cache;
  mutable std::map<std::tuple<int64_t,int64_t,unsigned>,CachedSample> sample_parameter_cache;
  bool entry(const Value& ref,const XrefEntry*& out) const {
   if(ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
