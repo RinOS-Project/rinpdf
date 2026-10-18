@@ -28,6 +28,7 @@ struct SampledFunction {
  size_t count=0;
  unsigned bits=0;
  unsigned outputs=0;
+ unsigned order=1;
  double domain[2]{0,1};
  double encode[2]{};
  std::array<double,8> decode{};
@@ -43,7 +44,7 @@ bool evaluate_sampled_function(const SampledFunction& function,
 // Multi-input sampled functions used by DeviceN and Separation tint maps.
 // The first input dimension varies fastest in the PDF sample table.
 struct MultidimensionalSampledFunction {
- unsigned inputs=0,outputs=0,bits=0;
+ unsigned inputs=0,outputs=0,bits=0,order=1;
  std::array<unsigned,4> sizes{};
  std::array<double,8> domain{};
  std::array<double,8> encode{};
