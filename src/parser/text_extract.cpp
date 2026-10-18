@@ -564,7 +564,9 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
     previous_a=line_a;previous_b=line_b;
     previous_end_valid=std::isfinite(previous_end_x)&&
       std::isfinite(previous_end_y);
-   }else previous_end_valid=false;
+   }
+   // Empty text objects emit no glyphs and must not erase the last
+   // usable endpoint from an earlier text object.
    text=false;pending_tj_adjustment=0;text_run_emitted=false;continue;}
   if(t.value=="EMC"){
    if(actual_stack.empty())return false;
