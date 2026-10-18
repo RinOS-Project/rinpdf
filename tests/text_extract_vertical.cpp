@@ -55,5 +55,43 @@ int main(){
  if(!extract_page_text(reinterpret_cast<const uint8_t*>(same_column.data()),
       same_column.size(),0,same_column_text))return 7;
  if(same_column_text!="日本")return 8;
+ // Separate BT/ET objects: the vertical endpoint must be retained
+ // for column movement without applying horizontal space heuristics.
+ const auto make_two_objects=[&](int x){
+  const std::string stream=
+    "BT /F1 10 Tf 1 0 0 1 0 0 Tm <0041> Tj ET "
+    "BT /F1 10 Tf 1 0 0 1 "+std::to_string(x)+
+    " -8 Tm <0042> Tj ET";
+  std::string doc="%PDF-1.5\n";
+  size_t at_obj[8]{};
+  auto write=[&](unsigned id,const std::string& body){
+   at_obj[id]=doc.size();
+   doc+=std::to_string(id)+" 0 obj\n"+body+"\nendobj\n";
+  };
+  write(1,"<< /Type /Catalog /Pages 2 0 R >>");
+  write(2,"<< /Type /Pages /Count 1 /Kids [3 0 R] /Resources << /Font << /F1 4 0 R >> >> >>");
+  write(3,"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Contents 6 0 R >>");
+  write(4,"<< /Type /Font /Subtype /Type0 /BaseFont /Example /Encoding /Identity-V /DescendantFonts [5 0 R] /ToUnicode 7 0 R >>");
+  write(5,"<< /Type /Font /Subtype /CIDFontType2 /BaseFont /Example /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> /DW 1000 /DW2 [880 -900] /W2 [65 [-800 500 900]] >>");
+  write(6,"<< /Length "+std::to_string(stream.size())+" >>\nstream\n"+stream+"\nendstream");
+  write(7,"<< /Length "+std::to_string(cmap.size())+" >>\nstream\n"+cmap+"\nendstream");
+  const auto xref_at=doc.size();
+  doc+="xref\n0 8\n0000000000 65535 f \n";
+  for(unsigned id=1;id<=7;++id){
+   char row[32];std::snprintf(row,sizeof(row),"%010zu 00000 n \n",at_obj[id]);
+   doc+=row;
+  }
+  doc+="trailer\n<< /Root 1 0 R /Size 8 >>\nstartxref\n"+
+       std::to_string(xref_at)+"\n%%EOF\n";
+  return doc;
+ };
+ for(const auto& [x,want]:std::pair<int,const char*>[]{
+      {0,"日本"},{20,"日\n本"}}){
+  const auto test_pdf=make_two_objects(x);
+  std::string output;
+  if(!extract_page_text(reinterpret_cast<const uint8_t*>(test_pdf.data()),
+       test_pdf.size(),0,output))return 9;
+  if(output!=want)return 10;
+ }
  return 0;
 }
