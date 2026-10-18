@@ -973,6 +973,7 @@ struct Reader {
    tokens.erase(tokens.begin());
    tokens.pop_back();
    std::vector<double> stack{x};
+   std::vector<uint8_t> is_bool{0}; // Type 4 boolean values are not numbers.
    std::vector<std::vector<std::string>> procedures;
    size_t operations=0;
    for(size_t pc=0;pc<tokens.size();++pc){
@@ -996,8 +997,9 @@ struct Reader {
     if(token=="if"||token=="ifelse"){
      const size_t required=token=="if"?1:2;
      if(procedures.size()<required||stack.empty())return false;
+     if(!is_bool.back())return false;
      const bool condition=stack.back()!=0;
-     stack.pop_back();
+     stack.pop_back();is_bool.pop_back();
      std::vector<std::string> chosen;
      if(required==1){
       if(condition)chosen=procedures.back();
@@ -1017,33 +1019,38 @@ struct Reader {
     if(parsed.ec==std::errc()&&
        parsed.ptr==token.data()+token.size()){
      if(!std::isfinite(value)||stack.size()>=64)return false;
-     stack.push_back(value);continue;
+     stack.push_back(value);is_bool.push_back(0);continue;
     }
     if(token=="true"||token=="false"){
      if(stack.size()>=64)return false;
-     stack.push_back(token=="true"?1.0:0.0);continue;
+     stack.push_back(token=="true"?1.0:0.0);is_bool.push_back(1);continue;
     }
     if(token=="copy"){
      if(stack.empty())return false;
-     const double n=stack.back();stack.pop_back();
+     if(is_bool.back())return false;
+     const double n=stack.back();stack.pop_back();is_bool.pop_back();
      if(n<0||n!=std::floor(n)||n>double(stack.size())||
         stack.size()+size_t(n)>64)return false;
      const size_t count=size_t(n);
      const std::vector<double> copied(stack.end()-count,stack.end());
+     const std::vector<uint8_t> kinds(is_bool.end()-count,is_bool.end());
      stack.insert(stack.end(),copied.begin(),copied.end());
+     is_bool.insert(is_bool.end(),kinds.begin(),kinds.end());
      continue;
     }
     if(token=="index"){
      if(stack.empty())return false;
-     const double n=stack.back();stack.pop_back();
+     const double n=stack.back();stack.pop_back();is_bool.pop_back();
      if(n<0||n!=std::floor(n)||n>=double(stack.size())||
         stack.size()>=64)return false;
      stack.push_back(stack[stack.size()-1-size_t(n)]);
+     is_bool.push_back(is_bool[is_bool.size()-1-size_t(n)]);
      continue;
     }
     if(token=="roll"){
      if(stack.size()<2)return false;
-     const double shift=stack.back();stack.pop_back();
+     if(is_bool.back()||is_bool[is_bool.size()-2])return false;
+     const double shift=stack.back();stack.pop_back();is_bool.pop_back();
      const double n=stack.back();stack.pop_back();
      if(n<0||n!=std::floor(n)||n>double(stack.size())||
         shift!=std::trunc(shift)||!std::isfinite(shift))return false;
@@ -1053,25 +1060,28 @@ struct Reader {
          shift,double(count)));
       const size_t right=size_t((distance+long long(count))%long long(count));
       std::rotate(stack.end()-count,stack.end()-right,stack.end());
+      std::rotate(is_bool.end()-count,is_bool.end()-right,is_bool.end());
      }
      continue;
     }
     if(token=="dup"){
      if(stack.empty()||stack.size()>=64)return false;
-     stack.push_back(stack.back());continue;
+     stack.push_back(stack.back());is_bool.push_back(is_bool.back());continue;
     }
     if(token=="exch"){
      if(stack.size()<2)return false;
-     std::swap(stack[stack.size()-1],stack[stack.size()-2]);continue;
+     std::swap(stack[stack.size()-1],stack[stack.size()-2]);
+     std::swap(is_bool[is_bool.size()-1],is_bool[is_bool.size()-2]);continue;
     }
     if(token=="pop"){
      if(stack.empty())return false;
-     stack.pop_back();continue;
+     stack.pop_back();is_bool.pop_back();continue;
     }
     if(token=="cvi"||token=="cvr"||token=="floor"||
        token=="ceiling"||token=="round"||token=="truncate"||
        token=="ln"||token=="log"||token=="sin"||token=="cos"){
      if(stack.empty())return false;
+     if(is_bool.back())return false;
      double& value=stack.back();
      if(token=="cvi"||token=="truncate")value=std::trunc(value);
      else if(token=="floor")value=std::floor(value);
@@ -1090,7 +1100,8 @@ struct Reader {
     if(token=="idiv"||token=="mod"||token=="exp"||
        token=="atan"||token=="bitshift"){
      if(stack.size()<2)return false;
-     const double rhs=stack.back();stack.pop_back();
+     if(is_bool.back()||is_bool[is_bool.size()-2])return false;
+     const double rhs=stack.back();stack.pop_back();is_bool.pop_back();
      double& lhs=stack.back();
      if(token=="idiv"||token=="mod"){
       if(rhs==0||lhs!=std::trunc(lhs)||rhs!=std::trunc(rhs)||
@@ -1115,6 +1126,7 @@ struct Reader {
     }
     if(token=="neg"||token=="abs"||token=="sqrt"){
      if(stack.empty())return false;
+     if(is_bool.back())return false;
      double& top=stack.back();
      if(token=="neg")top=-top;
      else if(token=="abs")top=std::abs(top);
@@ -1139,7 +1151,13 @@ struct Reader {
              token=="ge"||token=="lt"||token=="le"||
              token=="and"||token=="or"||token=="xor"){
      if(stack.size()<2)return false;
-     const double rhs=stack.back();stack.pop_back();
+     const bool lb=is_bool[is_bool.size()-2]!=0;
+     const bool rb=is_bool.back()!=0;
+     const bool logic=token=="and"||token=="or"||token=="xor";
+     const bool equality=token=="eq"||token=="ne";
+     if((logic&&(!lb||!rb))||(equality&&lb!=rb)||
+        (!logic&&!equality&&(lb||rb)))return false;
+     const double rhs=stack.back();stack.pop_back();is_bool.pop_back();
      double& lhs=stack.back();
      if(token=="eq")lhs=lhs==rhs;
      else if(token=="ne")lhs=lhs!=rhs;
@@ -1147,17 +1165,21 @@ struct Reader {
      else if(token=="ge")lhs=lhs>=rhs;
      else if(token=="lt")lhs=lhs<rhs;
      else if(token=="le")lhs=lhs<=rhs;
-     else if(token=="and")lhs=(lhs!=0&&rhs!=0);
-     else if(token=="or")lhs=(lhs!=0||rhs!=0);
+     else if(token=="and")lhs=lhs!=0&&rhs!=0;
+     else if(token=="or")lhs=lhs!=0||rhs!=0;
      else lhs=(lhs!=0)!=(rhs!=0);
+     is_bool.back()=1;
     }else if(token=="not"){
      if(stack.empty())return false;
+     if(!is_bool.back())return false;
      stack.back()=stack.back()==0?1:0;
     }else return false;
     if(stack.empty()||!std::isfinite(stack.back())||
        std::abs(stack.back())>1e12)return false;
    }
-   if(!procedures.empty()||stack.size()!=outputs)return false;
+   if(!procedures.empty()||stack.size()!=outputs||
+      is_bool.size()!=stack.size())return false;
+   for(uint8_t t:is_bool)if(t)return false;
    for(unsigned j=0;j<outputs;++j)result[j]=stack[j];
   }else if(type->integer==2){
    const Value* n=get(function,"N");
