@@ -373,6 +373,11 @@ struct Reader {
          return false;
         const Value* sizes=get(function_range.dictionary,"Size");
         const Value* bps=get(function_range.dictionary,"BitsPerSample");
+        const Value* order=get(function_range.dictionary,"Order");
+        // Cubic interpolation (Order 3) is not yet implemented; do not
+        // silently render it as linear interpolation.
+        if(order&&(order->kind!=Value::Kind::Integer||order->integer!=1))
+         return false;
         const Value* range=get(function_range.dictionary,"Range");
         const Value* encode=get(function_range.dictionary,"Encode");
         const Value* decode=get(function_range.dictionary,"Decode");
