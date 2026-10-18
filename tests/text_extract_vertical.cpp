@@ -94,5 +94,18 @@ int main(){
        test_pdf.size(),0,output))return 9;
   if(output!=want)return 10;
  }
+ // Identity-V T* follows the vertical writing axis and must not
+ // synthesize a column break. Preserve /Length and xref offsets.
+ std::string line_move=pdf;
+ const std::string old_move="1 0 0 1 20 0 Tm";
+ const std::string new_move="10 TL T*       ";
+ static_assert(sizeof("1 0 0 1 20 0 Tm")==sizeof("10 TL T*       "));
+ const auto move_at=line_move.find(old_move);
+ if(move_at==std::string::npos)return 11;
+ line_move.replace(move_at,old_move.size(),new_move);
+ std::string line_text;
+ if(!extract_page_text(reinterpret_cast<const uint8_t*>(line_move.data()),
+      line_move.size(),0,line_text))return 12;
+ if(line_text!="日本")return 13;
  return 0;
 }
