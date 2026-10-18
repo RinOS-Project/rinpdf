@@ -364,9 +364,52 @@ struct Reader {
     if(!object(*resource,scope))return false;
    }else scope=*resource;
    if(scope.kind!=Value::Kind::Dictionary||
-      get(scope,"Font")||get(scope,"Properties")||
+      get(scope,"Properties")||
       get(scope,"ColorSpace")||get(scope,"ExtGState")||
       get(scope,"Pattern")||get(scope,"Shading"))return false;
+   if(const Value* fonts=get(scope,"Font")){
+    Value dictionary;
+    if(fonts->kind==Value::Kind::Reference){
+     if(!object(*fonts,dictionary))return false;
+    }else dictionary=*fonts;
+    if(dictionary.kind!=Value::Kind::Dictionary||
+       dictionary.dictionary.size()>64)return false;
+    for(const auto& [alias,reference]:dictionary.dictionary){
+     Value font;
+     if(reference.kind==Value::Kind::Reference){
+      if(!object(reference,font))return false;
+     }else font=reference;
+     const Value* subtype=get(font,"Subtype");
+     const Value* base=get(font,"BaseFont");
+     const Value* encoding=get(font,"Encoding");
+     const Value* descriptor=get(font,"FontDescriptor");
+     if(!subtype||subtype->kind!=Value::Kind::Name||
+        subtype->text!="TrueType"||
+        !base||base->kind!=Value::Kind::Name||
+        !encoding||encoding->kind!=Value::Kind::Name||
+        (encoding->text!="WinAnsiEncoding"&&
+         encoding->text!="MacRomanEncoding"&&
+         encoding->text!="StandardEncoding")||
+        !descriptor)return false;
+     Value desc;
+     if(descriptor->kind==Value::Kind::Reference){
+      if(!object(*descriptor,desc))return false;
+     }else desc=*descriptor;
+     const Value* file=get(desc,"FontFile2");
+     if(!file||file->kind!=Value::Kind::Reference)return false;
+     PageFont local;
+     local.base_font=base->text;
+     local.subtype="TrueType";
+     local.encoding=encoding->text;
+     if(!stream(*file,local.embedded_truetype,16*1024*1024))
+      return false;
+     renderer::SfntFont validated;
+     if(!renderer::parse_sfnt(local.embedded_truetype.data(),
+                              local.embedded_truetype.size(),validated))
+      return false;
+     form.local_fonts.emplace(alias,std::move(local));
+    }
+   }
    if(const Value* x=get(scope,"XObject")){
     Value children;
     if(x->kind==Value::Kind::Reference){
