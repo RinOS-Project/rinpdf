@@ -119,5 +119,23 @@ int main(){
  if(!extract_page_text(reinterpret_cast<const uint8_t*>(other_column.data()),
       other_column.size(),0,column_text))return 15;
  if(column_text!="日\n本")return 16;
+ // Quote is equivalent to T* followed by Tj. It must also stay
+ // in the same vertical column without inserting a newline.
+ std::string quoted=pdf;
+ const std::string quote_move="<0042> Tj ET";
+ const std::string quote_show="<0042> '  ET";
+ static_assert(sizeof("<0042> Tj ET")==sizeof("<0042> '  ET"));
+ const auto quote_at=quoted.find(quote_move);
+ if(quote_at==std::string::npos)return 17;
+ quoted.replace(quote_at,quote_move.size(),quote_show);
+ // The initial Tm column change would still create a newline: replace
+ // it with an in-column translation of exactly the same byte length.
+ const auto quoted_move_at=quoted.find(old_move);
+ if(quoted_move_at==std::string::npos)return 18;
+ quoted.replace(quoted_move_at,old_move.size(),to);
+ std::string quoted_text;
+ if(!extract_page_text(reinterpret_cast<const uint8_t*>(quoted.data()),
+      quoted.size(),0,quoted_text))return 19;
+ if(quoted_text!="日本")return 20;
  return 0;
 }
