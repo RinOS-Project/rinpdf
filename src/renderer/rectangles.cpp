@@ -264,7 +264,15 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      pending_image.clear();
      ImageResources scoped_images;
      FormResources scoped_forms;
+     FontResources scoped_fonts=fonts;
      if(fm.own_resources){
+      // A Form's Font dictionary is local; it may shadow a page font.
+      scoped_fonts.clear();
+      for(const auto& [alias,local]:fm.local_fonts)
+       scoped_fonts.emplace(alias,FontResource{
+         local.base_font,local.subtype,local.encoding,
+         local.embedded_truetype,local.differences,local.cid_map,
+         local.cid_widths,local.vertical_metrics,local.language});
       // A Form's own resource dictionary replaces its parent's namespace.
       // Child Forms resolved from their indirect objects remain local.
       for(const auto& [alias,child]:fm.local_forms)
@@ -284,7 +292,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      }
      if(!render_rectangles_box_with_fonts(
            reinterpret_cast<const uint8_t*>(stream.data()),stream.size(),
-           width,height,rgba,stride,box,fonts,properties,scoped_images,
+           width,height,rgba,stride,box,scoped_fonts,properties,scoped_images,
            scoped_forms,false,form_depth+1))
       return false;
      continue;
