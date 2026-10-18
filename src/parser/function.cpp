@@ -166,8 +166,10 @@ bool evaluate_multidimensional_sampled_function(
  for(unsigned d=0;d<f.inputs;++d)corners*=taps;
  // Clamped cubic boundary taps can refer to the same grid point. Merge
  // their weights so each distinct sample is unpacked only once.
- std::array<size_t,256> sample_indices{};
- std::array<double,256> sample_weights{};
+ std::array<size_t,512> sample_indices{};
+ std::array<double,512> sample_weights{};
+ std::array<bool,512> occupied{};
+ std::array<unsigned,256> used_slots{};
  unsigned unique=0;
  for(unsigned corner=0;corner<corners;++corner){
   size_t index=0;
@@ -180,20 +182,23 @@ bool evaluate_multidimensional_sampled_function(
    weight*=weights[d][tap];
   }
   if(weight==0)continue;
-  unsigned position=0;
-  for(;position<unique;++position)
-   if(sample_indices[position]==index)break;
-  if(position==unique){
-   sample_indices[unique]=index;
-   sample_weights[unique]=weight;
-   ++unique;
-  }else sample_weights[position]+=weight;
+  // Fixed-size open addressing avoids scanning all previous corners.
+  size_t slot=(index*size_t(11400714819323198485ull))&511u;
+  while(occupied[slot]&&sample_indices[slot]!=index)
+   slot=(slot+1)&511u;
+  if(!occupied[slot]){
+   occupied[slot]=true;
+   sample_indices[slot]=index;
+   sample_weights[slot]=weight;
+   used_slots[unique++]=unsigned(slot);
+  }else sample_weights[slot]+=weight;
  }
  const double maximum=double((uint64_t(1)<<f.bits)-1);
  for(unsigned i=0;i<unique;++i){
-  const double weight=sample_weights[i];
+  const unsigned slot=used_slots[i];
+  const double weight=sample_weights[slot];
   if(weight==0)continue;
-  const size_t first=(sample_indices[i]*f.outputs)*f.bits;
+  const size_t first=(sample_indices[slot]*f.outputs)*f.bits;
   for(unsigned c=0;c<f.outputs;++c){
    const size_t offset=first+size_t(c)*f.bits;
    uint64_t value=0;
