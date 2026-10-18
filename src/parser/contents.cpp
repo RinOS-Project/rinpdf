@@ -382,10 +382,47 @@ struct Reader {
      if(child_type->text=="Image"){
       const auto page=page_names.find({child_ref.integer,
                                         int64_t(child_ref.generation)});
-      // Page-registered images reuse the already decoded image. An image
-      // solely reachable from this Form needs its own decoder integration.
-      if(page==page_names.end())return false;
-      form.xobject_aliases.emplace(alias,page->second);
+      if(page!=page_names.end()){
+       form.xobject_aliases.emplace(alias,page->second);
+      }else{
+       // Independently referenced Form image: support bounded opaque 8-bit
+       // grayscale/RGB streams. Unhandled masks/predictors fail closed.
+       const Value* width=get(child_range.dictionary,"Width");
+       const Value* height=get(child_range.dictionary,"Height");
+       const Value* bits=get(child_range.dictionary,"BitsPerComponent");
+       const Value* colorspace=get(child_range.dictionary,"ColorSpace");
+       if(!width||!height||!bits||!colorspace||
+          width->kind!=Value::Kind::Integer||
+          height->kind!=Value::Kind::Integer||
+          bits->kind!=Value::Kind::Integer||bits->integer!=8||
+          width->integer<=0||height->integer<=0||
+          width->integer>4096||height->integer>4096||
+          colorspace->kind!=Value::Kind::Name||
+          get(child_range.dictionary,"SMask")||
+          get(child_range.dictionary,"Mask")||
+          get(child_range.dictionary,"Decode")||
+          get(child_range.dictionary,"DecodeParms"))return false;
+       PageImage image;
+       image.width=unsigned(width->integer);
+       image.height=unsigned(height->integer);
+       image.channels=colorspace->text=="DeviceGray"?1:
+                      colorspace->text=="DeviceRGB"?3:0;
+       if(!image.channels)return false;
+       const size_t expected=size_t(image.width)*image.height*image.channels;
+       if(expected>32*1024*1024)return false;
+       const Value* filter=get(child_range.dictionary,"Filter");
+       const bool dct=filter&&filter->kind==Value::Kind::Name&&
+         (filter->text=="DCTDecode"||filter->text=="DCT");
+       if(dct){
+        if(child_range.offset>size||
+           child_range.length>size-child_range.offset||
+           !decode_dct_image(data+child_range.offset,child_range.length,
+              image.width,image.height,image.channels,image.pixels))
+         return false;
+       }else if(!decode_stream(data,size,child_range,image.pixels,expected)||
+                image.pixels.size()!=expected)return false;
+       form.local_images.emplace(alias,std::move(image));
+      }
      }else if(child_type->text=="Form"){
       PageForm child;
       if(!load_local_form(child_ref,depth+1,visiting,page_names,child))
