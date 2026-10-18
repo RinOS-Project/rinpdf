@@ -428,6 +428,14 @@ struct Reader {
                           size_t(byte_count))||
            tint_samples.size()!=size_t(byte_count))return false;
         sampled_tint=true;
+       }else if(type->integer==4){
+        if(device_inputs!=1)return false;
+        double probe[4]{};
+        if(!eval_tint_function(cs->array[3],0,tint_channels,probe)||
+           !eval_tint_function(cs->array[3],1,tint_channels,probe))
+         return false;
+        stitch_function=cs->array[3];
+        recursive_stitch=true;
        }else if(type->integer==3){
         if(device_inputs!=1)return false;
         double boundary[4]{};
@@ -946,6 +954,13 @@ struct Reader {
    std::vector<uint8_t> program;
    if(!decode_stream(data,size,sampled_stream,program,16384))return false;
    std::string source(program.begin(),program.end());
+   // Procedure delimiters are syntax even when adjacent to tokens.
+   for(size_t i=0;i<source.size();++i)
+    if(source[i]=='{'||source[i]=='}'){
+     source.insert(i,1,' ');
+     i+=2;
+     source.insert(i,1,' ');
+    }
    std::istringstream scanner(source);
    std::string token;
    std::vector<double> stack{x};
