@@ -58,3 +58,5 @@ test('rinpdf-text-extract',executable('rinpdf-text-extract','text_extract.cpp',d
 test('rinpdf-text-extract-cid-space',executable('rinpdf-text-extract-cid-space','text_extract_cid_space.cpp',dependencies:rinpdf_dep))
 
 test('rinpdf-text-extract-truetype-space',executable('rinpdf-text-extract-truetype-space','text_extract_truetype_space.cpp',dependencies:rinpdf_dep))
+
+test('rinpdf-text-extract-objects',executable('rinpdf-text-extract-objects','text_extract_objects.cpp',dependencies:rinpdf_dep))
