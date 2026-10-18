@@ -344,6 +344,32 @@ struct Reader {
   }
   return true;
  }
+ bool parse_font_descriptor(const Value& reference,PageFont& font) const {
+  Value descriptor;
+  if(reference.kind==Value::Kind::Reference){
+   if(!object(reference,descriptor))return false;
+  }else descriptor=reference;
+  if(descriptor.kind!=Value::Kind::Dictionary)return false;
+  if(font.subtype!="Type0"){
+   if(const Value* missing=get(descriptor,"MissingWidth")){
+    if(missing->kind==Value::Kind::Integer)
+     font.missing_width=double(missing->integer);
+    else if(missing->kind==Value::Kind::Real)
+     font.missing_width=missing->real;
+    else return false;
+    if(!std::isfinite(font.missing_width)||
+       font.missing_width<0||font.missing_width>100000)return false;
+   }
+  }
+  if(const Value* file=get(descriptor,"FontFile2")){
+   if(file->kind!=Value::Kind::Reference||
+      !stream(*file,font.embedded_truetype,16*1024*1024))return false;
+   renderer::SfntFont validated;
+   if(!renderer::parse_sfnt(font.embedded_truetype.data(),
+                            font.embedded_truetype.size(),validated))return false;
+  }
+  return true;
+ }
  bool parse_font_encoding(const Value& font,PageFont& out) const {
   const Value* encoding=get(font,"Encoding");
   if(!encoding)return true;
@@ -455,15 +481,8 @@ struct Reader {
        if(!object(*descriptor,desc))return false;
       }else desc=*descriptor;
      }else return false;
-     if(desc.kind!=Value::Kind::Dictionary)return false;
-     const Value* file=get(desc,"FontFile2");
-     if(!file||file->kind!=Value::Kind::Reference||
-        !stream(*file,local.embedded_truetype,16*1024*1024))
-      return false;
-     renderer::SfntFont validated;
-     if(!renderer::parse_sfnt(local.embedded_truetype.data(),
-                              local.embedded_truetype.size(),validated))
-      return false;
+     if(!parse_font_descriptor(desc,local)||
+        local.embedded_truetype.empty())return false;
      if(const Value* cmap=get(font,"ToUnicode")){
       if(cmap->kind!=Value::Kind::Reference)return false;
       std::set<size_t> cmap_visiting;
@@ -471,17 +490,6 @@ struct Reader {
       if(!resolve_unicode_cmap(*cmap,0,cmap_visiting,
            local.unicode_sequences,local.unicode_codespaces,
            cmap_name,&scope))return false;
-     }
-     if(local.subtype=="TrueType"){
-      if(const Value* missing=get(desc,"MissingWidth")){
-       if(missing->kind==Value::Kind::Integer)
-        local.missing_width=double(missing->integer);
-       else if(missing->kind==Value::Kind::Real)
-        local.missing_width=missing->real;
-       else return false;
-       if(!std::isfinite(local.missing_width)||
-          local.missing_width<0||local.missing_width>100000)return false;
-      }
      }
      form.local_fonts.emplace(alias,std::move(local));
     }
@@ -735,57 +743,15 @@ struct Reader {
        if(!parse_cid_descendant(descendant,resource)){
         active.erase(id);return false;
        }
-       // CIDFont's descriptor owns the embedded TrueType, not Type0's.
-       // Parse the descendant descriptor in the common path below.
        if(const Value* child_descriptor=get(descendant,"FontDescriptor")){
-        Value desc;
-        if(child_descriptor->kind==Value::Kind::Reference){
-         if(!object(*child_descriptor,desc)){active.erase(id);return false;}
-        }else desc=*child_descriptor;
-        if(desc.kind!=Value::Kind::Dictionary){active.erase(id);return false;}
-        if(const Value* file=get(desc,"FontFile2")){
-         if(file->kind!=Value::Kind::Reference||
-            !stream(*file,resource.embedded_truetype,16*1024*1024)){
-          active.erase(id);return false;
-         }
-         renderer::SfntFont sfnt;
-         if(!renderer::parse_sfnt(resource.embedded_truetype.data(),
-                                  resource.embedded_truetype.size(),sfnt)){
-          active.erase(id);return false;
-         }
+        if(!parse_font_descriptor(*child_descriptor,resource)){
+         active.erase(id);return false;
         }
        }
       }
       if(const Value* descriptor=get(font,"FontDescriptor")){
-       Value resolved_descriptor;
-       if(descriptor->kind==Value::Kind::Reference){
-        if(!object(*descriptor,resolved_descriptor)){active.erase(id);return false;}
-       }else resolved_descriptor=*descriptor;
-       if(resolved_descriptor.kind!=Value::Kind::Dictionary){
+       if(!parse_font_descriptor(*descriptor,resource)){
         active.erase(id);return false;
-       }
-       if(resource.subtype!="Type0"){
-        if(const Value* missing=get(resolved_descriptor,"MissingWidth")){
-         double width=0;
-         if(missing->kind==Value::Kind::Integer)width=double(missing->integer);
-         else if(missing->kind==Value::Kind::Real)width=missing->real;
-         else{active.erase(id);return false;}
-         if(!std::isfinite(width)||width<0||width>100000){
-          active.erase(id);return false;
-         }
-         resource.missing_width=width;
-        }
-       }
-       if(const Value* file=get(resolved_descriptor,"FontFile2")){
-        if(file->kind!=Value::Kind::Reference||
-           !stream(*file,resource.embedded_truetype,16*1024*1024)){
-         active.erase(id);return false;
-        }
-        renderer::SfntFont sfnt;
-        if(!renderer::parse_sfnt(resource.embedded_truetype.data(),
-                                 resource.embedded_truetype.size(),sfnt)){
-         active.erase(id);return false;
-        }
        }
       }
       if(const Value* cmap=get(font,"ToUnicode")){
