@@ -39,7 +39,8 @@ struct SampledFunction {
 // The caller owns and retains the decoded stream bytes.
 bool evaluate_sampled_function(const SampledFunction& function,
                                const std::vector<uint8_t>& samples,
-                               double input,double* result) noexcept;
+                               double input,double* result,
+                               const std::vector<double>* expanded=nullptr) noexcept;
 
 // Multi-input sampled functions used by DeviceN and Separation tint maps.
 // The first input dimension varies fastest in the PDF sample table.
@@ -54,7 +55,7 @@ struct MultidimensionalSampledFunction {
 bool evaluate_multidimensional_sampled_function(
  const MultidimensionalSampledFunction& function,
  const std::vector<uint8_t>& samples,const double* inputs,
- double* result) noexcept;
+ double* result,const std::vector<double>* expanded=nullptr) noexcept;
 
 // Select a Type 3 stitching segment and map its input into its child domain.
 // Bounds contain the initial and final domain endpoints.
@@ -110,6 +111,8 @@ struct PdfFunction {
  SampledFunction sampled;
  MultidimensionalSampledFunction multidimensional;
  std::vector<uint8_t> samples;
+ // Optional predecoded normalized grid, bounded at compile time.
+ std::vector<double> expanded_samples;
  CalculatorProgram calculator;
  std::vector<double> stitch_bounds,stitch_encode;
  std::vector<PdfFunction> stitch_children;
