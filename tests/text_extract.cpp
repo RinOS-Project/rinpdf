@@ -55,7 +55,7 @@ int main(){
     !page_properties.at("P1").has_actual_text)return 15;
  std::string result;
  if(!extract_page_text(reinterpret_cast<const uint8_t*>(pdf.data()),pdf.size(),0,result))return 1;
- if(result!=std::string("\xe4\xb8\x96\xe6\x97\xa5\xe6\x9c\xac")+"ABB\nB\nB\nB\nBB\nBB BBBB BBBBBB\nB\nB")return 2;
+ if(result!=std::string("\xe4\xb8\x96\xe6\x97\xa5\xe6\x9c\xac")+"ABB\nB\nB\nB\nB B\nBB BBBB BBBBBB\nB\nB")return 2;
  // Changing only the resource key keeps object offsets intact and must
  // cause a clean failure rather than silently using an unresolved parent.
  std::string missing_parent=pdf;
@@ -265,7 +265,21 @@ int main(){
  same_line_tm.replace(tm_at,tm_before.size(),tm_after);
  if(!extract_page_text(reinterpret_cast<const uint8_t*>(same_line_tm.data()),
       same_line_tm.size(),0,result))return 80;
- if(result.find("ABB\\nBB B")==std::string::npos)return 81;
+ if(result.find("ABB\nBB B")==std::string::npos)return 81;
+ result=previous;
+ // A greater gap along the rotated vertical baseline still represents
+ // a space. Keep the PDF byte length and xref positions unchanged.
+ std::string rotated_gap=pdf;
+ const std::string old_rotated="0 1 -1 0 50 20 Tm";
+ const std::string new_rotated="0 1 -1 0 50 90 Tm";
+ static_assert(sizeof("0 1 -1 0 50 20 Tm")==
+               sizeof("0 1 -1 0 50 90 Tm"));
+ const auto rotated_at=rotated_gap.find(old_rotated);
+ if(rotated_at==std::string::npos)return 82;
+ rotated_gap.replace(rotated_at,old_rotated.size(),new_rotated);
+ if(!extract_page_text(reinterpret_cast<const uint8_t*>(rotated_gap.data()),
+      rotated_gap.size(),0,result))return 83;
+ if(result!=previous)return 84;
  result=previous;
  // The UTF-16BE ActualText payload must reject lone low surrogates.
  // Replace equal-length hex digits so all xref offsets remain valid.
