@@ -145,6 +145,45 @@ struct Reader {
       const Value* h=get(range.dictionary,"Height");
       const Value* bits=get(range.dictionary,"BitsPerComponent");
       const Value* cs=get(range.dictionary,"ColorSpace");
+      const Value* mask_flag=get(range.dictionary,"ImageMask");
+      if(mask_flag){
+       if(mask_flag->kind!=Value::Kind::Boolean)return false;
+       if(mask_flag->boolean){
+        if(!w||!h||w->kind!=Value::Kind::Integer||
+           h->kind!=Value::Kind::Integer||
+           w->integer<=0||h->integer<=0||
+           w->integer>4096||h->integer>4096||cs||
+           get(range.dictionary,"SMask")||get(range.dictionary,"Mask")||
+           get(range.dictionary,"DecodeParms")||
+           (bits&&(bits->kind!=Value::Kind::Integer||bits->integer!=1)))
+         return false;
+        bool invert=false;
+        if(const Value* decode=get(range.dictionary,"Decode")){
+         if(decode->kind!=Value::Kind::Array||decode->array.size()!=2||
+            decode->array[0].kind!=Value::Kind::Integer||
+            decode->array[1].kind!=Value::Kind::Integer)return false;
+         if(decode->array[0].integer==1&&decode->array[1].integer==0)
+          invert=true;
+         else if(decode->array[0].integer!=0||decode->array[1].integer!=1)
+          return false;
+        }
+        const size_t width=size_t(w->integer),height=size_t(h->integer);
+        const size_t pitch=(width+7)/8;
+        std::vector<uint8_t> packed;
+        if(!decode_stream(data,size,range,packed,pitch*height)||
+           packed.size()!=pitch*height)return false;
+        image=PageImage{};
+        image.width=unsigned(width);image.height=unsigned(height);
+        image.channels=1;image.stencil=true;
+        image.pixels.assign(width*height,0);
+        for(size_t y=0;y<height;++y)
+         for(size_t x=0;x<width;++x){
+          const bool bit=(packed[y*pitch+x/8]>>(7-(x%8)))&1;
+          image.pixels[y*width+x]=uint8_t(bit!=invert?255:0);
+         }
+        return true;
+       }
+      }
       if(!w||!h||!bits||!cs||
          w->kind!=Value::Kind::Integer||h->kind!=Value::Kind::Integer||
          bits->kind!=Value::Kind::Integer||
