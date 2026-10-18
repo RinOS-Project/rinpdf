@@ -79,6 +79,73 @@ bool evaluate_sampled_function(const SampledFunction& function,
  return true;
 }
 
+bool evaluate_multidimensional_sampled_function(
+ const MultidimensionalSampledFunction& f,
+ const std::vector<uint8_t>& samples,const double* inputs,
+ double* result) noexcept {
+ if(!inputs||!result||f.inputs<1||f.inputs>4||
+    f.outputs<1||f.outputs>4||
+    (f.bits!=1&&f.bits!=2&&f.bits!=4&&f.bits!=8&&
+     f.bits!=12&&f.bits!=16&&f.bits!=24&&f.bits!=32))return false;
+ size_t grid=1;
+ size_t stride[4]{},lower[4]{};
+ double fraction[4]{};
+ for(unsigned d=0;d<f.inputs;++d){
+  if(f.sizes[d]<2||f.sizes[d]>4096||
+     !std::isfinite(inputs[d])||
+     !std::isfinite(f.domain[d*2])||
+     !std::isfinite(f.domain[d*2+1])||
+     f.domain[d*2]>=f.domain[d*2+1]||
+     !std::isfinite(f.encode[d*2])||
+     !std::isfinite(f.encode[d*2+1])||
+     grid>SIZE_MAX/f.sizes[d])return false;
+  const double x=std::clamp(inputs[d],f.domain[d*2],f.domain[d*2+1]);
+  const double t=(x-f.domain[d*2])/(f.domain[d*2+1]-f.domain[d*2]);
+  const double pos=std::clamp(f.encode[d*2]+
+     t*(f.encode[d*2+1]-f.encode[d*2]),0.0,double(f.sizes[d]-1));
+  if(!std::isfinite(pos))return false;
+  lower[d]=size_t(pos);
+  fraction[d]=pos-double(lower[d]);
+  stride[d]=grid;
+  grid*=f.sizes[d];
+ }
+ if(grid>SIZE_MAX/f.outputs/f.bits)return false;
+ const size_t total_bits=grid*f.outputs*f.bits;
+ if(total_bits/8>samples.size()||((total_bits+7)/8)>samples.size())
+  return false;
+ std::array<double,4> computed{};
+ for(unsigned corner=0;corner<(1u<<f.inputs);++corner){
+  size_t index=0;
+  double weight=1;
+  for(unsigned d=0;d<f.inputs;++d){
+   const bool upper=(corner&(1u<<d))!=0;
+   const bool advance=upper&&lower[d]+1<f.sizes[d];
+   index+=(lower[d]+size_t(advance))*stride[d];
+   weight*=upper?fraction[d]:1-fraction[d];
+  }
+  if(weight==0)continue;
+  for(unsigned c=0;c<f.outputs;++c){
+   const double lo=f.range[c*2],hi=f.range[c*2+1];
+   const double d0=f.decode[c*2],d1=f.decode[c*2+1];
+   if(!std::isfinite(lo)||!std::isfinite(hi)||lo>hi||
+      !std::isfinite(d0)||!std::isfinite(d1))return false;
+   const size_t offset=(index*f.outputs+c)*f.bits;
+   uint64_t value=0;
+   for(unsigned bit=0;bit<f.bits;++bit){
+    const size_t p=offset+bit;
+    value=(value<<1)|((samples[p/8]>>(7-(p%8)))&1u);
+   }
+   const double raw=double(value)/double((uint64_t(1)<<f.bits)-1);
+   computed[c]+=weight*std::clamp(d0+raw*(d1-d0),lo,hi);
+  }
+ }
+ for(unsigned c=0;c<f.outputs;++c){
+  if(!std::isfinite(computed[c]))return false;
+  result[c]=computed[c];
+ }
+ return true;
+}
+
 bool map_stitching_input(const std::vector<double>& bounds,
                          const std::vector<double>& encode,
                          double input,size_t& segment,
