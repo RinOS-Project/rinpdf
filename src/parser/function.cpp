@@ -659,6 +659,59 @@ static bool pdf_function_limits(unsigned outputs,double d0,double d1,
  return true;
 }
 
+bool compile_sampled_pdf_function(const SampledFunction& parameters,
+                                  const std::vector<uint8_t>& decoded_samples,
+                                  PdfFunction& output) {
+ if(!pdf_function_limits(parameters.outputs,parameters.domain[0],
+                         parameters.domain[1],parameters.range))return false;
+ if(parameters.count<2||parameters.count>4096||parameters.bits==0||
+    parameters.count>SIZE_MAX/parameters.outputs/parameters.bits)return false;
+ const size_t bytes=(parameters.count*parameters.outputs*parameters.bits+7)/8;
+ if(decoded_samples.size()!=bytes)return false;
+ PdfFunction compiled;
+ compiled.kind=PdfFunction::Kind::Sampled;
+ compiled.outputs=parameters.outputs;
+ compiled.domain[0]=parameters.domain[0];
+ compiled.domain[1]=parameters.domain[1];
+ compiled.range=parameters.range;
+ compiled.sampled=parameters;
+ compiled.samples=decoded_samples;
+ std::array<double,4> probe{};
+ if(!evaluate_sampled_function(compiled.sampled,compiled.samples,
+                                compiled.domain[0],probe.data()))return false;
+ output=std::move(compiled);
+ return true;
+}
+
+bool compile_stitching_pdf_function(const std::vector<PdfFunction>& children,
+                                    const std::vector<double>& bounds,
+                                    const std::vector<double>& encode,
+                                    unsigned outputs,double domain_min,
+                                    double domain_max,
+                                    const std::array<double,8>& range,
+                                    PdfFunction& output) {
+ if(!pdf_function_limits(outputs,domain_min,domain_max,range)||
+    children.empty()||children.size()>32||
+    bounds.size()!=children.size()+1||
+    encode.size()!=children.size()*2||
+    bounds.front()!=domain_min||bounds.back()!=domain_max)return false;
+ size_t segment=0;double mapped=0;
+ if(!map_stitching_input(bounds,encode,domain_min,segment,mapped))return false;
+ for(const auto& child:children)
+  if(child.outputs!=outputs)return false;
+ PdfFunction compiled;
+ compiled.kind=PdfFunction::Kind::Stitching;
+ compiled.outputs=outputs;
+ compiled.domain[0]=domain_min;
+ compiled.domain[1]=domain_max;
+ compiled.range=range;
+ compiled.stitch_bounds=bounds;
+ compiled.stitch_encode=encode;
+ compiled.stitch_children=children;
+ output=std::move(compiled);
+ return true;
+}
+
 bool compile_exponential_pdf_function(const ExponentialFunction& parameters,
                                       unsigned outputs,double domain_min,
                                       double domain_max,
@@ -719,6 +772,18 @@ bool evaluate_pdf_function(const PdfFunction& function,
    ok=evaluate_exponential_function(function.exponential,clamped,
                                     function.outputs,values.data());
    break;
+  case PdfFunction::Kind::Stitching: {
+   size_t segment=0;
+   double mapped=0;
+   if(!map_stitching_input(function.stitch_bounds,function.stitch_encode,
+                           clamped,segment,mapped)||
+      segment>=function.stitch_children.size())return false;
+   // Bound recursive evaluation independently of the program's contents.
+   // Compiler-built trees are finite; reject overly deep ones at compilation.
+   ok=evaluate_pdf_function(function.stitch_children[segment],mapped,
+                            values.data());
+   break;
+  }
   case PdfFunction::Kind::Calculator:
    ok=evaluate_calculator_function(function.calculator,clamped,
                                    function.outputs,values.data());
