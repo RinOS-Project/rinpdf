@@ -138,6 +138,81 @@ struct Reader {
   visiting.erase(size_t(ref.integer));
   return true;
  }
+ bool walk_images(const Value& ref,size_t depth,size_t& current,size_t target,
+  std::set<size_t>& active,const Value* inherited,
+  std::map<std::string,PageImage>& output) const {
+  if(depth>64||ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
+  const size_t id=static_cast<size_t>(ref.integer);
+  if(!active.insert(id).second)return false;
+  Value node,resources_owned;
+  if(!object(ref,node)){active.erase(id);return false;}
+  if(const Value* resources=get(node,"Resources")){
+   if(resources->kind==Value::Kind::Reference){
+    if(!object(*resources,resources_owned)){active.erase(id);return false;}
+   }else resources_owned=*resources;
+   if(resources_owned.kind!=Value::Kind::Dictionary){active.erase(id);return false;}
+   inherited=&resources_owned;
+  }
+  const Value* type=get(node,"Type");
+  if(!type||type->kind!=Value::Kind::Name){active.erase(id);return false;}
+  if(type->text=="Page"){
+   if(current==target&&inherited){
+    if(const Value* xobjs=get(*inherited,"XObject")){
+     Value entries;
+     if(xobjs->kind==Value::Kind::Reference){
+      if(!object(*xobjs,entries)){active.erase(id);return false;}
+     }else entries=*xobjs;
+     if(entries.kind!=Value::Kind::Dictionary||
+        entries.dictionary.size()>256){active.erase(id);return false;}
+     for(const auto& [name,ref_image]:entries.dictionary){
+      if(ref_image.kind!=Value::Kind::Reference){active.erase(id);return false;}
+      const XrefEntry* ent=nullptr;
+      if(!entry(ref_image,ent)){active.erase(id);return false;}
+      StreamRange range;
+      if(!locate_indirect_stream(data,size,*ent,xref,range)){
+       active.erase(id);return false;
+      }
+      const Value* subtype=get(range.dictionary,"Subtype");
+      if(!subtype||subtype->kind!=Value::Kind::Name){active.erase(id);return false;}
+      if(subtype->text!="Image"){active.erase(id);return false;}
+      const Value* w=get(range.dictionary,"Width");
+      const Value* h=get(range.dictionary,"Height");
+      const Value* bits=get(range.dictionary,"BitsPerComponent");
+      const Value* cs=get(range.dictionary,"ColorSpace");
+      if(!w||!h||!bits||!cs||
+         w->kind!=Value::Kind::Integer||h->kind!=Value::Kind::Integer||
+         bits->kind!=Value::Kind::Integer||bits->integer!=8||
+         w->integer<=0||h->integer<=0||
+         w->integer>4096||h->integer>4096||
+         cs->kind!=Value::Kind::Name){active.erase(id);return false;}
+      const unsigned channels=cs->text=="DeviceGray"?1:
+                              cs->text=="DeviceRGB"?3:0;
+      if(!channels||get(range.dictionary,"SMask")||
+         get(range.dictionary,"Mask")||
+         get(range.dictionary,"Decode")){active.erase(id);return false;}
+      const size_t expected=size_t(w->integer)*size_t(h->integer)*channels;
+      if(expected>32*1024*1024){active.erase(id);return false;}
+      PageImage image;
+      image.width=unsigned(w->integer);image.height=unsigned(h->integer);
+      image.channels=channels;
+      if(!decode_stream(data,size,range,image.pixels,expected)||
+         image.pixels.size()!=expected){active.erase(id);return false;}
+      output.emplace(name,std::move(image));
+     }
+    }
+   }
+   ++current;active.erase(id);return true;
+  }
+  if(type->text!="Pages"){active.erase(id);return false;}
+  const Value* kids=get(node,"Kids");
+  if(!kids||kids->kind!=Value::Kind::Array){active.erase(id);return false;}
+  for(const Value& child:kids->array){
+   if(!walk_images(child,depth+1,current,target,active,inherited,output)){
+    active.erase(id);return false;
+   }
+  }
+  active.erase(id);return true;
+ }
  bool walk_properties(const Value& ref,size_t depth,size_t& current,size_t target,
   std::set<size_t>& active,const Value* inherited,PageProperties& output) const {
   if(depth>64||ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
@@ -551,6 +626,25 @@ bool read_page_properties(const uint8_t* data,size_t size,size_t index,
  if(!reader.walk_properties(*pages,0,current,index,active,nullptr,result)||
     index>=current)return false;
  properties=std::move(result);return true;
+}
+
+bool read_page_images(const uint8_t* data,size_t size,size_t index,
+ std::map<std::string,PageImage>& images){
+ if(!data)return false;
+ std::vector<XrefEntry> xref;std::vector<XrefStreamEntry> compressed;Value trailer;
+ if(!read_object_xref(data,size,xref,compressed,trailer)||
+    get(trailer,"Encrypt"))return false;
+ const Value* root=get(trailer,"Root");if(!root)return false;
+ Reader reader{data,size,xref,compressed,{}};
+ Value catalog;
+ if(!reader.object(*root,catalog))return false;
+ const Value* type=get(catalog,"Type"),*pages=get(catalog,"Pages");
+ if(!type||type->kind!=Value::Kind::Name||type->text!="Catalog"||!pages)return false;
+ size_t current=0;std::set<size_t> active;
+ std::map<std::string,PageImage> result;
+ if(!reader.walk_images(*pages,0,current,index,active,nullptr,result)||
+    index>=current)return false;
+ images=std::move(result);return true;
 }
 
 }
