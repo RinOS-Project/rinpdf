@@ -499,6 +499,21 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
      output+=' ';
     }
    }
+   // A new text object begins with an identity text matrix, so its
+   // first Tm must be compared with the preceding object's endpoint.
+   // Use the previous baseline normal to distinguish a new line from
+   // a horizontal word gap.
+   if(cross_object_pending&&previous_end_valid&&!suppressed&&
+      operands[0]==previous_a&&operands[1]==previous_b){
+    const double axis_length=std::hypot(previous_a,previous_b);
+    if(axis_length>1e-12&&std::isfinite(axis_length)){
+     const double dx=next_x-previous_end_x;
+     const double dy=next_y-previous_end_y;
+     const double perpendicular=(dy*previous_a-dx*previous_b)/axis_length;
+     if(std::isfinite(perpendicular)&&std::abs(perpendicular)>0.001)
+      new_line_pending=true;
+    }
+   }
    if(cross_object_pending&&previous_end_valid&&!suppressed&&
       !new_line_pending&&!output.empty()&&output.back()!=' '&&
       output.back()!='\n'&&
