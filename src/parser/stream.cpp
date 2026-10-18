@@ -303,16 +303,31 @@ bool decode_stream(const uint8_t *data,size_t size,const StreamRange& range,std:
    }
   }
   std::vector<uint8_t> decoded;
+  // PNG predictors prepend one selector byte per decoded row.
+  // Allow only that bounded overhead before the predictor is removed.
+  size_t stage_limit=max_output;
+  if(parms!=range.dictionary.dictionary.end()&&
+     (name=="FlateDecode"||name=="Fl"||
+      name=="LZWDecode"||name=="LZW")&&
+     parms->second.kind==Value::Kind::Dictionary){
+   const auto& d=parms->second.dictionary;
+   const auto it=d.find("Predictor");
+   if(it!=d.end()&&it->second.kind==Value::Kind::Integer&&
+      it->second.integer>=10&&it->second.integer<=15){
+    if(max_output>SIZE_MAX/2)return false;
+    stage_limit=max_output*2;
+   }
+  }
   const bool ok=name=="FlateDecode"||name=="Fl"?
-    flate_decode(stage.data(),stage.size(),decoded,max_output):
+    flate_decode(stage.data(),stage.size(),decoded,stage_limit):
     (name=="ASCIIHexDecode"||name=="AHx")?
-    decode_hex(stage.data(),stage.size(),decoded,max_output):
+    decode_hex(stage.data(),stage.size(),decoded,stage_limit):
     (name=="ASCII85Decode"||name=="A85")?
-    decode_ascii85(stage.data(),stage.size(),decoded,max_output):
+    decode_ascii85(stage.data(),stage.size(),decoded,stage_limit):
     (name=="RunLengthDecode"||name=="RL")?
-    decode_run_length(stage.data(),stage.size(),decoded,max_output):
+    decode_run_length(stage.data(),stage.size(),decoded,stage_limit):
     (name=="LZWDecode"||name=="LZW")?
-    decode_lzw(stage.data(),stage.size(),decoded,max_output,early_change):false;
+    decode_lzw(stage.data(),stage.size(),decoded,stage_limit,early_change):false;
   if(!ok){output.clear();return false;}
   stage=std::move(decoded);
   if(parms!=range.dictionary.dictionary.end()&&
