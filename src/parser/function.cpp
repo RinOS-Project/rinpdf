@@ -30,6 +30,23 @@ bool evaluate_exponential_function(const ExponentialFunction& function,
 
 // Local cubic interpolation on the sampled grid. Endpoints are extended
 // by replication to avoid reads outside the declared sample table.
+// PDF sampled values are packed MSB-first. Byte-aligned values can be
+// decoded with byte reads instead of one branch and shift per bit.
+static uint64_t unpack_pdf_sample(const std::vector<uint8_t>& bytes,
+                                  size_t bit_offset,unsigned bits) noexcept {
+ uint64_t value=0;
+ if((bit_offset%8)==0&&(bits%8)==0){
+  const size_t start=bit_offset/8;
+  for(unsigned n=0;n<bits/8;++n)value=(value<<8)|bytes[start+n];
+ }else{
+  for(unsigned n=0;n<bits;++n){
+   const size_t p=bit_offset+n;
+   value=(value<<1)|((bytes[p/8]>>(7-(p%8)))&1u);
+  }
+ }
+ return value;
+}
+
 static void sample_kernel(unsigned order,double t,double* weights) noexcept {
  if(order==1){weights[0]=1-t;weights[1]=t;return;}
  const double t2=t*t,t3=t2*t;
@@ -78,11 +95,7 @@ bool evaluate_sampled_function(const SampledFunction& function,
  const double fraction=position-double(index);
  auto sample_at=[&](size_t sample_index)->double {
   const size_t first_bit=sample_index*bits;
-  uint64_t value=0;
-  for(unsigned bit=0;bit<bits;++bit){
-   const size_t bit_pos=first_bit+bit;
-   value=(value<<1)|((samples[bit_pos/8]>>(7-(bit_pos%8)))&1u);
-  }
+  const uint64_t value=unpack_pdf_sample(samples,first_bit,bits);
   return double(value)/double((uint64_t(1)<<bits)-1);
  };
  std::array<double,4> computed{};
@@ -201,11 +214,7 @@ bool evaluate_multidimensional_sampled_function(
   const size_t first=(sample_indices[slot]*f.outputs)*f.bits;
   for(unsigned c=0;c<f.outputs;++c){
    const size_t offset=first+size_t(c)*f.bits;
-   uint64_t value=0;
-   for(unsigned bit=0;bit<f.bits;++bit){
-    const size_t p=offset+bit;
-    value=(value<<1)|((samples[p/8]>>(7-(p%8)))&1u);
-   }
+   const uint64_t value=unpack_pdf_sample(samples,offset,f.bits);
    const double raw=double(value)/maximum;
    const double d0=f.decode[c*2],d1=f.decode[c*2+1];
    computed[c]+=weight*(d0+raw*(d1-d0));
