@@ -151,31 +151,32 @@
    sampled.range=params->range;
    if(!evaluate_sampled_function(sampled,*samples,x,result))return false;
   }else if(type->integer==4){
-   // Bounded numeric calculator with executable procedures and branches.
-   // Unsupported operators and malformed procedure nesting fail closed.
-   if(!has_sampled_stream)return false;
+   // Compile Type 4 once per object and output arity, then reuse the
+   // common PdfFunction evaluation path across all image pixels.
+   if(!has_sampled_stream||reference.kind!=Value::Kind::Reference)
+    return false;
    const Value* output_range=get(function,"Range");
    if(!output_range||output_range->kind!=Value::Kind::Array||
       output_range->array.size()!=outputs*2)return false;
-   // Cache bounded decoded calculator programs for this document so image
-   // pixels do not repeatedly decompress and tokenize the same function.
-   if(reference.kind!=Value::Kind::Reference)return false;
-   const auto cache_key=std::make_pair(reference.integer,reference.generation);
-   CalculatorProgram temporary;
-   const CalculatorProgram* compiled=nullptr;
-   const auto cached=calculator_token_cache.find(cache_key);
-   if(cached!=calculator_token_cache.end()){
-    compiled=&cached->second;
+   const auto key=std::make_tuple(reference.integer,reference.generation,outputs);
+   const PdfFunction* compiled=nullptr;
+   PdfFunction local;
+   const auto hit=compiled_calculator_cache.find(key);
+   if(hit!=compiled_calculator_cache.end()){
+    compiled=&hit->second;
    }else{
+    std::array<double,8> limits{};
+    for(unsigned j=0;j<outputs*2;++j)
+     if(!number(output_range->array[j],limits[j]))return false;
     std::vector<uint8_t> source;
     if(!decode_stream(data,size,sampled_stream,source,16384)||
-       !compile_calculator_function(source,temporary))return false;
-    if(calculator_token_cache.size()<64)
-     compiled=&calculator_token_cache.emplace(cache_key,
-                                                std::move(temporary)).first->second;
-    else compiled=&temporary;
+       !compile_calculator_pdf_function(source,outputs,low,high,
+                                        limits,local))return false;
+    if(compiled_calculator_cache.size()<64)
+     compiled=&compiled_calculator_cache.emplace(key,std::move(local)).first->second;
+    else compiled=&local;
    }
-   if(!evaluate_calculator_function(*compiled,x,outputs,result))return false;
+   if(!evaluate_pdf_function(*compiled,x,result))return false;
   }else if(type->integer==2){
    CachedExponent local;
    const CachedExponent* compiled=nullptr;
