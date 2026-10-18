@@ -109,5 +109,18 @@ int main(){
  if(!extract_page_text(reinterpret_cast<const uint8_t*>(multi_pdf.data()),
       multi_pdf.size(),0,multi_result))return 13;
  if(multi_result!="日本 B")return 14;
+ // Identity-V uses vertical displacements: a horizontal TJ-space
+ // heuristic must not synthesize spaces between vertical CID glyphs.
+ std::string vertical_pdf=pdf;
+ const auto encoding_at=vertical_pdf.find("/Identity-H");
+ const auto adjustment_at=vertical_pdf.find("-300");
+ if(encoding_at==std::string::npos||
+    adjustment_at==std::string::npos)return 15;
+ vertical_pdf.replace(encoding_at,sizeof("/Identity-H")-1,"/Identity-V");
+ vertical_pdf.replace(adjustment_at,4,"-900");
+ std::string vertical_text;
+ if(!extract_page_text(reinterpret_cast<const uint8_t*>(vertical_pdf.data()),
+      vertical_pdf.size(),0,vertical_text))return 16;
+ if(vertical_text!="AB\nA")return 17;
  return 0;
 }
