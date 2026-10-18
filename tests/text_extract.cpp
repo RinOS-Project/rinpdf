@@ -57,7 +57,8 @@ int main(){
  if(!extract_page_text(reinterpret_cast<const uint8_t*>(pdf.data()),pdf.size(),0,result))return 1;
  const std::string expected=
   std::string("\xe4\xb8\x96\xe6\x97\xa5\xe6\x9c\xac")+
-  "ABB\nB\nB\nB\nB B\nBB BBBB BBBBBB\nB\nB";
+  // Each <42> maps to one B; the final unbroken run has seven glyphs.
+  "ABB\nB\nB\nB\nB B\nBB BBBB BBBBBBB\nB\nB";
  if(result!=expected){
   size_t first=0;
   while(first<result.size()&&first<expected.size()&&
