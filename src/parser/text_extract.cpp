@@ -134,6 +134,25 @@ double tj_space_threshold(const PageFont& font){
  }
  return 500;
 }
+// Shared geometric spacing check for Td/TD and Tm. The previous glyph
+// advance and both text origins are expressed in the same text matrix.
+bool has_position_gap(double old_x,double old_y,double next_x,double next_y,
+ double a,double b,double cursor,double threshold_units,
+ double font_size,double horizontal_scale){
+ const double length=std::hypot(a,b);
+ if(!std::isfinite(length)||length<=1e-12||
+    !std::isfinite(cursor)||!std::isfinite(threshold_units)||
+    threshold_units<=0||font_size<=0||horizontal_scale<=0)return false;
+ const double dx=next_x-old_x-a*cursor;
+ const double dy=next_y-old_y-b*cursor;
+ const double along=(dx*a+dy*b)/length;
+ const double across=(dx*b-dy*a)/length;
+ const double threshold=font_size*horizontal_scale*length*
+                        threshold_units/1000.0;
+ return std::isfinite(along)&&std::isfinite(across)&&
+        std::isfinite(threshold)&&threshold>0&&
+        std::abs(across)<=0.001&&along>=threshold;
+}
 bool decode_run(const std::string& bytes,const PageFont& font,std::string& out){
  if(font.unicode_sequences.empty())return false;
  const unsigned max_width=font.subtype=="Type0"?4:1;
@@ -419,23 +438,18 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
   }
   if(text&&(t.value=="Td"||t.value=="TD")){
    if(operands.size()!=2||have_pending)return false;
-   // Td is relative to the line origin in text coordinates; compare
-   // the next origin with the prior glyph endpoint on any baseline.
+   // Compare the new line origin against the previous glyph endpoint.
    if(!suppressed&&operands[1]==0&&has_line_origin&&
-      text_run_emitted&&text_cursor_known&&font_size>0&&
-      std::hypot(line_a,line_b)>1e-12&&
-      horizontal_scale>0&&!new_line_pending&&!output.empty()&&
-      output.back()!=' '&&output.back()!='\n'&&
-      operands[0]>text_cursor){
+      text_run_emitted&&text_cursor_known&&!new_line_pending&&
+      !output.empty()&&output.back()!=' '&&output.back()!='\n'){
     const auto font_it=fonts.find(selected);
-    if(font_it!=fonts.end()){
-     const double threshold=font_size*horizontal_scale*
-        tj_space_threshold(font_it->second)/1000.0;
-     if(std::isfinite(threshold)&&threshold>0&&
-        operands[0]-text_cursor>=threshold){
-      if(output.size()>=4*1024*1024)return false;
-      output+=' ';
-     }
+    const double next_x=text_line_x+line_a*operands[0]+line_c*operands[1];
+    const double next_y=text_line_y+line_b*operands[0]+line_d*operands[1];
+    if(font_it!=fonts.end()&&has_position_gap(text_line_x,text_line_y,
+       next_x,next_y,line_a,line_b,text_cursor,
+       tj_space_threshold(font_it->second),font_size,horizontal_scale)){
+     if(output.size()>=4*1024*1024)return false;
+     output+=' ';
     }
    }
    if(operands[1]!=0&&!suppressed)new_line_pending=true;
@@ -468,28 +482,16 @@ bool extract_page_text(const uint8_t* pdf,size_t size,size_t page,
        (next_y-text_line_y)*line_axis_x/old_length;
    if(has_line_origin&&std::abs(displacement_normal)>0.001&&!suppressed)
     new_line_pending=true;
-   // Compare the destination against the previous glyph endpoint on
-   // an unchanged baseline, including rotated and scaled text matrices.
    if(!suppressed&&has_line_origin&&text_run_emitted&&text_cursor_known&&
-      !new_line_pending&&font_size>0&&horizontal_scale>0&&
-      operands[0]==line_a&&operands[1]==line_b&&
+      !new_line_pending&&operands[0]==line_a&&operands[1]==line_b&&
       operands[2]==line_c&&operands[3]==line_d&&
       !output.empty()&&output.back()!=' '&&output.back()!='\n'){
-    const double axis_length=std::hypot(line_a,line_b);
-    const double dx=next_x-text_line_x-line_a*text_cursor;
-    const double dy=next_y-text_line_y-line_b*text_cursor;
-    const double forward=(dx*line_a+dy*line_b)/axis_length;
-    const double cross=(dx*line_b-dy*line_a)/axis_length;
     const auto font_it=fonts.find(selected);
-    if(font_it!=fonts.end()&&axis_length>1e-12&&
-       std::isfinite(forward)&&std::isfinite(cross)&&
-       std::abs(cross)<=0.001){
-     const double threshold=font_size*horizontal_scale*axis_length*
-        tj_space_threshold(font_it->second)/1000.0;
-     if(std::isfinite(threshold)&&threshold>0&&forward>=threshold){
-      if(output.size()>=4*1024*1024)return false;
-      output+=' ';
-     }
+    if(font_it!=fonts.end()&&has_position_gap(text_line_x,text_line_y,
+       next_x,next_y,line_a,line_b,text_cursor,
+       tj_space_threshold(font_it->second),font_size,horizontal_scale)){
+     if(output.size()>=4*1024*1024)return false;
+     output+=' ';
     }
    }
    text_cursor=0;text_cursor_known=true;text_run_emitted=false;
