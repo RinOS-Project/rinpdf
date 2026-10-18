@@ -1194,8 +1194,8 @@ struct Reader {
      if(stack.back().kind!=1)return false;
      stack.back().number=stack.back().number==0?1:0;
     }else return false;
-    if(stack.empty()||!std::isfinite(stack.back())||
-       std::abs(stack.back())>1e12)return false;
+    if(stack.empty()||!std::isfinite(stack.back().number)||
+       std::abs(stack.back().number)>1e12)return false;
    }
    if(stack.size()!=outputs)return false;
    for(const CalcValue& value:stack)
