@@ -198,6 +198,8 @@ struct Reader {
       bool separation=false;
       unsigned device_inputs=1;
       bool sampled_tint=false;
+      bool recursive_stitch=false;
+      Value stitch_function;
       struct StitchPart {
        double c0[4]{0,0,0,0},c1[4]{1,1,1,1},exponent=1;
       };
@@ -425,64 +427,14 @@ struct Reader {
            tint_samples.size()!=size_t(byte_count))return false;
         sampled_tint=true;
        }else if(type->integer==3){
-        // A stitching function has one input; each segment is mapped
-        // into a bounded Type 2 exponential subfunction.
-        if(device_inputs!=1||!domain||domain->kind!=Value::Kind::Array||
-           domain->array.size()!=2)return false;
-        double d0=0,d1=0;
-        if(!number(domain->array[0],d0)||
-           !number(domain->array[1],d1)||d0!=0||d1!=1)return false;
-        const Value* functions=get(fn,"Functions");
-        const Value* bounds=get(fn,"Bounds");
-        const Value* encode_stitch=get(fn,"Encode");
-        if(!functions||functions->kind!=Value::Kind::Array||
-           functions->array.empty()||functions->array.size()>32||
-           !bounds||bounds->kind!=Value::Kind::Array||
-           bounds->array.size()!=functions->array.size()-1||
-           !encode_stitch||encode_stitch->kind!=Value::Kind::Array||
-           encode_stitch->array.size()!=functions->array.size()*2)
+        if(device_inputs!=1)return false;
+        double boundary[4]{};
+        // Probe all four tint endpoints to validate the function hierarchy.
+        if(!eval_tint_function(cs->array[3],0,tint_channels,boundary)||
+           !eval_tint_function(cs->array[3],1,tint_channels,boundary))
          return false;
-        double previous=0;
-        stitch_bounds.push_back(0);
-        for(const Value& bound:bounds->array){
-         double value=0;
-         if(!number(bound,value)||value<=previous||value>=1)return false;
-         stitch_bounds.push_back(value);previous=value;
-        }
-        stitch_bounds.push_back(1);
-        for(const Value& value:encode_stitch->array){
-         double v=0;
-         if(!number(value,v))return false;
-         stitch_encode.push_back(v);
-        }
-        for(const Value& reference:functions->array){
-         Value sub;
-         if(reference.kind==Value::Kind::Reference){
-          if(!object(reference,sub))return false;
-         }else sub=reference;
-         const Value* subtype=get(sub,"FunctionType");
-         const Value* power=get(sub,"N");
-         if(!subtype||subtype->kind!=Value::Kind::Integer||
-            subtype->integer!=2||!power)return false;
-         StitchPart part;
-         if(!number(*power,part.exponent)||part.exponent<=0||
-            part.exponent>100)return false;
-         for(const auto& [key,destination,default_value]:
-           std::initializer_list<std::tuple<const char*,double*,double>>{
-             {"C0",part.c0,0},{"C1",part.c1,1}}){
-          const Value* values=get(sub,key);
-          if(!values){
-           for(unsigned c=0;c<tint_channels;++c)destination[c]=default_value;
-           continue;
-          }
-          if(values->kind!=Value::Kind::Array||
-             values->array.size()!=tint_channels)return false;
-          for(unsigned c=0;c<tint_channels;++c)
-           if(!number(values->array[c],destination[c])||
-              destination[c]<0||destination[c]>1)return false;
-         }
-         stitch_parts.push_back(part);
-        }
+        stitch_function=cs->array[3];
+        recursive_stitch=true;
        }else if(type->integer==2){
         if(device_inputs!=1||!domain||domain->kind!=Value::Kind::Array||
            domain->array.size()!=2||!exponent||
@@ -750,21 +702,10 @@ struct Reader {
                                                   tint_range[2*c+1]);
           }
          }
-        }else if(!stitch_parts.empty()){
-         const double x=double(image.pixels[i])/255;
-         size_t part=0;
-         while(part+1<stitch_parts.size()&&x>=stitch_bounds[part+1])
-          ++part;
-         const double begin=stitch_bounds[part];
-         const double end=stitch_bounds[part+1];
-         const double normalized=(x-begin)/(end-begin);
-         const double input=stitch_encode[2*part]+normalized*
-           (stitch_encode[2*part+1]-stitch_encode[2*part]);
-         const double tint=std::pow(std::clamp(input,0.0,1.0),
-                                     stitch_parts[part].exponent);
-         for(unsigned c=0;c<tint_channels;++c)
-          values[c]=stitch_parts[part].c0[c]+tint*
-                    (stitch_parts[part].c1[c]-stitch_parts[part].c0[c]);
+        }else if(recursive_stitch){
+         if(!eval_tint_function(stitch_function,
+              double(image.pixels[i])/255,tint_channels,values))
+          return false;
         }else{
          const double tint=std::pow(double(image.pixels[i])/255,tint_n);
          for(unsigned c=0;c<tint_channels;++c)
@@ -902,6 +843,94 @@ struct Reader {
    }
   }
   active.erase(id);return true;
+ }
+ // Evaluate one-input Type 2 and nested Type 3 functions. References
+ // are resolved explicitly and recursion is bounded for untrusted PDFs.
+ bool eval_tint_function(const Value& reference,double x,unsigned outputs,
+                         double* result,unsigned depth=0) const {
+  if(depth>=8||outputs<1||outputs>4||!std::isfinite(x))return false;
+  Value function;
+  if(reference.kind==Value::Kind::Reference){
+   if(!object(reference,function))return false;
+  }else function=reference;
+  const Value* type=get(function,"FunctionType");
+  const Value* domain=get(function,"Domain");
+  if(!type||type->kind!=Value::Kind::Integer||
+     !domain||domain->kind!=Value::Kind::Array||
+     domain->array.size()!=2)return false;
+  auto number=[](const Value& v,double& out){
+   if(v.kind==Value::Kind::Integer)out=double(v.integer);
+   else if(v.kind==Value::Kind::Real)out=v.real;
+   else return false;
+   return std::isfinite(out)&&std::abs(out)<=100000;
+  };
+  double low=0,high=0;
+  if(!number(domain->array[0],low)||!number(domain->array[1],high)||
+     high<=low)return false;
+  x=std::clamp(x,low,high);
+  if(type->integer==2){
+   const Value* n=get(function,"N");
+   double exponent=0;
+   if(!n||!number(*n,exponent)||exponent<=0||exponent>100)
+    return false;
+   double c0[4]{0,0,0,0},c1[4]{1,1,1,1};
+   for(const auto& [key,dest]:std::initializer_list<std::pair<const char*,double*>>{
+        {"C0",c0},{"C1",c1}}){
+    if(const Value* values=get(function,key)){
+     if(values->kind!=Value::Kind::Array||
+        values->array.size()!=outputs)return false;
+     for(unsigned j=0;j<outputs;++j)
+      if(!number(values->array[j],dest[j]))return false;
+    }
+   }
+   const double exponentiated=std::pow(x,exponent);
+   if(!std::isfinite(exponentiated))return false;
+   for(unsigned j=0;j<outputs;++j){
+    result[j]=c0[j]+exponentiated*(c1[j]-c0[j]);
+    if(!std::isfinite(result[j]))return false;
+   }
+  }else if(type->integer==3){
+   const Value* functions=get(function,"Functions");
+   const Value* bounds=get(function,"Bounds");
+   const Value* enc=get(function,"Encode");
+   if(!functions||functions->kind!=Value::Kind::Array||
+      functions->array.empty()||functions->array.size()>32||
+      !bounds||bounds->kind!=Value::Kind::Array||
+      bounds->array.size()!=functions->array.size()-1||
+      !enc||enc->kind!=Value::Kind::Array||
+      enc->array.size()!=functions->array.size()*2)return false;
+   unsigned segment=0;
+   double start=low;
+   for(const Value& bound:bounds->array){
+    double b=0;
+    if(!number(bound,b)||b<=start||b>=high)return false;
+    if(x>=b)++segment;
+    if(segment==0)start=b;
+   }
+   double left=low,right=high;
+   if(segment){
+    if(!number(bounds->array[segment-1],left))return false;
+   }
+   if(segment<bounds->array.size()&&
+      !number(bounds->array[segment],right))return false;
+   double e0=0,e1=0;
+   if(!number(enc->array[2*segment],e0)||
+      !number(enc->array[2*segment+1],e1))return false;
+   const double mapped=e0+(x-left)/(right-left)*(e1-e0);
+   if(!eval_tint_function(functions->array[segment],mapped,outputs,
+                          result,depth+1))return false;
+  }else return false;
+  if(const Value* range=get(function,"Range")){
+   if(range->kind!=Value::Kind::Array||range->array.size()!=outputs*2)
+    return false;
+   for(unsigned j=0;j<outputs;++j){
+    double a=0,b=0;
+    if(!number(range->array[2*j],a)||
+       !number(range->array[2*j+1],b)||a>b)return false;
+    result[j]=std::clamp(result[j],a,b);
+   }
+  }
+  return true;
  }
  bool parse_cid_descendant(const Value& descendant,PageFont& resource) const {
   const Value* subtype=get(descendant,"Subtype");
