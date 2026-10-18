@@ -206,7 +206,7 @@ int main(){
  // Tr is an integer from 0 through 7.
  if(const int error=reject_boundary("0 Tw <42> '","9 Tr <42> '",
       57,58,59))return error;
- if(const int error=reject_boundary("0 Tw <42> '","1.5Tr<42> '",
+ if(const int error=reject_boundary("0 Tw <42> '","1.5 Tr<42>'",
       60,61,62))return error;
  // A standalone TJ or Tf has no valid operand sequence. These two-byte
  // substitutions preserve the content length and classic xref positions.
