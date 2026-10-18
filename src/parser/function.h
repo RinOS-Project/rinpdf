@@ -40,6 +40,21 @@ bool evaluate_sampled_function(const SampledFunction& function,
                                const std::vector<uint8_t>& samples,
                                double input,double* result) noexcept;
 
+// Multi-input sampled functions used by DeviceN and Separation tint maps.
+// The first input dimension varies fastest in the PDF sample table.
+struct MultidimensionalSampledFunction {
+ unsigned inputs=0,outputs=0,bits=0;
+ std::array<unsigned,4> sizes{};
+ std::array<double,8> domain{};
+ std::array<double,8> encode{};
+ std::array<double,8> decode{};
+ std::array<double,8> range{};
+};
+bool evaluate_multidimensional_sampled_function(
+ const MultidimensionalSampledFunction& function,
+ const std::vector<uint8_t>& samples,const double* inputs,
+ double* result) noexcept;
+
 // Select a Type 3 stitching segment and map its input into its child domain.
 // Bounds contain the initial and final domain endpoints.
 bool map_stitching_input(const std::vector<double>& bounds,
