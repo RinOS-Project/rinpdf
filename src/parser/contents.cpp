@@ -202,71 +202,20 @@ struct Reader {
              image.pixels)){return false;}
        return true;
       }
-      // PDF Flate image predictors operate on complete scanlines.
-      // Undo the predictor before exposing samples to the renderer.
-      unsigned predictor=1;
+      // Predictor handling is centralized in decode_stream for both
+      // Flate and LZW images. Validate the resulting raster dimensions.
       if(const Value* parms=get(range.dictionary,"DecodeParms")){
-       if(parms->kind!=Value::Kind::Dictionary){return false;}
-       auto parameter=[&](const char* key,unsigned fallback,unsigned& out){
-        const Value* v=get(*parms,key);
-        if(!v){out=fallback;return true;}
-        if(v->kind!=Value::Kind::Integer||v->integer<0||
-           v->integer>100000)return false;
-        out=unsigned(v->integer);return true;
+       if(parms->kind!=Value::Kind::Dictionary)return false;
+       auto check=[&](const char* key,unsigned expected_value){
+        const Value* value=get(*parms,key);
+        return !value||(value->kind==Value::Kind::Integer&&
+                        value->integer==expected_value);
        };
-       unsigned columns=0,colors=0,bpc=0;
-       if(!parameter("Predictor",1,predictor)||
-          !parameter("Columns",1,columns)||
-          !parameter("Colors",1,colors)||
-          !parameter("BitsPerComponent",8,bpc)||
-          columns!=unsigned(w->integer)||colors!=channels||bpc!=8||
-          !(predictor==1||predictor==2||
-            (predictor>=10&&predictor<=15))){return false;}
+       if(!check("Columns",image.width)||!check("Colors",channels)||
+          !check("BitsPerComponent",8))return false;
       }
-      const size_t rowbytes=size_t(w->integer)*channels;
-      const size_t row_count=size_t(h->integer);
-      const size_t encoded_size=expected+
-         ((predictor>=10&&predictor<=15)?row_count:0);
-      if(encoded_size>32*1024*1024+4096){return false;}
-      std::vector<uint8_t> decoded;
-      if(!decode_stream(data,size,range,decoded,encoded_size)||
-         decoded.size()!=encoded_size){return false;}
-      if(predictor==2){
-       for(size_t row=0;row<row_count;++row)
-        for(size_t col=channels;col<rowbytes;++col){
-         const size_t offset=row*rowbytes+col;
-         decoded[offset]=uint8_t(decoded[offset]+decoded[offset-channels]);
-        }
-      }else if(predictor>=10&&predictor<=15){
-       std::vector<uint8_t> raw(expected);
-       for(size_t row=0;row<row_count;++row){
-        const size_t source=row*(rowbytes+1);
-        const unsigned filter=decoded[source];
-        if(filter>4||(predictor!=15&&filter!=predictor-10)){
-         return false;
-        }
-        for(size_t col=0;col<rowbytes;++col){
-         const unsigned left=col>=channels?raw[row*rowbytes+col-channels]:0;
-         const unsigned up=row?raw[(row-1)*rowbytes+col]:0;
-         const unsigned upper_left=row&&col>=channels?
-           raw[(row-1)*rowbytes+col-channels]:0;
-         unsigned prediction=0;
-         if(filter==1)prediction=left;
-         else if(filter==2)prediction=up;
-         else if(filter==3)prediction=(left+up)/2;
-         else if(filter==4){
-          const int p=int(left)+int(up)-int(upper_left);
-          const int a=std::abs(p-int(left));
-          const int b=std::abs(p-int(up));
-          const int c=std::abs(p-int(upper_left));
-          prediction=(a<=b&&a<=c)?left:(b<=c?up:upper_left);
-         }
-         raw[row*rowbytes+col]=uint8_t(decoded[source+1+col]+prediction);
-        }
-       }
-       decoded=std::move(raw);
-      }
-      image.pixels=std::move(decoded);
+      if(!decode_stream(data,size,range,image.pixels,expected)||
+         image.pixels.size()!=expected)return false;
       return true;
  }
  bool walk_images(const Value& ref,size_t depth,size_t& current,size_t target,
