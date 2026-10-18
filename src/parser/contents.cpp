@@ -595,16 +595,39 @@ struct Reader {
        for(size_t i=0;i<size_t(image.width)*image.height;++i){
         double values[4]{};
         if(sampled_tint){
-         size_t offset=0,multiplier=1;
+         // Multilinear interpolation over the sampled function grid.
+         // The first input varies fastest in the PDF sample table.
+         size_t lower[4]{},strides[4]{};
+         double fraction[4]{};
+         size_t stride=1;
          for(unsigned dimension=0;dimension<device_inputs;++dimension){
-          const double x=double(image.pixels[i*device_inputs+dimension])/255;
-          const size_t sample=size_t(std::lround(
-             x*double(tint_sizes[dimension]-1)));
-          offset+=sample*multiplier;
-          multiplier*=tint_sizes[dimension];
+          const double position=
+           double(image.pixels[i*device_inputs+dimension])/255*
+           double(tint_sizes[dimension]-1);
+          lower[dimension]=size_t(position);
+          fraction[dimension]=position-double(lower[dimension]);
+          if(lower[dimension]>=tint_sizes[dimension]-1){
+           lower[dimension]=tint_sizes[dimension]-1;
+           fraction[dimension]=0;
+          }
+          strides[dimension]=stride;
+          stride*=tint_sizes[dimension];
          }
-         for(unsigned c=0;c<tint_channels;++c)
-          values[c]=double(tint_samples[offset*tint_channels+c])/255;
+         const unsigned corners=1u<<device_inputs;
+         for(unsigned corner=0;corner<corners;++corner){
+          size_t index=0;
+          double weight=1;
+          for(unsigned dimension=0;dimension<device_inputs;++dimension){
+           const bool upper=(corner&(1u<<dimension))!=0;
+           const bool can_advance=lower[dimension]+1<tint_sizes[dimension];
+           index+=(lower[dimension]+(upper&&can_advance?1:0))*
+                  strides[dimension];
+           weight*=upper?fraction[dimension]:1-fraction[dimension];
+          }
+          for(unsigned c=0;c<tint_channels;++c)
+           values[c]+=weight*
+              (double(tint_samples[index*tint_channels+c])/255);
+         }
         }else{
          const double tint=std::pow(double(image.pixels[i])/255,tint_n);
          for(unsigned c=0;c<tint_channels;++c)
