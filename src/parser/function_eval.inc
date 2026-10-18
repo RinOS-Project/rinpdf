@@ -67,6 +67,9 @@
    if(!is_stream)return false;
    const Value* sz=get(dictionary,"Size");
    const Value* bp=get(dictionary,"BitsPerSample");
+   const Value* order=get(dictionary,"Order");
+   if(order&&(order->kind!=Value::Kind::Integer||order->integer!=1))
+    return false;
    if(!sz||sz->kind!=Value::Kind::Array||sz->array.size()!=1||
       sz->array[0].kind!=Value::Kind::Integer||
       sz->array[0].integer<2||sz->array[0].integer>4096||
