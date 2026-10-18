@@ -16,6 +16,7 @@
 #include <set>
 #include <cmath>
 #include <tuple>
+#include <array>
 #include <sstream>
 #include <charconv>
 namespace rinpdf::parser {
@@ -40,6 +41,7 @@ struct Reader {
  const uint8_t *data;size_t size;const std::vector<XrefEntry>& xref;const std::vector<XrefStreamEntry>& compressed;
  mutable std::map<size_t,Value> compressed_cache;
  mutable std::map<std::pair<int64_t,int64_t>,std::vector<std::string>> calculator_token_cache;
+ mutable std::map<std::tuple<int64_t,int64_t,unsigned,unsigned>,std::array<double,4>> calculator_result_cache;
  bool entry(const Value& ref,const XrefEntry*& out) const {
   if(ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
   auto it=std::find_if(xref.begin(),xref.end(),[&](const XrefEntry& e){
@@ -860,6 +862,23 @@ struct Reader {
  bool eval_tint_function(const Value& reference,double x,unsigned outputs,
                          double* result,unsigned depth=0) const {
   if(depth>=8||outputs<1||outputs>4||!std::isfinite(x))return false;
+  // Image tint inputs are 8-bit values. Memoize only exact byte-grid
+  // evaluations; arbitrary floating-point inputs retain full precision.
+  bool cacheable=false;
+  unsigned byte_input=0;
+  if(reference.kind==Value::Kind::Reference&&x>=0&&x<=1){
+   const double quantized=std::round(x*255.0);
+   if(x==quantized/255.0){
+    cacheable=true;byte_input=unsigned(quantized);
+    const auto key=std::make_tuple(reference.integer,
+                                  reference.generation,outputs,byte_input);
+    const auto hit=calculator_result_cache.find(key);
+    if(hit!=calculator_result_cache.end()){
+     for(unsigned j=0;j<outputs;++j)result[j]=hit->second[j];
+     return true;
+    }
+   }
+  }
   Value function;
   StreamRange sampled_stream;
   bool has_sampled_stream=false;
@@ -1381,6 +1400,13 @@ struct Reader {
        !number(range->array[2*j+1],b)||a>b)return false;
     result[j]=std::clamp(result[j],a,b);
    }
+  }
+  if(cacheable&&calculator_result_cache.size()<16384){
+   std::array<double,4> saved{};
+   for(unsigned j=0;j<outputs;++j)saved[j]=result[j];
+   calculator_result_cache.emplace(
+      std::make_tuple(reference.integer,reference.generation,
+                      outputs,byte_input),saved);
   }
   return true;
  }
