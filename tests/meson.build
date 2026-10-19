@@ -97,3 +97,5 @@ test('rinpdf-smask-decode-image',executable('rinpdf-smask-decode-image','smask_d
 if jpeg_dep.found()
  test('rinpdf-jpeg-smask-image',executable('rinpdf-jpeg-smask-image','jpeg_smask_image.cpp',dependencies:[rinpdf_dep,jpeg_dep]))
 endif
+
+test('rinpdf-extgstate-opacity',executable('rinpdf-extgstate-opacity','extgstate_opacity.cpp',dependencies:rinpdf_dep))
