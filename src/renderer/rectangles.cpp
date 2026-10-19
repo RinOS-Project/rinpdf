@@ -1662,9 +1662,11 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
     if(clip_mask!=nullptr)alpha=(alpha*(*clip_mask)[i]+127)/255;
     if(!alpha&&!(transparent_target&&transparent_target->knockout))continue;
     if(transparent_target){
-     if(!transparent_target->mark_shape(x,y,uint8_t(hits*255/4))||
+     unsigned geometry=(hits*255+2)/4;
+     if(clip_mask)geometry=(geometry*(*clip_mask)[i]+127)/255;
+     if(!transparent_target->mark_shape(x,y,uint8_t(geometry))||
         !transparent_target->blend_pixel(x,y,cr,cg,cb,uint8_t(alpha),
-                                transparent_blend_mode(),uint8_t(hits*255/4)))
+                                transparent_blend_mode(),uint8_t(geometry)))
       return false;
      continue;
     }
@@ -1700,9 +1702,11 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
     if(clip_mask!=nullptr)alpha=(alpha*(*clip_mask)[i]+127)/255;
     if(!alpha&&!(transparent_target&&transparent_target->knockout))continue;
     if(transparent_target){
-     if(!transparent_target->mark_shape(x,y,uint8_t(antialias?coverage[i]:255))||
+     unsigned geometry=antialias?coverage[i]:255;
+     if(clip_mask)geometry=(geometry*(*clip_mask)[i]+127)/255;
+     if(!transparent_target->mark_shape(x,y,uint8_t(geometry))||
         !transparent_target->blend_pixel(x,y,cr,cg,cb,uint8_t(alpha),
-                                transparent_blend_mode(),uint8_t(antialias?coverage[i]:255)))
+                                transparent_blend_mode(),uint8_t(geometry)))
       return false;
      continue;
     }
