@@ -26,6 +26,19 @@ int main(){
  for(size_t i=0;i<rgba.size();i+=4)
   if(rgba[i]<63||rgba[i]>65||rgba[i]!=rgba[i+1]||
      rgba[i]!=rgba[i+2]||rgba[i+3]!=255)return 2;
- // Unsupported group definitions must never be silently rendered.
+ // An RGB source must produce the same recovered coverage in all
+ // channels, rather than reconstructing independent per-channel alphas.
+ const std::string colored="q /Half gs 1 0 0 rg 0 0 8 8 re f Q";
+ form.content.assign(colored.begin(),colored.end());
+ forms["Group"]=form;
+ const std::string page_rgb="0.5 g 0 0 8 8 re f /Group Do";
+ std::vector<uint8_t> rgb(8*8*4);
+ if(!rinpdf::renderer::render_rectangles_box_with_fonts(
+      reinterpret_cast<const uint8_t*>(page_rgb.data()),page_rgb.size(),
+      8,8,rgb.data(),32,{0,0,8,8},{},{},{},forms,true,0,states))
+  return 3;
+ for(size_t i=0;i<rgb.size();i+=4)
+  if(rgb[i]<190||rgb[i]>193||rgb[i+1]<63||rgb[i+1]>65||
+     rgb[i+2]<63||rgb[i+2]>65||rgb[i+3]!=255)return 4;
  return 0;
 }
