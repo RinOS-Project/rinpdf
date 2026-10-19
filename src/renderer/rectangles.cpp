@@ -411,9 +411,23 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      if(fm.knockout_transparency_group){
       // The direct replacement path is only valid for isolated groups
       // consisting of simple page graphics, with no nested Form calls.
-      if(!fm.isolated_transparency_group||!fm.local_forms.empty()||
-         !fm.xobject_aliases.empty())return false;
+      if(!fm.isolated_transparency_group)return false;
      }
+     if(transparent_target&&transparent_target->knockout&&
+        !fm.transparency_group){
+      // A normal nested Form contributes one painting object to a
+      // knockout group. Render its internal paints normally first.
+      PremultipliedSurface object;
+      if(!object.resize(width,height))return false;
+      const size_t rowbytes=size_t(width)*4;
+      std::vector<uint8_t> scratch(rowbytes*height,0);
+      if(!draw_form(scratch.data(),rowbytes,&object)||
+         !transparent_target->composite_knockout_object(object))return false;
+      continue;
+     }
+     if(transparent_target&&transparent_target->knockout&&
+        fm.transparency_group&&!fm.isolated_transparency_group)
+      return false;
      if(fm.transparency_group&&!fm.isolated_transparency_group){
       // Normal-only non-isolated groups use the parent's live backdrop.
       // Rendering onto that backdrop directly avoids applying paint twice,
