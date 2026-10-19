@@ -406,6 +406,12 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
          width,height,target,target_stride,box,scoped_fonts,properties,
          scoped_images,scoped_forms,false,form_depth+1,form_graphics,surface);
      };
+     if(fm.knockout_transparency_group){
+      // The direct replacement path is only valid for isolated groups
+      // consisting of simple page graphics, with no nested Form calls.
+      if(!fm.isolated_transparency_group||!fm.local_forms.empty()||
+         !fm.xobject_aliases.empty())return false;
+     }
      if(fm.transparency_group&&!fm.isolated_transparency_group){
       // Normal-only non-isolated groups use the parent's live backdrop.
       // Rendering onto that backdrop directly avoids applying paint twice,
@@ -432,6 +438,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
       // the isolated group. The group's external blend remains Normal.
       PremultipliedSurface group;
       if(!group.resize(width,height))return false;
+      group.knockout=fm.knockout_transparency_group;
       const size_t rowbytes=size_t(width)*4;
       std::vector<uint8_t> scratch(rowbytes*height,0);
       if(!draw_form(scratch.data(),rowbytes,&group))return false;
