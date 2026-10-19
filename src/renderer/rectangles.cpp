@@ -226,7 +226,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      const unsigned alpha=(coverage*opacity+127)/255;
      if(coverage&&!transparent_target->mark_shape(x,y,uint8_t(coverage)))return false;
      if(alpha&&!transparent_target->fill_pixel(x,y,uint8_t(color[0]),
-                   uint8_t(color[1]),uint8_t(color[2]),uint8_t(alpha)))
+                   uint8_t(color[1]),uint8_t(color[2]),uint8_t(alpha),uint8_t(coverage)))
       return false;
     }
    return true;
@@ -500,7 +500,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
       if(!transparent_target->mark_shape(px,py,uint8_t(base_opacity)))return false;
       if(!transparent_target->blend_pixel(
             px,py,component(0),component(1),component(2),uint8_t(opacity),
-            transparent_blend_mode()))
+            transparent_blend_mode(),uint8_t(base_opacity)))
        return false;
       continue;
      }
@@ -1612,7 +1612,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
     if(transparent_target){
      if(!transparent_target->mark_shape(x,y,uint8_t(hits*255/4))||
         !transparent_target->blend_pixel(x,y,cr,cg,cb,uint8_t(alpha),
-                                transparent_blend_mode()))
+                                transparent_blend_mode(),uint8_t(hits*255/4)))
       return false;
      continue;
     }
@@ -1650,7 +1650,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
     if(transparent_target){
      if(!transparent_target->mark_shape(x,y,uint8_t(antialias?coverage[i]:255))||
         !transparent_target->blend_pixel(x,y,cr,cg,cb,uint8_t(alpha),
-                                transparent_blend_mode()))
+                                transparent_blend_mode(),uint8_t(antialias?coverage[i]:255)))
       return false;
      continue;
     }
