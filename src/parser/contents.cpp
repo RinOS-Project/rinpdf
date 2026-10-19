@@ -552,13 +552,14 @@ struct Reader {
         cs->text=="DeviceCMYK"?4:0;
       if(!channels||(!indexed&&bits->integer!=8&&channels!=1)||
          get(range.dictionary,"Mask"))return false;
-      // Apply 8-bit DeviceGray/DeviceRGB Decode independently by channel.
+      // Apply DeviceGray/RGB/CMYK Decode independently by component.
       // Packed DeviceGray only admits normal or reversed endpoints.
       std::array<double,8> decode_endpoints{};
       bool has_device_decode=false;
       if(const Value* decode=get(range.dictionary,"Decode")){
        if(cs->kind!=Value::Kind::Name||
-          (cs->text!="DeviceGray"&&cs->text!="DeviceRGB")||
+          (cs->text!="DeviceGray"&&cs->text!="DeviceRGB"&&
+           cs->text!="DeviceCMYK")||
           decode->kind!=Value::Kind::Array||
           decode->array.size()!=2*channels)return false;
        if(bits->integer!=8&&channels!=1)return false;
