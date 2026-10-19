@@ -29,7 +29,7 @@ bool read_page_forms(const uint8_t* data,size_t size,size_t page_index,
  std::map<std::string,PageForm>& forms);
 bool read_page_images(const uint8_t* data,size_t size,size_t page_index,
  std::map<std::string,PageImage>& images);
-struct PageGraphicsState {double fill_alpha=1,stroke_alpha=1;};
+struct PageGraphicsState {double fill_alpha=1,stroke_alpha=1;bool has_fill_alpha=false,has_stroke_alpha=false;};
 using PageGraphicsStates=std::map<std::string,PageGraphicsState>;
 bool read_page_graphics_states(const uint8_t* data,size_t size,size_t page_index,
  PageGraphicsStates& states);
