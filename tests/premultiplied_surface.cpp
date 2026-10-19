@@ -65,5 +65,19 @@ int main(){
     !transparent_erase.blend_pixel(0,0,0,0,255,0,0,255))return 25;
  for(auto c:transparent_erase.pixels)if(c!=0)return 26;
  if(transparent_erase.blend_pixel(0,0,255,0,0,255,1,255))return 27;
+ // A Form with multiple internal paints must be treated as one object:
+ // knockout happens once with its union shape, not once per child stroke.
+ rinpdf::renderer::PremultipliedSurface parent,object;
+ if(!parent.resize(1,1)||!object.resize(1,1))return 28;
+ parent.knockout=true;
+ if(!parent.blend_pixel(0,0,255,0,0,255,0,255))return 29;
+ if(!object.mark_shape(0,0,255)||
+    !object.blend_pixel(0,0,0,255,0,128,0,255)||
+    !object.blend_pixel(0,0,0,0,255,128,0,255))return 30;
+ if(!parent.composite_knockout_object(object))return 31;
+ const auto& result=parent.pixels;
+ if(result[0]!=0||result[1]<63||result[1]>65||
+    result[2]<127||result[2]>129||
+    result[3]<190||result[3]>193)return 32;
  return 0;
 }
