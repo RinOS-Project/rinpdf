@@ -316,7 +316,6 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
     // Dispatch image painting through the normal Do branch.
     const auto form=forms.find(pending_image);
     if(form!=forms.end()){
-     if(transparent_target)return false;
      if(form_depth>=8)return false;
      // A recursive call begins with the current page pixels and a fresh
      // graphics state. Do not attempt nested forms or inherited clipping.
@@ -394,12 +393,19 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
       scoped_images=images;
       scoped_forms=forms;
      }
-     auto draw_form=[&](uint8_t* target,size_t target_stride)->bool{
+     auto draw_form=[&](uint8_t* target,size_t target_stride,
+                        PremultipliedSurface* surface=nullptr)->bool{
       return render_rectangles_box_with_fonts(
          reinterpret_cast<const uint8_t*>(stream.data()),stream.size(),
          width,height,target,target_stride,box,scoped_fonts,properties,
-         scoped_images,scoped_forms,false,form_depth+1,form_graphics);
+         scoped_images,scoped_forms,false,form_depth+1,form_graphics,surface);
      };
+     if(transparent_target&&!fm.isolated_transparency_group){
+      // A regular Form shares its caller's backdrop and graphics state.
+      // Render directly into the same premultiplied surface.
+      if(!draw_form(rgba,stride,transparent_target))return false;
+      continue;
+     }
      if(fm.isolated_transparency_group){
       // Isolated Normal groups render independently of the page backdrop.
       // Two opaque backdrops let us recover premultiplied color and alpha
@@ -423,7 +429,9 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
          return false;
        }
       }
-      if(!group.composite_over_opaque(rgba,stride))return false;
+      if(transparent_target){
+       if(!group.composite_over(*transparent_target))return false;
+      }else if(!group.composite_over_opaque(rgba,stride))return false;
      }else if(!draw_form(rgba,stride))return false;
      continue;
     }
