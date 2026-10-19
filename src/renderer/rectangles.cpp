@@ -190,6 +190,9 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
   if(blend_mode=="Screen")return 255-((255-src)*(255-dst)+127)/255;
   return src;
  };
+ auto transparent_blend_mode=[&]()->unsigned{
+  return blend_mode=="Multiply"?1u:blend_mode=="Screen"?2u:0u;
+ };
  auto paint_text=[&](auto&& draw)->bool{
   if(blend_mode!="Normal")return false;
   if(transparent_target){
@@ -466,14 +469,14 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      const unsigned opacity=(base_opacity*unsigned(std::lround(fill_alpha*255))+127)/255;
      if(!opacity)continue;
      if(transparent_target){
-      if(blend_mode!="Normal")return false;
       const auto component=[&](unsigned channel)->uint8_t{
        return uint8_t(im.stencil?
          unsigned(std::lround((channel==0?red:channel==1?green:blue)*255)):
          im.pixels[source+(im.channels==3?channel:0)]);
       };
-      if(!transparent_target->fill_pixel(
-            px,py,component(0),component(1),component(2),uint8_t(opacity)))
+      if(!transparent_target->blend_pixel(
+            px,py,component(0),component(1),component(2),uint8_t(opacity),
+            transparent_blend_mode()))
        return false;
       continue;
      }
@@ -1583,8 +1586,8 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
     if(clip_mask!=nullptr)alpha=(alpha*(*clip_mask)[i]+127)/255;
     if(!alpha)continue;
     if(transparent_target){
-     if(blend_mode!="Normal"||
-        !transparent_target->fill_pixel(x,y,cr,cg,cb,uint8_t(alpha)))
+     if(!transparent_target->blend_pixel(x,y,cr,cg,cb,uint8_t(alpha),
+                                transparent_blend_mode()))
       return false;
      continue;
     }
@@ -1620,8 +1623,8 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
     if(clip_mask!=nullptr)alpha=(alpha*(*clip_mask)[i]+127)/255;
     if(!alpha)continue;
     if(transparent_target){
-     if(blend_mode!="Normal"||
-        !transparent_target->fill_pixel(x,y,cr,cg,cb,uint8_t(alpha)))
+     if(!transparent_target->blend_pixel(x,y,cr,cg,cb,uint8_t(alpha),
+                                transparent_blend_mode()))
       return false;
      continue;
     }
