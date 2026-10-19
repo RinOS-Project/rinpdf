@@ -45,6 +45,21 @@ int main(){
   if(faded[i]!=expected)return 7;
  }
  if(!saw_ink)return 8;
+ // A Form XObject inherits the current graphics state, including ca.
+ rinpdf::parser::PageForm form;
+ form.bbox[0]=0;form.bbox[1]=0;form.bbox[2]=8;form.bbox[3]=8;
+ const char form_content[]="0 g 0 0 8 8 re f";
+ form.content.assign(form_content,form_content+sizeof(form_content)-1);
+ rinpdf::renderer::FormResources forms;
+ forms.emplace("Form1",form);
+ const char with_form[]="q /Half gs /Form1 Do Q";
+ std::vector<uint8_t> form_pixels(8*8*4);
+ if(!rinpdf::renderer::render_rectangles_box_with_fonts(
+      reinterpret_cast<const uint8_t*>(with_form),sizeof(with_form)-1,
+      8,8,form_pixels.data(),32,{0,0,8,8},{},{},{},forms,true,0,states))
+  return 9;
+ if(form_pixels[0]!=127||form_pixels[1]!=127||
+    form_pixels[2]!=127)return 10;
  // Verify the public page-resource resolver, including parent inheritance
  // and partial ExtGState keys that must not reset unrelated opacity.
  std::string pdf="%PDF-1.4\n";
