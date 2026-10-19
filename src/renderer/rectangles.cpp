@@ -352,11 +352,42 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
       scoped_images=images;
       scoped_forms=forms;
      }
-     if(!render_rectangles_box_with_fonts(
-           reinterpret_cast<const uint8_t*>(stream.data()),stream.size(),
-           width,height,rgba,stride,box,scoped_fonts,properties,scoped_images,
-           scoped_forms,false,form_depth+1,form_graphics))
-      return false;
+     auto draw_form=[&](uint8_t* target,size_t target_stride)->bool{
+      return render_rectangles_box_with_fonts(
+         reinterpret_cast<const uint8_t*>(stream.data()),stream.size(),
+         width,height,target,target_stride,box,scoped_fonts,properties,
+         scoped_images,scoped_forms,false,form_depth+1,form_graphics);
+     };
+     if(fm.isolated_transparency_group){
+      // Isolated Normal groups render independently of the page backdrop.
+      // Two opaque backdrops let us recover premultiplied color and alpha
+      // without changing the existing rasterizer's opaque RGBA contract.
+      if(blend_mode!="Normal"||size_t(width)*height>1048576u)
+       return false;
+      for(const auto& [name,state]:form_graphics)
+       if(state.has_blend_mode&&state.blend_mode!="Normal")return false;
+      const size_t rowbytes=size_t(width)*4;
+      std::vector<uint8_t> black(rowbytes*height,0);
+      std::vector<uint8_t> white(rowbytes*height,255);
+      for(size_t i=3;i<black.size();i+=4)black[i]=255;
+      if(!draw_form(black.data(),rowbytes)||
+         !draw_form(white.data(),rowbytes))return false;
+      for(unsigned y=0;y<height;++y){
+       for(unsigned x=0;x<width;++x){
+        const size_t source=(size_t(y)*width+x)*4;
+        const size_t dest=size_t(y)*stride+size_t(x)*4;
+        for(unsigned c=0;c<3;++c){
+         const int opaque=int(255)+int(black[source+c])-int(white[source+c]);
+         const unsigned alpha=unsigned(std::clamp(opaque,0,255));
+         const unsigned dst=rgba[dest+c];
+         const unsigned merged=unsigned(black[source+c])+
+                                ((255-alpha)*dst+127)/255;
+         rgba[dest+c]=uint8_t(std::min(merged,255u));
+        }
+        rgba[dest+3]=255;
+       }
+      }
+     }else if(!draw_form(rgba,stride))return false;
      continue;
     }
     const auto found=images.find(pending_image);
