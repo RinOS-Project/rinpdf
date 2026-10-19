@@ -223,6 +223,9 @@ bool evaluate_multidimensional_sampled_function(
    const double raw=expanded&&!expanded->empty()?
      (*expanded)[sample_indices[slot]*f.outputs+c]:
      double(unpack_pdf_sample(samples,offset,f.bits))/maximum;
+   // Predecoded samples are normalized fractions. Reject corrupted data
+   // before interpolation rather than allowing NaN/Inf to propagate.
+   if(!std::isfinite(raw)||raw<0.0||raw>1.0)return false;
    const double d0=f.decode[c*2],d1=f.decode[c*2+1];
    computed[c]+=weight*(d0+raw*(d1-d0));
   }
