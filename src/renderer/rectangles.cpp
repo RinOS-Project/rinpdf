@@ -446,8 +446,15 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
       if(!draw_form(scratch.data(),rowbytes,&group))return false;
       const unsigned external_mode=transparent_blend_mode();
       if(transparent_target){
-       if(!group.composite_blend_over(*transparent_target,external_mode))return false;
-      }else if(!group.composite_blend_over_opaque(rgba,stride,external_mode))return false;
+       if(transparent_target->knockout){
+        // Nested isolated Form is one knockout object, not a sequence
+        // of independent paints against the parent's existing objects.
+        if(external_mode!=0||
+           !transparent_target->composite_knockout_object(group))return false;
+       }else if(!group.composite_blend_over(*transparent_target,external_mode))
+        return false;
+      }else if(!group.composite_blend_over_opaque(rgba,stride,external_mode))
+       return false;
      }else if(!draw_form(rgba,stride))return false;
      continue;
     }
