@@ -46,5 +46,15 @@ int main(){
  if(child.shape[0]!=255||child.pixels[3]!=0)return 18;
  if(!child.composite_over(shapes)||shapes.shape[0]!=255||
     shapes.pixels[3]!=0)return 19;
+ // Half-pixel shape coverage removes only half of earlier color,
+ // independent of the second object's opacity.
+ rinpdf::renderer::PremultipliedSurface edge;
+ if(!edge.resize(1,1))return 20;
+ edge.knockout=true;
+ if(!edge.blend_pixel(0,0,255,0,0,255,0,255))return 21;
+ if(!edge.blend_pixel(0,0,0,0,255,128,0,128))return 22;
+ const auto& ep=edge.pixels;
+ if(ep[0]<126||ep[0]>129||ep[2]<63||ep[2]>65||
+    ep[3]<190||ep[3]>193)return 23;
  return 0;
 }
