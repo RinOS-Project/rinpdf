@@ -157,7 +157,9 @@ bool evaluate_multidimensional_sampled_function(
  const size_t total_bits=grid*f.outputs*f.bits;
  // Ceil-divide without adding 7 to a potentially overflowing size_t.
  const size_t required_bytes=total_bits/8+size_t(total_bits%8!=0);
- if(required_bytes!=samples.size()||
+ // Match the single-input sampled-function budget on the direct
+ // evaluator too. Validated callers must not bypass the 4 MiB cap.
+ if(required_bytes>4*1024*1024||required_bytes!=samples.size()||
     (expanded&&!expanded->empty()&&expanded->size()!=grid*f.outputs))return false;
  // Check every output channel once, even if all interpolation weights
  // for some corner happen to be zero.
