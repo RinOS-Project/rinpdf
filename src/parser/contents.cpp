@@ -43,7 +43,6 @@ struct Reader {
  mutable std::map<size_t,Value> compressed_cache;
  mutable std::map<std::tuple<int64_t,int64_t,unsigned>,PdfFunction> compiled_function_cache;
  mutable std::map<std::tuple<int64_t,int64_t,unsigned,unsigned>,std::array<double,4>> calculator_result_cache;
- mutable std::map<std::pair<int64_t,int64_t>,CachedFunction> function_dictionary_cache;
  bool entry(const Value& ref,const XrefEntry*& out) const {
   if(ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
   auto it=std::find_if(xref.begin(),xref.end(),[&](const XrefEntry& e){
