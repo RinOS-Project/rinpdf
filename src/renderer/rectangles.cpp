@@ -230,8 +230,10 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
       next.value=="gs"&&stack.empty()){
     const auto state=graphic_states.find(token.value);
     if(state==graphic_states.end())return false;
-    fill_alpha=state->second.fill_alpha;
-    stroke_alpha=state->second.stroke_alpha;
+    if(state->second.has_fill_alpha)
+     fill_alpha=state->second.fill_alpha;
+    if(state->second.has_stroke_alpha)
+     stroke_alpha=state->second.stroke_alpha;
     lex=look;continue;
    }
    if(!in_text&&next.kind==parser::TokenKind::Keyword&&
