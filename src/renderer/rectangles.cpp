@@ -543,9 +543,9 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
        (im.alpha.empty()?255:im.alpha[size_t(iy)*im.width+ix]);
      const unsigned clip_coverage=clip_mask?
          (*clip_mask)[size_t(py)*width+px]:255u;
-     const unsigned opacity=(base_opacity*
-         unsigned(std::lround(fill_alpha*255))+127)/255*
-         clip_coverage/255;
+     const unsigned painted_opacity=(base_opacity*
+         unsigned(std::lround(fill_alpha*255))+127)/255;
+     const unsigned opacity=(painted_opacity*clip_coverage+127)/255;
      if(!opacity&&!(transparent_target&&transparent_target->knockout))continue;
      if(transparent_target){
       const auto component=[&](unsigned channel)->uint8_t{
