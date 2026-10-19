@@ -91,5 +91,14 @@ int main() {
    ok=false;
   }
  }
+ // PostScript round chooses the greater integer at exact half-way ties.
+ ok=expect("{ pop -6.5 round }",true,-6.0)&&ok;
+ ok=expect("{ pop -1.5 round }",true,-1.0)&&ok;
+ ok=expect("{ pop -1.6 round }",true,-2.0)&&ok;
+ ok=expect("{ pop -1.4 round }",true,-1.0)&&ok;
+ ok=expect("{ pop 1.5 round }",true,2.0)&&ok;
+ ok=expect("{ pop 2.5 round }",true,3.0)&&ok;
+ ok=expect("{ pop -1.5 truncate }",true,-1.0)&&ok;
+ ok=expect("{ pop -1.5 floor }",true,-2.0)&&ok;
  return ok?0:1;
 }
