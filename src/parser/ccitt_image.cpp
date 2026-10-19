@@ -3,6 +3,7 @@
 #include <cstring>
 #include <cstdio>
 #include <utility>
+#include <limits>
 #if defined(RINPDF_HAVE_TIFF)
 #include <tiffio.h>
 #endif
@@ -24,9 +25,23 @@ tsize_t read_bytes(thandle_t handle,tdata_t dest,tsize_t count){
 tsize_t write_bytes(thandle_t,tdata_t,tsize_t){return 0;}
 toff_t seek_bytes(thandle_t handle,toff_t off,int whence){
  auto& m=*static_cast<Memory*>(handle);
- const size_t base=whence==SEEK_SET?0:whence==SEEK_CUR?m.offset:whence==SEEK_END?m.size:m.size+1;
- if(base>m.size||size_t(off)>m.size-base)return toff_t(-1);
- m.offset=base+size_t(off);return toff_t(m.offset);
+ if(m.offset>m.size)return toff_t(-1);
+ size_t base=0;
+ if(whence==SEEK_SET)base=0;
+ else if(whence==SEEK_CUR)base=m.offset;
+ else if(whence==SEEK_END)base=m.size;
+ else return toff_t(-1);
+ // libtiff represents signed relative moves in an unsigned toff_t.
+ // Interpret its sign bit for SEEK_CUR/SEEK_END without signed overflow.
+ if(whence!=SEEK_SET && off>(std::numeric_limits<toff_t>::max()/2)){
+  const toff_t backwards=toff_t(0)-off;
+  if(backwards>base)return toff_t(-1);
+  m.offset=base-size_t(backwards);
+ }else{
+  if(off>m.size-base)return toff_t(-1);
+  m.offset=base+size_t(off);
+ }
+ return toff_t(m.offset);
 }
 int close_bytes(thandle_t){return 0;}
 toff_t size_bytes(thandle_t handle){return static_cast<Memory*>(handle)->size;}
