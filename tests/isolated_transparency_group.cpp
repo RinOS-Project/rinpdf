@@ -55,8 +55,8 @@ int main(){
   return 5;
  for(size_t i=0;i<overlap_pixels.size();i+=4){
   // Premultiplied group: red ~64, blue ~128, alpha ~192.
-  // Over opaque 128 gray: RGB should be approximately 80, 32, 160.
-  if(overlap_pixels[i]<78||overlap_pixels[i]>82||
+  // Over opaque 128 gray: RGB should be approximately 96, 32, 160.
+  if(overlap_pixels[i]<94||overlap_pixels[i]>98||
      overlap_pixels[i+1]<30||overlap_pixels[i+1]>34||
      overlap_pixels[i+2]<158||overlap_pixels[i+2]>162||
      overlap_pixels[i+3]!=255)return 6;
