@@ -551,8 +551,24 @@ struct Reader {
         cs->text=="DeviceGray"?1:cs->text=="DeviceRGB"?3:
         cs->text=="DeviceCMYK"?4:0;
       if(!channels||(!indexed&&bits->integer!=8&&channels!=1)||
-         get(range.dictionary,"Mask")||
-         get(range.dictionary,"Decode")){return false;}
+         get(range.dictionary,"Mask"))return false;
+      // Support normal and reversed Decode for device grayscale images.
+      // Other color spaces still require their own component mappings.
+      bool invert_gray=false;
+      if(const Value* decode=get(range.dictionary,"Decode")){
+       if(cs->kind!=Value::Kind::Name||cs->text!="DeviceGray"||
+          decode->kind!=Value::Kind::Array||decode->array.size()!=2)
+        return false;
+       double endpoints[2]{};
+       for(unsigned i=0;i<2;++i){
+        const Value& v=decode->array[i];
+        if(v.kind==Value::Kind::Integer)endpoints[i]=double(v.integer);
+        else if(v.kind==Value::Kind::Real)endpoints[i]=v.real;
+        else return false;
+       }
+       if(endpoints[0]==1&&endpoints[1]==0)invert_gray=true;
+       else if(endpoints[0]!=0||endpoints[1]!=1)return false;
+      }
       const size_t expected=size_t(w->integer)*size_t(h->integer)*channels;
       if(expected>32*1024*1024){return false;}
       image=PageImage{};
@@ -640,6 +656,8 @@ struct Reader {
           !decode_dct_image(data+range.offset,range.length,
              unsigned(w->integer),unsigned(h->integer),channels,
              image.pixels)){return false;}
+       if(invert_gray)
+        for(auto& pixel:image.pixels)pixel=uint8_t(255u-pixel);
        return true;
       }
       // Predictor handling is centralized in decode_stream for both
@@ -686,6 +704,8 @@ struct Reader {
                     (sample*255u+max_sample/2u)/max_sample);
         }
       }else image.pixels=std::move(decoded);
+      if(invert_gray)
+       for(auto& pixel:image.pixels)pixel=uint8_t(255u-pixel);
       if(indexed){
        std::vector<uint8_t> rgb(size_t(image.width)*image.height*3);
        for(size_t i=0;i<size_t(image.width)*image.height;++i){
