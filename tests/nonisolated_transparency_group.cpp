@@ -38,5 +38,26 @@ int main(){
      transparent.pixels[i+1]<30||transparent.pixels[i+1]>34||
      transparent.pixels[i+2]<30||transparent.pixels[i+2]>34||
      transparent.pixels[i+3]<190||transparent.pixels[i+3]>193)return 5;
+ // Non-isolated groups use the live backdrop for internal blend modes.
+ parser::PageGraphicsState mul,scr;
+ mul.has_blend_mode=true;mul.blend_mode="Multiply";
+ scr.has_blend_mode=true;scr.blend_mode="Screen";
+ states.emplace("Mul",mul);states.emplace("Scr",scr);
+ for(const auto& item:std::vector<std::pair<std::string,unsigned>>{
+     {"Mul",64u},{"Scr",192u}}){
+  const std::string body="/"+item.first+" gs 0.5 g 0 0 8 8 re f";
+  group.content.assign(body.begin(),body.end());
+  forms["NonIsolated"]=group;
+  const std::string page="0.5 g 0 0 8 8 re f /NonIsolated Do";
+  std::vector<uint8_t> frame(8*8*4);
+  if(!renderer::render_rectangles_box_with_fonts(
+    reinterpret_cast<const uint8_t*>(page.data()),page.size(),
+    8,8,frame.data(),32,{0,0,8,8},{},{},{},forms,true,0,states))
+   return 6;
+  for(size_t i=0;i<frame.size();i+=4)
+   if(frame[i]<item.second-2||frame[i]>item.second+2||
+      frame[i+1]!=frame[i]||frame[i+2]!=frame[i]||
+      frame[i+3]!=255)return 7;
+ }
  return 0;
 }
