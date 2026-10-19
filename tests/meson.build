@@ -62,3 +62,6 @@ test('rinpdf-text-extract-truetype-space',executable('rinpdf-text-extract-truety
 test('rinpdf-text-extract-objects',executable('rinpdf-text-extract-objects','text_extract_objects.cpp',dependencies:rinpdf_dep))
 
 test('rinpdf-text-extract-vertical',executable('rinpdf-text-extract-vertical','text_extract_vertical.cpp',dependencies:rinpdf_dep))
+
+# Type 4 compiled calculator numeric-type semantics.
+test('rinpdf-calculator-division-type',executable('rinpdf-calculator-division-type','calculator_division_type.cpp',dependencies:rinpdf_dep))
