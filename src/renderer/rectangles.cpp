@@ -30,7 +30,8 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
  const MarkedProperties& properties,const ImageResources& images,
  const FormResources& forms,bool clear_background,unsigned form_depth,
  const GraphicsStateResources& graphic_states,
- PremultipliedSurface* transparent_target){
+ PremultipliedSurface* transparent_target,
+ PremultipliedCMYKSurface* cmyk_target){
  if(form_depth>8)return false;
  if(!std::isfinite(box.x0)||!std::isfinite(box.y0)||!std::isfinite(box.x1)||!std::isfinite(box.y1)||box.x1<=box.x0||box.y1<=box.y0)return false;
  const double sx=(double)width/(box.x1-box.x0),sy=(double)height/(box.y1-box.y0);
@@ -41,6 +42,10 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
  if(transparent_target&&
     (transparent_target->width!=width||transparent_target->height!=height||
      transparent_target->pixels.size()!=size_t(width)*height*4))return false;
+ if(cmyk_target&&
+    (cmyk_target->width!=width||cmyk_target->height!=height||
+     cmyk_target->ink.size()!=size_t(width)*height*5||
+     cmyk_target->shape.size()!=size_t(width)*height))return false;
  if(clear_background)for(unsigned y=0;y<height;++y)
   std::memset(rgba+(size_t)y*stride,255,(size_t)width*4);
  double red=0,green=0,blue=0;
@@ -195,6 +200,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
   return blend_mode=="Multiply"?1u:blend_mode=="Screen"?2u:0u;
  };
  auto paint_text=[&](auto&& draw)->bool{
+  if(cmyk_target)return false;
   if(blend_mode!="Normal")return false;
   if(transparent_target){
    // Derive coverage from one draw on a contrasting opaque background.
@@ -323,6 +329,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
     // Dispatch image painting through the normal Do branch.
     const auto form=forms.find(pending_image);
     if(form!=forms.end()){
+     if(cmyk_target)return false;
      if(form_depth>=8)return false;
      // A recursive call begins with the current page pixels and a fresh
      // graphics state. Do not attempt nested forms or inherited clipping.
@@ -593,6 +600,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
     const auto found=images.find(pending_image);
     if(found==images.end())return false;
     const auto& im=found->second;
+    if(cmyk_target)return false;
     pending_image.clear();
     if((im.channels!=1&&im.channels!=3)||!im.width||!im.height||
        im.pixels.size()!=size_t(im.width)*im.height*im.channels||
