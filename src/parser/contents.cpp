@@ -1120,11 +1120,12 @@ struct Reader {
    const Value* knockout=get(group,"K");
    if(!subtype||subtype->kind!=Value::Kind::Name||
       subtype->text!="Transparency"||
-      !isolated||isolated->kind!=Value::Kind::Boolean||!isolated->boolean||
+      (isolated&&isolated->kind!=Value::Kind::Boolean)||
       (knockout&&(knockout->kind!=Value::Kind::Boolean||knockout->boolean))||
       get(group,"CS"))
     return false;
-   form.isolated_transparency_group=true;
+   form.transparency_group=true;
+   form.isolated_transparency_group=isolated&&isolated->boolean;
   }
   const Value* bbox=get(range.dictionary,"BBox");
   if(!bbox||bbox->kind!=Value::Kind::Array||bbox->array.size()!=4)return false;
