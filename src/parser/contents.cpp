@@ -543,13 +543,15 @@ struct Reader {
        if(palette.size()!=palette_size)return false;
        indexed=true;
       }
-      if(!indexed&&bits->integer!=8&&bits->integer!=1)return false;
+      if(!indexed&&bits->integer!=8&&bits->integer!=1&&
+         bits->integer!=2&&bits->integer!=4)return false;
       if(indexed&&unsigned(maximum_index)>=(1u<<unsigned(bits->integer)))
        return false;
       const unsigned channels=indexed?1:separation?device_inputs:lab?3:calibrated?calibrated:icc_channels?icc_channels:
         cs->text=="DeviceGray"?1:cs->text=="DeviceRGB"?3:
         cs->text=="DeviceCMYK"?4:0;
-      if(!channels||get(range.dictionary,"Mask")||
+      if(!channels||(!indexed&&bits->integer!=8&&channels!=1)||
+         get(range.dictionary,"Mask")||
          get(range.dictionary,"Decode")){return false;}
       const size_t expected=size_t(w->integer)*size_t(h->integer)*channels;
       if(expected>32*1024*1024){return false;}
@@ -653,7 +655,7 @@ struct Reader {
       }
       const unsigned sample_bits=unsigned(bits->integer);
       const size_t packed_stride=(size_t(image.width)*sample_bits+7)/8;
-      const bool packed_gray=!indexed&&channels==1&&sample_bits==1;
+      const bool packed_gray=!indexed&&channels==1&&sample_bits<8;
       const size_t decoded_size=(indexed&&sample_bits<8)||packed_gray?
          packed_stride*image.height:expected;
       std::vector<uint8_t> decoded;
@@ -670,13 +672,18 @@ struct Reader {
           sample_mask);
         }
       }else if(packed_gray){
-       // PDF DeviceGray sample 0 is black and 1 is white. Expand each
-       // scanline independently: padding bits never become image pixels.
+       // DeviceGray samples of 1, 2, or 4 bits are MSB-first and
+       // normalized to 8-bit grayscale. Each row has separate padding.
        image.pixels.resize(size_t(image.width)*image.height);
+       const unsigned max_sample=(1u<<sample_bits)-1u;
        for(size_t y=0;y<image.height;++y)
-        for(size_t x=0;x<image.width;++x)
-         image.pixels[y*image.width+x]=
-           (decoded[y*packed_stride+x/8]&(0x80u>>(x%8)))?255:0;
+        for(size_t x=0;x<image.width;++x){
+         const size_t bit=x*sample_bits;
+         const unsigned sample=(decoded[y*packed_stride+bit/8]>>
+                    (8-sample_bits-(bit%8)))&max_sample;
+         image.pixels[y*image.width+x]=uint8_t(
+                    (sample*255u+max_sample/2u)/max_sample);
+        }
       }else image.pixels=std::move(decoded);
       if(indexed){
        std::vector<uint8_t> rgb(size_t(image.width)*image.height*3);
