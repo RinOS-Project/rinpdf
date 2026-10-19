@@ -36,12 +36,14 @@ struct PremultipliedSurface {
  // Source-over a solid fill at the specified 8-bit coverage.
  // Color is supplied unassociated; storage remains premultiplied.
  bool fill_pixel(unsigned x,unsigned y,uint8_t red,uint8_t green,
-                 uint8_t blue,uint8_t coverage){
+                 uint8_t blue,uint8_t coverage,uint8_t geometry=255){
   if(x>=width||y>=height||
      pixels.size()!=size_t(width)*height*4)return false;
   const size_t index=(size_t(y)*width+x)*4;
   if(knockout){
-   for(unsigned c=0;c<4;++c)pixels[index+c]=0;
+   const unsigned remaining=255u-geometry;
+   for(unsigned c=0;c<4;++c)
+    pixels[index+c]=uint8_t(mul255(pixels[index+c],remaining));
   }
   const unsigned remain=255u-coverage;
   const unsigned colors[3]={red,green,blue};
@@ -55,12 +57,15 @@ struct PremultipliedSurface {
  // PDF separable blending on a transparent premultiplied backdrop.
  // Modes: 0 Normal, 1 Multiply, 2 Screen. Source colors are unassociated.
  bool blend_pixel(unsigned x,unsigned y,uint8_t red,uint8_t green,
-                  uint8_t blue,uint8_t source_alpha,unsigned mode){
+                  uint8_t blue,uint8_t source_alpha,unsigned mode,
+                  uint8_t geometry=255){
   if(mode>2||x>=width||y>=height||
      pixels.size()!=size_t(width)*height*4)return false;
   const size_t i=(size_t(y)*width+x)*4;
   if(knockout){
-   for(unsigned c=0;c<4;++c)pixels[i+c]=0;
+   const unsigned remaining=255u-geometry;
+   for(unsigned c=0;c<4;++c)
+    pixels[i+c]=uint8_t(mul255(pixels[i+c],remaining));
   }
   const unsigned as=source_alpha,ad=pixels[i+3];
   const unsigned src[3]={red,green,blue};
