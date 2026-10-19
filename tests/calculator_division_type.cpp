@@ -20,7 +20,7 @@ static bool expect(const char* source,bool success,double expected=0) {
  double output=-100;
  const bool actual=run(source,output);
  if(actual!=success || (success&&std::abs(output-expected)>1e-12)) {
-  std::fprintf(stderr,"Unexpected Type 4 result for %s: success=%d value=%.17g\\n",
+  std::fprintf(stderr,"Unexpected Type 4 result for %s: success=%d value=%.17g\n",
                source,int(actual),output);
   return false;
  }
