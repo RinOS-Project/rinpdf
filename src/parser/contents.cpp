@@ -592,7 +592,8 @@ struct Reader {
              image.pixels))return false;
        return true;
       }
-      if(!indexed&&bits->integer!=8)return false;
+      if(!indexed&&bits->integer!=8&&
+         !(channels==1&&bits->integer==1))return false;
       // Support a same-size, 8-bit grayscale SMask image. Restrict the
       // initial implementation to raw/Flate data without predictors.
       if(const Value* smask=get(range.dictionary,"SMask")){
@@ -627,7 +628,8 @@ struct Reader {
         (filter->text=="DCTDecode"||filter->text=="DCT");
       if(dct){
        // The JPEG backend only decodes native Gray/RGB samples.
-       if(indexed||separation||calibrated||lab||channels==4)return false;
+       if(indexed||separation||calibrated||lab||channels==4||
+          bits->integer!=8)return false;
        // JPEG image data is compressed independently of PDF Flate filters.
        // DecodeParms predictors are not valid for this path.
        if(get(range.dictionary,"DecodeParms")||
@@ -651,7 +653,8 @@ struct Reader {
       }
       const unsigned sample_bits=unsigned(bits->integer);
       const size_t packed_stride=(size_t(image.width)*sample_bits+7)/8;
-      const size_t decoded_size=indexed&&sample_bits<8?
+      const bool packed_gray=!indexed&&channels==1&&sample_bits==1;
+      const size_t decoded_size=(indexed&&sample_bits<8)||packed_gray?
          packed_stride*image.height:expected;
       std::vector<uint8_t> decoded;
       if(!decode_stream(data,size,range,decoded,decoded_size)||
@@ -666,6 +669,14 @@ struct Reader {
           (decoded[y*packed_stride+bit/8]>>(8-sample_bits-(bit%8)))&
           sample_mask);
         }
+      }else if(packed_gray){
+       // PDF DeviceGray sample 0 is black and 1 is white. Expand each
+       // scanline independently: padding bits never become image pixels.
+       image.pixels.resize(size_t(image.width)*image.height);
+       for(size_t y=0;y<image.height;++y)
+        for(size_t x=0;x<image.width;++x)
+         image.pixels[y*image.width+x]=
+           (decoded[y*packed_stride+x/8]&(0x80u>>(x%8)))?255:0;
       }else image.pixels=std::move(decoded);
       if(indexed){
        std::vector<uint8_t> rgb(size_t(image.width)*image.height*3);
