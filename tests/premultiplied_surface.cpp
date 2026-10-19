@@ -108,5 +108,19 @@ int main(){
     background.pixels[1]<30||background.pixels[1]>34||
     background.pixels[3]<190||background.pixels[3]>193||
     background.shape[0]!=255)return 43;
+ // Non-isolated knockout restores inherited backdrop instead of
+ // replacing covered pixels with transparent black.
+ rinpdf::renderer::PremultipliedSurface host,ko;
+ if(!host.resize(1,1)||!ko.resize(1,1))return 44;
+ if(!host.fill_pixel(0,0,128,128,128,255)||
+    !ko.begin_nonisolated_knockout(host))return 45;
+ if(!ko.mark_shape(0,0,255)||
+    !ko.blend_pixel(0,0,255,0,0,128,0,255)||
+    !ko.blend_pixel(0,0,0,0,255,128,0,255))return 46;
+ if(ko.pixels[0]<63||ko.pixels[0]>65||
+    ko.pixels[1]<63||ko.pixels[1]>65||
+    ko.pixels[2]!=255||ko.pixels[3]!=255)return 47;
+ if(!ko.composite_backdrop_difference_over(host,host)||
+    host.pixels!=ko.pixels)return 48;
  return 0;
 }
