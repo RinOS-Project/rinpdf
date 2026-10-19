@@ -1,5 +1,6 @@
 #include "../src/parser/function.h"
 #include <cmath>
+#include <limits>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -45,5 +46,23 @@ int main() {
  ok=expect("{ pop 2147483648.0 cvi }",false)&&ok;
  ok=expect("{ pop -2147483649.0 cvi }",false)&&ok;
  ok=expect("{ pop -1.9 cvi 2 mod }",true,-1.0)&&ok;
+ // Reject malformed externally supplied compiled IR, without touching output.
+ using rinpdf::parser::CalculatorInstruction;
+ CalculatorProgram malformed;
+ CalculatorInstruction literal;
+ literal.kind=0;
+ literal.numeric_kind=2;
+ literal.number=1.5;
+ malformed.instructions.push_back(literal);
+ double untouched=42.0;
+ ok=(!evaluate_calculator_function(malformed,0.0,1,&untouched)&&untouched==42.0)&&ok;
+ malformed.instructions[0].number=2147483648.0;
+ ok=(!evaluate_calculator_function(malformed,0.0,1,&untouched)&&untouched==42.0)&&ok;
+ malformed.instructions[0].numeric_kind=0;
+ malformed.instructions[0].number=std::numeric_limits<double>::quiet_NaN();
+ ok=(!evaluate_calculator_function(malformed,0.0,1,&untouched)&&untouched==42.0)&&ok;
+ malformed.instructions[0].kind=1;
+ malformed.instructions[0].number=2.0;
+ ok=(!evaluate_calculator_function(malformed,0.0,1,&untouched)&&untouched==42.0)&&ok;
  return ok?0:1;
 }
