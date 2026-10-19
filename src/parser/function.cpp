@@ -627,8 +627,11 @@ bool evaluate_calculator_tokens(const std::vector<std::string>& parsed_tokens,
      else lhs=std::max(lhs,rhs);
      const bool in_integer_range=std::isfinite(lhs)&&
        lhs>=-2147483648.0&&lhs<=2147483647.0;
-     if(integer_pair&&token!="div"&&!in_integer_range)return false;
-     const bool keep_integer=integer_pair&&token!="div"&&
+     // Compiled calculator programs execute without source tokens; decide
+     // integer promotion from the decoded opcode, not a stale token.
+     const bool is_division=opcode==uint8_t(CalculatorOp::Op29);
+     if(integer_pair&&!is_division&&!in_integer_range)return false;
+     const bool keep_integer=integer_pair&&!is_division&&
        lhs==std::trunc(lhs)&&in_integer_range;
      stack.back().kind=keep_integer?2:0;
     }else if(opcode==uint8_t(CalculatorOp::Op32)||opcode==uint8_t(CalculatorOp::Op33)||opcode==uint8_t(CalculatorOp::Op34)||
