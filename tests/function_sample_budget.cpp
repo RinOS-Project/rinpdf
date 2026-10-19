@@ -2,6 +2,7 @@
 #include <array>
 #include <cstdint>
 #include <cstdio>
+#include <limits>
 #include <vector>
 
 using rinpdf::parser::MultidimensionalSampledFunction;
@@ -23,6 +24,21 @@ int main() {
   std::fprintf(stderr,"small multidimensional sampled function failed\n");
   return 1;
  }
+ // Predecoded sample grids must contain finite normalized values.
+ std::vector<double> expanded={0.0,1.0,0.0,1.0};
+ result=91.0;
+ if(!evaluate_multidimensional_sampled_function(f,samples,xy,&result,&expanded)||
+    result!=1.0)return 1;
+ expanded[1]=std::numeric_limits<double>::quiet_NaN();
+ result=91.0;
+ if(evaluate_multidimensional_sampled_function(f,samples,xy,&result,&expanded)||
+    result!=91.0)return 1;
+ expanded[1]=std::numeric_limits<double>::infinity();
+ if(evaluate_multidimensional_sampled_function(f,samples,xy,&result,&expanded)||
+    result!=91.0)return 1;
+ expanded[1]=1.5;
+ if(evaluate_multidimensional_sampled_function(f,samples,xy,&result,&expanded)||
+    result!=91.0)return 1;
  // A direct evaluator call must reject the same oversized grid that
  // compile-time validation rejects, while preserving the output.
  f.sizes[0]=4096;
