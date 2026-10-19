@@ -1121,11 +1121,12 @@ struct Reader {
    if(!subtype||subtype->kind!=Value::Kind::Name||
       subtype->text!="Transparency"||
       (isolated&&isolated->kind!=Value::Kind::Boolean)||
-      (knockout&&(knockout->kind!=Value::Kind::Boolean||knockout->boolean))||
+      (knockout&&knockout->kind!=Value::Kind::Boolean)||
       get(group,"CS"))
     return false;
    form.transparency_group=true;
    form.isolated_transparency_group=isolated&&isolated->boolean;
+   form.knockout_transparency_group=knockout&&knockout->boolean;
   }
   const Value* bbox=get(range.dictionary,"BBox");
   if(!bbox||bbox->kind!=Value::Kind::Array||bbox->array.size()!=4)return false;
