@@ -1304,6 +1304,8 @@ struct Reader {
          active.erase(id);return false;
         }
         *destination=number;
+        if(key[0]=='c')item.has_fill_alpha=true;
+        else item.has_stroke_alpha=true;
        }
       }
       // Other transparency features require separate compositing support.
