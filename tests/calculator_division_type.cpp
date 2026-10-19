@@ -39,5 +39,11 @@ int main() {
  ok=expect("{ pop 5 2 add 3 mod }",true,1.0)&&ok;
  ok=expect("{ pop 8 2 sub 3 mod }",true,0.0)&&ok;
  ok=expect("{ pop 5 2 mul 3 mod }",true,1.0)&&ok;
+ // cvi truncates before enforcing the signed 32-bit bounds.
+ ok=expect("{ pop 2147483647.9 cvi }",true,2147483647.0)&&ok;
+ ok=expect("{ pop -2147483648.9 cvi }",true,-2147483648.0)&&ok;
+ ok=expect("{ pop 2147483648.0 cvi }",false)&&ok;
+ ok=expect("{ pop -2147483649.0 cvi }",false)&&ok;
+ ok=expect("{ pop -1.9 cvi 2 mod }",true,-1.0)&&ok;
  return ok?0:1;
 }
