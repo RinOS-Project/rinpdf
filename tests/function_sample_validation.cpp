@@ -50,5 +50,19 @@ int main(){
    return 1;
   }
  }
+ // Packed one-bit and non-byte-aligned twelve-bit samples are MSB-first.
+ rinpdf::parser::SampledFunction packed=f;
+ packed.bits=1;
+ const std::vector<uint8_t> one_bit{0x40}; // 0,1 and six padding bits
+ double decoded=-1;
+ if(!rinpdf::parser::evaluate_sampled_function(
+      packed,one_bit,0.5,&decoded)||
+    std::abs(decoded-0.5)>1e-12)return 1;
+ packed.bits=12;
+ const std::vector<uint8_t> twelve_bit{0x00,0x0f,0xff}; // 0,4095
+ decoded=-1;
+ if(!rinpdf::parser::evaluate_sampled_function(
+      packed,twelve_bit,0.5,&decoded)||
+    std::abs(decoded-0.5)>1e-12)return 1;
  return 0;
 }
