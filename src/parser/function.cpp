@@ -379,6 +379,21 @@ bool evaluate_calculator_tokens(const std::vector<std::string>& parsed_tokens,
    if(instruction.kind>4)return false;
    if(instruction.kind==4&&instruction.opcode>=calculator_operator_names().size())
     return false;
+   // Publicly constructible IR must obey the same literal constraints as
+   // the source compiler, even when evaluation bypasses tokenization.
+   if(instruction.kind==0){
+    if(!std::isfinite(instruction.number)||
+       (instruction.numeric_kind!=0&&instruction.numeric_kind!=2))
+     return false;
+    if(instruction.numeric_kind==2&&
+       (instruction.number!=std::trunc(instruction.number)||
+        instruction.number< -2147483648.0||
+        instruction.number>2147483647.0))
+     return false;
+   }
+   if(instruction.kind==1&&
+      (instruction.number!=0.0&&instruction.number!=1.0))
+    return false;
    if(instruction.kind==2||instruction.kind==3){
     if(instruction.matching_brace>=instructions->size())return false;
     const auto& other=(*instructions)[instruction.matching_brace];
