@@ -137,5 +137,19 @@ int main(){
  if(stale_group.composite_backdrop_difference_over(stale_parent,stale_backdrop))
   return 53;
  if(stale_parent.pixels!=saved)return 54;
+ // Non-isolated knockout must use an independent immutable snapshot.
+ // Passing an alias of the parent cannot detect concurrent parent changes.
+ rinpdf::renderer::PremultipliedSurface nkparent,nkbackdrop,nkgroup;
+ if(!nkparent.resize(1,1)||!nkbackdrop.resize(1,1)||
+    !nkgroup.resize(1,1))return 55;
+ if(!nkparent.fill_pixel(0,0,128,128,128,255)||
+    !nkbackdrop.copy_backdrop_from(nkparent)||
+    !nkgroup.begin_nonisolated_knockout(nkparent))return 56;
+ if(!nkgroup.mark_shape(0,0,255)||
+    !nkgroup.blend_pixel(0,0,255,0,0,128,0,255))return 57;
+ if(!nkparent.fill_pixel(0,0,0,0,255,255))return 58;
+ const auto protected_pixels=nkparent.pixels;
+ if(nkgroup.composite_backdrop_difference_over(nkparent,nkbackdrop)||
+    nkparent.pixels!=protected_pixels)return 59;
  return 0;
 }
