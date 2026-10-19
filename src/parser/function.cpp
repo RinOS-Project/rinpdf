@@ -572,7 +572,9 @@ bool evaluate_calculator_tokens(const std::vector<std::string>& parsed_tokens,
      else if(opcode==uint8_t(CalculatorOp::Op10))value=std::floor(value);
      else if(opcode==uint8_t(CalculatorOp::Op11))value=std::ceil(value);
      else if(opcode==uint8_t(CalculatorOp::Op12))
-      value=value<0? -std::floor(-value+0.5):std::floor(value+0.5);
+      // PostScript round breaks exact half-way ties toward +infinity,
+      // including negative values (e.g. -1.5 becomes -1).
+      value=std::floor(value+0.5);
      else if(opcode==uint8_t(CalculatorOp::Op14)||opcode==uint8_t(CalculatorOp::Op15)){
       if(value<=0)return false;
       value=opcode==uint8_t(CalculatorOp::Op14)?std::log(value):std::log10(value);
