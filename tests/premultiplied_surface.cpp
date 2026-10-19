@@ -90,5 +90,23 @@ int main(){
   if(blending_parent.shape[0]!=255||
      blending_parent.pixels[3]!=0)return 36;
  }
+ // A non-isolated group inherits premultiplied backdrop color but not
+ // the parent's shape. Committing it must not composite backdrop twice.
+ rinpdf::renderer::PremultipliedSurface background,nonisolated,original;
+ if(!background.resize(1,1)||!nonisolated.resize(1,1)||
+    !original.resize(1,1))return 37;
+ if(!background.fill_pixel(0,0,128,128,128,128)||
+    !background.mark_shape(0,0,255))return 38;
+ if(!original.copy_backdrop_from(background)||
+    !nonisolated.copy_backdrop_from(background))return 39;
+ if(nonisolated.shape[0]!=0||nonisolated.pixels[3]!=128)return 40;
+ if(!nonisolated.mark_shape(0,0,255)||
+    !nonisolated.fill_pixel(0,0,255,0,0,128))return 41;
+ if(!nonisolated.composite_backdrop_difference_over(background,original))
+  return 42;
+ if(background.pixels[0]<158||background.pixels[0]>162||
+    background.pixels[1]<30||background.pixels[1]>34||
+    background.pixels[3]<190||background.pixels[3]>193||
+    background.shape[0]!=255)return 43;
  return 0;
 }
