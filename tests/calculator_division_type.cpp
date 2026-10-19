@@ -77,5 +77,19 @@ int main() {
  ok=(!evaluate_calculator_function(crossing,0.0,1,&untouched)&&untouched==42.0)&&ok;
  crossing.instructions.pop_back();
  ok=(!evaluate_calculator_function(crossing,0.0,1,&untouched)&&untouched==42.0)&&ok;
+ // Maximum supported procedure nesting is eight levels.
+ for(unsigned depth : {8u,9u}){
+  std::string source="{ ";
+  for(unsigned i=0;i<depth;++i)source+="{ ";
+  for(unsigned i=0;i<depth;++i)source+="} ";
+  source+="}";
+  CalculatorProgram nested;
+  const std::vector<uint8_t> bytes(source.begin(),source.end());
+  const bool compiled=compile_calculator_function(bytes,nested);
+  if(compiled!=(depth==8u)){
+   std::fprintf(stderr,"Unexpected nesting acceptance at depth %u\\n",depth);
+   ok=false;
+  }
+ }
  return ok?0:1;
 }
