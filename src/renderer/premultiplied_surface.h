@@ -93,7 +93,11 @@ struct PremultipliedSurface {
  // Source-over another premultiplied surface; preserve both alphas.
  bool composite_over(PremultipliedSurface& destination) const {
   if(width!=destination.width||height!=destination.height||
-     pixels.size()!=destination.pixels.size())return false;
+     pixels.size()!=destination.pixels.size()||
+     shape.size()!=destination.shape.size())return false;
+  for(size_t p=0;p<shape.size();++p)
+   destination.shape[p]=uint8_t(std::min(255u,
+       unsigned(shape[p])+mul255(destination.shape[p],255u-shape[p])));
   for(size_t i=0;i<pixels.size();i+=4){
    const unsigned remaining=255u-pixels[i+3];
    for(unsigned c=0;c<3;++c)
