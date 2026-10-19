@@ -196,8 +196,8 @@
    const auto key=std::make_tuple(reference.integer,reference.generation,outputs);
    PdfFunction local;
    const PdfFunction* compiled=nullptr;
-   const auto hit=compiled_sample_cache.find(key);
-   if(hit!=compiled_sample_cache.end())compiled=&hit->second;
+   const auto hit=compiled_function_cache.find(key);
+   if(hit!=compiled_function_cache.end())compiled=&hit->second;
    else{
     const Value* sizes=get(function,"Size");
     const Value* bits=get(function,"BitsPerSample");
@@ -248,8 +248,8 @@
     if(!decode_stream(data,size,sampled_stream,samples,byte_count)||
        samples.size()!=byte_count||
        !compile_sampled_pdf_function(parameters,samples,local))return false;
-    if(compiled_sample_cache.size()<64)
-     compiled=&compiled_sample_cache.emplace(key,std::move(local)).first->second;
+    if(compiled_function_cache.size()<64)
+     compiled=&compiled_function_cache.emplace(key,std::move(local)).first->second;
     else compiled=&local;
    }
    if(!evaluate_pdf_function(*compiled,x,result))return false;
@@ -264,8 +264,8 @@
    const auto key=std::make_tuple(reference.integer,reference.generation,outputs);
    const PdfFunction* compiled=nullptr;
    PdfFunction local;
-   const auto hit=compiled_calculator_cache.find(key);
-   if(hit!=compiled_calculator_cache.end()){
+   const auto hit=compiled_function_cache.find(key);
+   if(hit!=compiled_function_cache.end()){
     compiled=&hit->second;
    }else{
     std::array<double,8> limits{};
@@ -275,8 +275,8 @@
     if(!decode_stream(data,size,sampled_stream,source,16384)||
        !compile_calculator_pdf_function(source,outputs,low,high,
                                         limits,local))return false;
-    if(compiled_calculator_cache.size()<64)
-     compiled=&compiled_calculator_cache.emplace(key,std::move(local)).first->second;
+    if(compiled_function_cache.size()<64)
+     compiled=&compiled_function_cache.emplace(key,std::move(local)).first->second;
     else compiled=&local;
    }
    if(!evaluate_pdf_function(*compiled,x,result))return false;
@@ -287,8 +287,8 @@
    const auto key=std::make_tuple(reference.integer,reference.generation,
                                   outputs);
    if(indirect){
-    const auto hit=compiled_exponent_cache.find(key);
-    if(hit!=compiled_exponent_cache.end())compiled=&hit->second;
+    const auto hit=compiled_function_cache.find(key);
+    if(hit!=compiled_function_cache.end())compiled=&hit->second;
    }
    if(!compiled){
     ExponentialFunction parameters;
@@ -318,8 +318,8 @@
     }
     if(!compile_exponential_pdf_function(parameters,outputs,low,high,
                                          limits,local))return false;
-    if(indirect&&compiled_exponent_cache.size()<128)
-     compiled=&compiled_exponent_cache.emplace(key,std::move(local)).first->second;
+    if(indirect&&compiled_function_cache.size()<128)
+     compiled=&compiled_function_cache.emplace(key,std::move(local)).first->second;
     else compiled=&local;
    }
    if(!evaluate_pdf_function(*compiled,x,result))return false;
@@ -329,13 +329,13 @@
    const bool indirect=reference.kind==Value::Kind::Reference;
    const auto key=std::make_tuple(reference.integer,reference.generation,outputs);
    if(indirect){
-    const auto hit=compiled_stitch_cache.find(key);
-    if(hit!=compiled_stitch_cache.end())compiled=&hit->second;
+    const auto hit=compiled_function_cache.find(key);
+    if(hit!=compiled_function_cache.end())compiled=&hit->second;
    }
    if(!compiled){
     if(!compile_tint_tree(reference,outputs,local,depth))return false;
-    if(indirect&&compiled_stitch_cache.size()<64)
-     compiled=&compiled_stitch_cache.emplace(key,std::move(local)).first->second;
+    if(indirect&&compiled_function_cache.size()<64)
+     compiled=&compiled_function_cache.emplace(key,std::move(local)).first->second;
     else compiled=&local;
    }
    if(!evaluate_pdf_function(*compiled,x,result))return false;
