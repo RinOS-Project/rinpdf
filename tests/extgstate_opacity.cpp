@@ -23,6 +23,28 @@ int main(){
  // Opaque black should cover the bottom-left quarter after Q restores
  // normal opacity. The other regions remain half black over white.
  if(value(1,6)!=0||value(6,1)!=127||value(6,6)!=127)return 2;
+ // Diagnostic text must blend with the nonstroking ca value, while
+ // a stroke-only CA setting must not change glyph opacity.
+ const rinpdf::renderer::FontResources fonts{{"FD",{"RinPDF-Diagnostic","Type1"}}};
+ const char text_content[]="q /Half gs BT /FD 10 Tf 1 0 0 1 2 10 Tm (HI) Tj ET Q";
+ std::vector<uint8_t> faded(32*16*4),opaque(32*16*4);
+ if(!rinpdf::renderer::render_rectangles_box_with_fonts(
+      reinterpret_cast<const uint8_t*>(text_content),sizeof(text_content)-1,
+      32,16,faded.data(),32*4,{0,0,32,16},fonts,{},{},{},true,0,states))
+  return 5;
+ const char solid_text[]="BT /FD 10 Tf 1 0 0 1 2 10 Tm (HI) Tj ET";
+ if(!rinpdf::renderer::render_rectangles_box_with_fonts(
+      reinterpret_cast<const uint8_t*>(solid_text),sizeof(solid_text)-1,
+      32,16,opaque.data(),32*4,{0,0,32,16},fonts))
+  return 6;
+ bool saw_ink=false;
+ for(size_t i=0;i<opaque.size();i+=4){
+  if(opaque[i]==255)continue;
+  saw_ink=true;
+  const unsigned expected=(unsigned(opaque[i])*128+255u*127u+127u)/255u;
+  if(faded[i]!=expected)return 7;
+ }
+ if(!saw_ink)return 8;
  // Verify the public page-resource resolver, including parent inheritance
  // and partial ExtGState keys that must not reset unrelated opacity.
  std::string pdf="%PDF-1.4\n";
