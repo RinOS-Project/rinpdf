@@ -76,3 +76,8 @@ test('rinpdf-image-decoder-bounds',executable('rinpdf-image-decoder-bounds','ima
 if tiff_dep.found()
  test('rinpdf-ccitt-valid-decode',executable('rinpdf-ccitt-valid-decode','ccitt_valid_decode.cpp',dependencies:rinpdf_dep))
 endif
+
+# Encode real JPEG fixtures and verify the decoder, only with libjpeg enabled.
+if jpeg_dep.found()
+ test('rinpdf-dct-valid-decode',executable('rinpdf-dct-valid-decode','dct_valid_decode.cpp',dependencies:[rinpdf_dep,jpeg_dep]))
+endif
