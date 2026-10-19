@@ -490,7 +490,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
        im.pixels[size_t(iy)*im.width+ix]:
        (im.alpha.empty()?255:im.alpha[size_t(iy)*im.width+ix]);
      const unsigned opacity=(base_opacity*unsigned(std::lround(fill_alpha*255))+127)/255;
-     if(!opacity)continue;
+     if(!opacity&&!(transparent_target&&transparent_target->knockout))continue;
      if(transparent_target){
       const auto component=[&](unsigned channel)->uint8_t{
        return uint8_t(im.stencil?
@@ -1608,7 +1608,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
     unsigned alpha=(hits*255+2)/4;
     alpha=(alpha*unsigned(std::lround(stroke_alpha*255))+127)/255;
     if(clip_mask!=nullptr)alpha=(alpha*(*clip_mask)[i]+127)/255;
-    if(!alpha)continue;
+    if(!alpha&&!(transparent_target&&transparent_target->knockout))continue;
     if(transparent_target){
      if(!transparent_target->mark_shape(x,y,uint8_t(hits*255/4))||
         !transparent_target->blend_pixel(x,y,cr,cg,cb,uint8_t(alpha),
@@ -1646,7 +1646,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
     unsigned alpha=antialias?coverage[i]:255;
     alpha=(alpha*unsigned(std::lround(fill_alpha*255))+127)/255;
     if(clip_mask!=nullptr)alpha=(alpha*(*clip_mask)[i]+127)/255;
-    if(!alpha)continue;
+    if(!alpha&&!(transparent_target&&transparent_target->knockout))continue;
     if(transparent_target){
      if(!transparent_target->mark_shape(x,y,uint8_t(antialias?coverage[i]:255))||
         !transparent_target->blend_pixel(x,y,cr,cg,cb,uint8_t(alpha),
