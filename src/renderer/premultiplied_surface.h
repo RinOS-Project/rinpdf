@@ -40,6 +40,46 @@ struct PremultipliedSurface {
    if(pixels[i]!=pixels[i+1]||pixels[i]!=pixels[i+2])return false;
   return true;
  }
+ // Project an RGB premultiplied backdrop into the DeviceGray
+ // blending space while retaining its alpha and resetting group shape.
+ bool copy_gray_backdrop_from(const PremultipliedSurface& parent){
+  if(!copy_backdrop_from(parent))return false;
+  grayscale_group=true;
+  for(size_t i=0;i<pixels.size();i+=4){
+   const unsigned gray=(77u*pixels[i]+150u*pixels[i+1]+
+                        29u*pixels[i+2]+128u)/256u;
+   pixels[i]=pixels[i+1]=pixels[i+2]=uint8_t(gray);
+  }
+  return true;
+ }
+ // Commit a gray group result by applying its premultiplied color change
+ // relative to the projected backdrop. Untouched colored pixels remain
+ // unchanged. This is a bounded RGB approximation, not ICC color matching.
+ bool composite_gray_difference_over(
+    PremultipliedSurface& parent,const PremultipliedSurface& original,
+    const PremultipliedSurface& projected) const {
+  if(width!=parent.width||height!=parent.height||
+     width!=original.width||height!=original.height||
+     width!=projected.width||height!=projected.height||
+     pixels.size()!=parent.pixels.size()||
+     pixels.size()!=original.pixels.size()||
+     pixels.size()!=projected.pixels.size()||
+     shape.size()!=parent.shape.size()||
+     shape.size()!=size_t(width)*height||
+     parent.pixels!=original.pixels)return false;
+  for(size_t p=0;p<shape.size();++p){
+   if(!shape[p])continue;
+   const size_t i=p*4;
+   const int delta=int(pixels[i])-int(projected.pixels[i]);
+   for(unsigned c=0;c<3;++c)
+    parent.pixels[i+c]=uint8_t(std::clamp(
+       int(original.pixels[i+c])+delta,0,255));
+   parent.pixels[i+3]=pixels[i+3];
+   parent.shape[p]=uint8_t(std::min(255u,
+      unsigned(shape[p])+mul255(parent.shape[p],255u-shape[p])));
+  }
+  return true;
+ }
  // Union geometric coverage independently of source opacity.
  bool mark_shape(unsigned x,unsigned y,uint8_t coverage){
   if(x>=width||y>=height||shape.size()!=size_t(width)*height)
