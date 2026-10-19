@@ -5,7 +5,7 @@
 #include "object_resolver.h"
 #include "stream_object.h"
 #include "stream.h"
-#include "function_cache.h"
+#include "function.h"
 #include "dct_image.h"
 #include "ccitt_image.h"
 #include "value.h"
