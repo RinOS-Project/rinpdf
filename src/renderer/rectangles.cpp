@@ -338,7 +338,9 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      inherited.stroke_alpha=stroke_alpha;
      inherited.has_fill_alpha=true;
      inherited.has_stroke_alpha=true;
-     inherited.blend_mode=blend_mode;
+     // Isolated groups blend against transparent black internally.
+     // Their external blend mode applies only when composited to parent.
+     inherited.blend_mode=fm.isolated_transparency_group?"Normal":blend_mode;
      inherited.has_blend_mode=true;
      form_graphics.emplace(inherited_name,inherited);
      std::string stream="q /"+inherited_name+" gs ";
@@ -412,7 +414,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      if(fm.isolated_transparency_group){
       // Render the isolated group exactly once with a transparent backdrop.
       // All supported primitives now use the premultiplied target.
-      if(blend_mode!="Normal"||size_t(width)*height>1048576u)return false;
+      if(size_t(width)*height>1048576u)return false;
       // Multiply and Screen are handled by PremultipliedSurface within
       // the isolated group. The group's external blend remains Normal.
       PremultipliedSurface group;
@@ -420,9 +422,10 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
       const size_t rowbytes=size_t(width)*4;
       std::vector<uint8_t> scratch(rowbytes*height,0);
       if(!draw_form(scratch.data(),rowbytes,&group))return false;
+      const unsigned external_mode=transparent_blend_mode();
       if(transparent_target){
-       if(!group.composite_over(*transparent_target))return false;
-      }else if(!group.composite_over_opaque(rgba,stride))return false;
+       if(!group.composite_blend_over(*transparent_target,external_mode))return false;
+      }else if(!group.composite_blend_over_opaque(rgba,stride,external_mode))return false;
      }else if(!draw_form(rgba,stride))return false;
      continue;
     }
