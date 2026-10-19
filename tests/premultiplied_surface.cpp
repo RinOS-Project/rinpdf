@@ -79,5 +79,16 @@ int main(){
  if(result[0]!=0||result[1]<63||result[1]>65||
     result[2]<127||result[2]>129||
     result[3]<190||result[3]>193)return 32;
+ // A blended nested group must propagate its geometric shape even
+ // if its alpha is zero; parent knockout uses shape, not alpha.
+ rinpdf::renderer::PremultipliedSurface blending_parent,blending_child;
+ if(!blending_parent.resize(1,1)||!blending_child.resize(1,1))
+  return 33;
+ if(!blending_child.mark_shape(0,0,255))return 34;
+ for(unsigned mode:{1u,2u}){
+  if(!blending_child.composite_blend_over(blending_parent,mode))return 35;
+  if(blending_parent.shape[0]!=255||
+     blending_parent.pixels[3]!=0)return 36;
+ }
  return 0;
 }
