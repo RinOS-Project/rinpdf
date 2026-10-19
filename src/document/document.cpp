@@ -65,11 +65,14 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
   rinpdf::renderer::FormResources forms;
   if(!rinpdf::parser::read_page_forms(doc->bytes.data(),
        doc->bytes.size(),index,forms))return RINPDF_UNSUPPORTED;
+  rinpdf::parser::PageGraphicsStates graphic_states;
+  if(!rinpdf::parser::read_page_graphics_states(doc->bytes.data(),
+       doc->bytes.size(),index,graphic_states))return RINPDF_UNSUPPORTED;
   const unsigned rotation=box.rotation;
   const unsigned source_width=(rotation==90||rotation==270)?height:width;
   const unsigned source_height=(rotation==90||rotation==270)?width:height;
   std::vector<uint8_t> temporary((size_t)width*height*4);
-  if(!rinpdf::renderer::render_rectangles_box_with_fonts(contents.data(),contents.size(),source_width,source_height,temporary.data(),(size_t)source_width*4,{box.x0,box.y0,box.x1,box.y1},fonts,properties,images,forms))return RINPDF_UNSUPPORTED;
+  if(!rinpdf::renderer::render_rectangles_box_with_fonts(contents.data(),contents.size(),source_width,source_height,temporary.data(),(size_t)source_width*4,{box.x0,box.y0,box.x1,box.y1},fonts,properties,images,forms,true,0,graphic_states))return RINPDF_UNSUPPORTED;
   for(unsigned y=0;y<height;++y){
    for(unsigned x=0;x<width;++x){
     unsigned sx=x,sy=y;
