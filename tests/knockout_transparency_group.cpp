@@ -27,5 +27,25 @@ int main(){
   if(rgba[i]<126||rgba[i]>129||
      rgba[i+1]<126||rgba[i+1]>129||
      rgba[i+2]!=255||rgba[i+3]!=255)return 2;
+ // A nested regular Form with two translucent internal paints is
+ // composited into the knockout group once, preserving their overlap.
+ parser::PageForm nested;
+ nested.bbox[0]=0;nested.bbox[1]=0;nested.bbox[2]=8;nested.bbox[3]=8;
+ const std::string layered="1 0 0 rg 0 0 8 8 re f "
+                           "0 0 1 rg 0 0 8 8 re f";
+ nested.content.assign(layered.begin(),layered.end());
+ group.content.assign({'/','N','e','s','t','e','d',' ','D','o'});
+ forms["Knockout"]=group;
+ forms.emplace("Nested",nested);
+ std::vector<uint8_t> nested_result(8*8*4);
+ if(!renderer::render_rectangles_box_with_fonts(
+      reinterpret_cast<const uint8_t*>(page.data()),page.size(),
+      8,8,nested_result.data(),32,{0,0,8,8},{},{},{},forms,true,0,states))
+  return 3;
+ // Opaque blue is the result of the nested Form, independent of the
+ // knockout group's earlier objects.
+ for(size_t i=0;i<nested_result.size();i+=4)
+  if(nested_result[i]!=0||nested_result[i+1]!=0||
+     nested_result[i+2]!=255||nested_result[i+3]!=255)return 4;
  return 0;
 }
