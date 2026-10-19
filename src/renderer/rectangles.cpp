@@ -505,9 +505,19 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
       if(!draw_form(scratch.data(),rowbytes,&group))return false;
       const unsigned external_mode=transparent_blend_mode();
       if(transparent_target){
-       if(transparent_target->knockout){
-        // Nested isolated Form is one knockout object, not a sequence
-        // of independent paints against the parent's existing objects.
+       if(transparent_target->knockout_nonisolated){
+        // The isolated child is a single painting object. Blend it over
+        // the immutable group backdrop, not the earlier knockout objects.
+        if(external_mode!=0||
+           transparent_target->knockout_backdrop.size()!=rowbytes*height)
+         return false;
+        PremultipliedSurface object;
+        if(!object.resize(width,height))return false;
+        object.pixels=transparent_target->knockout_backdrop;
+        if(!group.composite_over(object)||
+           !transparent_target->composite_nonisolated_knockout_object(object))
+         return false;
+       }else if(transparent_target->knockout){
         if(external_mode!=0||
            !transparent_target->composite_knockout_object(group))return false;
        }else if(!group.composite_blend_over(*transparent_target,external_mode))
