@@ -162,6 +162,11 @@ struct PremultipliedSurface {
      pixels.size()!=destination.pixels.size()||
      pixels.size()!=size_t(width)*height*4)return false;
   if(mode==0)return composite_over(destination);
+  if(shape.size()!=size_t(width)*height||
+     destination.shape.size()!=shape.size())return false;
+  for(size_t p=0;p<shape.size();++p)
+   destination.shape[p]=uint8_t(std::min(255u,
+       unsigned(shape[p])+mul255(destination.shape[p],255u-shape[p])));
   for(size_t i=0;i<pixels.size();i+=4){
    const unsigned alpha=pixels[i+3];
    if(!alpha)continue;
