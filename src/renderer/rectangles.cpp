@@ -413,8 +413,8 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
       // Render the isolated group exactly once with a transparent backdrop.
       // All supported primitives now use the premultiplied target.
       if(blend_mode!="Normal"||size_t(width)*height>1048576u)return false;
-      for(const auto& [name,state]:form_graphics)
-       if(state.has_blend_mode&&state.blend_mode!="Normal")return false;
+      // Multiply and Screen are handled by PremultipliedSurface within
+      // the isolated group. The group's external blend remains Normal.
       PremultipliedSurface group;
       if(!group.resize(width,height))return false;
       const size_t rowbytes=size_t(width)*4;
