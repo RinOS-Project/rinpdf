@@ -67,3 +67,5 @@ test('rinpdf-text-extract-vertical',executable('rinpdf-text-extract-vertical','t
 test('rinpdf-calculator-division-type',executable('rinpdf-calculator-division-type','calculator_division_type.cpp',dependencies:rinpdf_dep))
 
 test('rinpdf-function-sample-budget',executable('rinpdf-function-sample-budget','function_sample_budget.cpp',dependencies:rinpdf_dep))
+
+test('rinpdf-function-sample-validation',executable('rinpdf-function-sample-validation','function_sample_validation.cpp',dependencies:rinpdf_dep))
