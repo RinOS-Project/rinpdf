@@ -273,7 +273,9 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      auto number_text=[](double value){return std::to_string(value);};
      // Each recursive Form starts with fresh state, so pass its inherited
      // nonstroking/stroking opacity through an explicit internal gs entry.
-     GraphicsStateResources form_graphics=graphic_states;
+     // Forms with their own resources must not see page-level gs names.
+     GraphicsStateResources form_graphics=fm.own_resources?
+         GraphicsStateResources{}:graphic_states;
      std::string inherited_name="RinPDFFormInheritedAlpha";
      while(form_graphics.count(inherited_name))inherited_name+="_";
      parser::PageGraphicsState inherited;
