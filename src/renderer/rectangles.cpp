@@ -104,7 +104,6 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
 
  // Explicit opt-in diagnostic font only: does not pretend to be Courier.
  auto diagnostic_show=[&](const std::vector<TextRun>& runs)->bool{
-  if(transparent_target)return false;
   const auto it=fonts.find(selected_font);
   if(it==fonts.end()||it->second.base_font!="RinPDF-Diagnostic"||
      selected_font_size<=0||selected_font_size>1000||
@@ -146,7 +145,6 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
  // Restricted embedded TrueType rendering for explicitly WinAnsi encoded
  // simple fonts. Unknown mappings and transformed text fail closed.
  auto truetype_show=[&](const std::vector<TextRun>& runs)->bool{
-  if(transparent_target)return false;
   const auto it=fonts.find(selected_font);
   if(it==fonts.end()||
      !(it->second.subtype=="TrueType"&&
@@ -194,6 +192,41 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
  };
  auto paint_text=[&](auto&& draw)->bool{
   if(blend_mode!="Normal")return false;
+  if(transparent_target){
+   // Derive coverage from one draw on a contrasting opaque background.
+   const unsigned color[3]={unsigned(std::lround(red*255)),
+      unsigned(std::lround(green*255)),unsigned(std::lround(blue*255))};
+   unsigned chosen=0,contrast=0,bg=255;
+   for(unsigned c=0;c<3;++c){
+    const unsigned white=255-color[c],black=color[c];
+    if(std::max(white,black)>contrast){
+     contrast=std::max(white,black);chosen=c;bg=white>=black?255u:0u;
+    }
+   }
+   if(!contrast)return false;
+   const size_t pitch=size_t(width)*4;
+   std::vector<uint8_t> scratch(pitch*height,uint8_t(bg));
+   for(size_t i=3;i<scratch.size();i+=4)scratch[i]=255;
+   uint8_t* destination=rgba;
+   const size_t original_stride=stride;
+   rgba=scratch.data();stride=pitch;
+   const bool ok=draw();
+   rgba=destination;stride=original_stride;
+   if(!ok)return false;
+   const unsigned opacity=unsigned(std::lround(fill_alpha*255));
+   for(unsigned y=0;y<height;++y)
+    for(unsigned x=0;x<width;++x){
+     const size_t i=(size_t(y)*width+x)*4;
+     const unsigned observed=scratch[i+chosen];
+     const unsigned delta=observed>bg?observed-bg:bg-observed;
+     const unsigned coverage=std::min(255u,(delta*255u+contrast/2)/contrast);
+     const unsigned alpha=(coverage*opacity+127)/255;
+     if(alpha&&!transparent_target->fill_pixel(x,y,uint8_t(color[0]),
+                   uint8_t(color[1]),uint8_t(color[2]),uint8_t(alpha)))
+      return false;
+    }
+   return true;
+  }
   if(fill_alpha==1)return draw();
   const size_t row_bytes=size_t(width)*4;
   std::vector<uint8_t> original(row_bytes*height);
