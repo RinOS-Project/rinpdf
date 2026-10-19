@@ -442,7 +442,16 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
       // Internal Multiply/Screen paint is evaluated against the inherited
       // live backdrop by the ordinary rasterizer. Do not reject a group
       // just because its resource dictionary contains those states.
-      if(!draw_form(rgba,stride,transparent_target))return false;
+      if(transparent_target){
+       PremultipliedSurface backdrop,group;
+       if(!backdrop.resize(width,height)||!group.resize(width,height)||
+          !backdrop.copy_backdrop_from(*transparent_target)||
+          !group.copy_backdrop_from(*transparent_target))return false;
+       // The group sees the parent's live colors, but owns fresh shape.
+       if(!draw_form(rgba,stride,&group)||
+          !group.composite_backdrop_difference_over(*transparent_target,backdrop))
+        return false;
+      }else if(!draw_form(rgba,stride))return false;
       continue;
      }
      if(transparent_target&&!fm.isolated_transparency_group){
