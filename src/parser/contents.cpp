@@ -709,9 +709,20 @@ struct Reader {
         if(bounds[0]==1&&bounds[1]==0)invert_alpha=true;
         else if(bounds[0]!=0||bounds[1]!=1)return false;
        }
-       if(!decode_stream(data,size,mask_range,image.alpha,
-                         size_t(w->integer)*size_t(h->integer))||
-          image.alpha.size()!=size_t(w->integer)*size_t(h->integer))
+       const Value* mask_filter=get(mask_range.dictionary,"Filter");
+       const bool mask_jpeg=mask_filter&&
+          mask_filter->kind==Value::Kind::Name&&
+          (mask_filter->text=="DCTDecode"||mask_filter->text=="DCT");
+       if(mask_jpeg){
+        if(mask_range.offset>size||
+           mask_range.length>size-mask_range.offset||
+           !decode_dct_image(data+mask_range.offset,mask_range.length,
+                             image.width,image.height,1,image.alpha))
+         return false;
+       }else if(!decode_stream(data,size,mask_range,image.alpha,
+                               size_t(w->integer)*size_t(h->integer)))
+        return false;
+       if(image.alpha.size()!=size_t(w->integer)*size_t(h->integer))
         return false;
        if(invert_alpha)
         for(auto& value:image.alpha)value=uint8_t(255u-value);
