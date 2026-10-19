@@ -1131,8 +1131,9 @@ struct Reader {
      if(!object(*cs,color_space))return false;
     }else color_space=*cs;
     if(color_space.kind!=Value::Kind::Name||
-       color_space.text!="DeviceRGB")return false;
-    form.group_color_space="DeviceRGB";
+       (color_space.text!="DeviceRGB"&&
+        color_space.text!="DeviceGray"))return false;
+    form.group_color_space=color_space.text;
    }
    form.transparency_group=true;
    form.isolated_transparency_group=isolated&&isolated->boolean;
