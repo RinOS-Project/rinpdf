@@ -107,5 +107,15 @@ int main() {
  ok=expect("{ pop -1000000000001.0 }",false)&&ok;
  double large_output=17.0;
  ok=(!run("{ pop 1000000000001.0 }",large_output)&&large_output==17.0)&&ok;
+ // copy duplicates the top N elements in order, including self-overlap
+ // on the destination, and must respect the 64-value stack budget.
+ ok=expect("{ pop 2 3 2 copy add add add }",true,10.0)&&ok;
+ ok=expect("{ pop 4 0 copy }",true,4.0)&&ok;
+ ok=expect("{ pop 1 2 copy }",false)&&ok;
+ std::string overflow="{ pop ";
+ for(unsigned i=0;i<33;++i)overflow+="1 ";
+ overflow+="33 copy }";
+ double copy_output=99.0;
+ ok=(!run(overflow.c_str(),copy_output)&&copy_output==99.0)&&ok;
  return ok?0:1;
 }
