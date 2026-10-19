@@ -117,5 +117,18 @@ int main() {
  overflow+="33 copy }";
  double copy_output=99.0;
  ok=(!run(overflow.c_str(),copy_output)&&copy_output==99.0)&&ok;
+ // Verify multi-output copy preserves operand ordering.
+ const std::string multi_source="{ pop 2 3 2 copy }";
+ const std::vector<uint8_t> multi_bytes(multi_source.begin(),multi_source.end());
+ CalculatorProgram multi_program;
+ double multi_values[4]={-1,-1,-1,-1};
+ const bool multi_compiled=compile_calculator_function(multi_bytes,multi_program);
+ const bool multi_evaluated=multi_compiled&&
+     evaluate_calculator_function(multi_program,0.0,4,multi_values);
+ if(!multi_evaluated||multi_values[0]!=2||multi_values[1]!=3||
+    multi_values[2]!=2||multi_values[3]!=3){
+  std::fprintf(stderr,"Type 4 copy multi-output order mismatch\\n");
+  ok=false;
+ }
  return ok?0:1;
 }
