@@ -112,7 +112,9 @@ bool evaluate_sampled_function(const SampledFunction& function,
   double v=0;
   for(unsigned k=0;k<(function.order==3?4u:2u);++k){
    const size_t neighbor=sample_neighbor(index,k,function.count,function.order);
-   v+=weights[k]*sample_at(neighbor*outputs+j);
+   const double raw=sample_at(neighbor*outputs+j);
+   if(!std::isfinite(raw)||raw<0.0||raw>1.0)return false;
+   v+=weights[k]*raw;
   }
   computed[j]=std::clamp(d0+v*(d1-d0),lo,hi);
   if(!std::isfinite(computed[j]))return false;
