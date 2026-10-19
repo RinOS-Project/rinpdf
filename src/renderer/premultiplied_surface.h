@@ -11,10 +11,22 @@ namespace rinpdf::renderer {
 struct PremultipliedSurface {
  unsigned width=0,height=0;
  std::vector<uint8_t> pixels;
+ // Geometric group shape is distinct from composited opacity.
+ std::vector<uint8_t> shape;
  bool resize(unsigned w,unsigned h){
   if(!w||!h||size_t(w)*h>1048576u)return false;
   width=w;height=h;
   pixels.assign(size_t(w)*h*4,0);
+  shape.assign(size_t(w)*h,0);
+  return true;
+ }
+ // Union geometric coverage independently of source opacity.
+ bool mark_shape(unsigned x,unsigned y,uint8_t coverage){
+  if(x>=width||y>=height||shape.size()!=size_t(width)*height)
+   return false;
+  const size_t i=size_t(y)*width+x;
+  shape[i]=uint8_t(std::min(255u,
+      unsigned(coverage)+mul255(shape[i],255u-coverage)));
   return true;
  }
  static unsigned mul255(unsigned a,unsigned b){
