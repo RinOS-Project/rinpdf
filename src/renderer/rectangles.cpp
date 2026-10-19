@@ -601,7 +601,6 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
     const auto found=images.find(pending_image);
     if(found==images.end())return false;
     const auto& im=found->second;
-    if(cmyk_target)return false;
     pending_image.clear();
     if((im.channels!=1&&im.channels!=3)||!im.width||!im.height||
        im.pixels.size()!=size_t(im.width)*im.height*im.channels||
@@ -645,6 +644,20 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
          unsigned(std::lround(fill_alpha*255))+127)/255;
      const unsigned opacity=(painted_opacity*clip_coverage+127)/255;
      if(!opacity&&!(transparent_target&&transparent_target->knockout))continue;
+     if(cmyk_target){
+      const auto component=[&](unsigned channel)->uint8_t{
+       return uint8_t(im.stencil?
+          unsigned(std::lround((channel==0?red:channel==1?green:blue)*255)):
+          im.pixels[source+(im.channels==3?channel:0)]);
+      };
+      const unsigned geometry=(im.stencil?base_opacity:255u)*
+                              clip_coverage/255u;
+      if(!cmyk_target->paint_rgb(px,py,component(0),component(1),
+                                 component(2),uint8_t(opacity),
+                                 transparent_blend_mode(),uint8_t(geometry)))
+       return false;
+      continue;
+     }
      if(transparent_target){
       const auto component=[&](unsigned channel)->uint8_t{
        return uint8_t(im.stencil?
