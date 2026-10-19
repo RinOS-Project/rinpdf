@@ -26,9 +26,17 @@ int main(){
  renderer::PremultipliedSurface transparent;
  if(!transparent.resize(8,8))return 3;
  std::vector<uint8_t> scratch(8*8*4);
- if(renderer::render_rectangles_box_with_fonts(
-    reinterpret_cast<const uint8_t*>(stream.data()),stream.size(),
+ // The parent starts 50% gray on transparency, then paints 50% red
+ // through the non-isolated Form without a second group compositing pass.
+ const std::string translucent="/Half gs 0.5 g 0 0 8 8 re f /NonIsolated Do";
+ if(!renderer::render_rectangles_box_with_fonts(
+    reinterpret_cast<const uint8_t*>(translucent.data()),translucent.size(),
     8,8,scratch.data(),32,{0,0,8,8},{},{},{},forms,false,0,
     states,&transparent))return 4;
+ for(size_t i=0;i<transparent.pixels.size();i+=4)
+  if(transparent.pixels[i]<158||transparent.pixels[i]>162||
+     transparent.pixels[i+1]<30||transparent.pixels[i+1]>34||
+     transparent.pixels[i+2]<30||transparent.pixels[i+2]>34||
+     transparent.pixels[i+3]<190||transparent.pixels[i+3]>193)return 5;
  return 0;
 }
