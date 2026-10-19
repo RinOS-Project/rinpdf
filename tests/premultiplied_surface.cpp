@@ -52,9 +52,18 @@ int main(){
  if(!edge.resize(1,1))return 20;
  edge.knockout=true;
  if(!edge.blend_pixel(0,0,255,0,0,255,0,255))return 21;
- if(!edge.blend_pixel(0,0,0,0,255,128,0,128))return 22;
+ if(!edge.blend_pixel(0,0,0,0,255,64,0,128))return 22;
  const auto& ep=edge.pixels;
- if(ep[0]<126||ep[0]>129||ep[2]<127||ep[2]>129||
+ if(ep[0]<126||ep[0]>129||ep[2]<63||ep[2]>65||
     ep[3]<190||ep[3]>193)return 23;
+ // Fully covered translucent source replaces earlier paint's backdrop,
+ // without a second (1-alpha) attenuation. Zero-alpha knockout must clear it.
+ rinpdf::renderer::PremultipliedSurface transparent_erase;
+ if(!transparent_erase.resize(1,1))return 24;
+ transparent_erase.knockout=true;
+ if(!transparent_erase.blend_pixel(0,0,255,0,0,255,0,255)||
+    !transparent_erase.blend_pixel(0,0,0,0,255,0,0,255))return 25;
+ for(auto c:transparent_erase.pixels)if(c!=0)return 26;
+ if(transparent_erase.blend_pixel(0,0,255,0,0,255,1,255))return 27;
  return 0;
 }
