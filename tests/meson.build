@@ -99,3 +99,5 @@ if jpeg_dep.found()
 endif
 
 test('rinpdf-extgstate-opacity',executable('rinpdf-extgstate-opacity','extgstate_opacity.cpp',dependencies:rinpdf_dep))
+
+test('rinpdf-isolated-transparency-group',executable('rinpdf-isolated-transparency-group','isolated_transparency_group.cpp',dependencies:rinpdf_dep))
