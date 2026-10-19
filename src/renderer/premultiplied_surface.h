@@ -178,6 +178,35 @@ struct PremultipliedSurface {
   }
   return true;
  }
+ // Commit one normally composited Form as a knockout object over the
+ // group's immutable inherited backdrop. Object pixels include that
+ // backdrop, so use the object result directly in covered regions.
+ bool composite_nonisolated_knockout_object(
+     const PremultipliedSurface& object){
+  if(!knockout_nonisolated||!knockout||
+     width!=object.width||height!=object.height||
+     pixels.size()!=object.pixels.size()||
+     shape.size()!=object.shape.size()||
+     knockout_backdrop.size()!=pixels.size())return false;
+  for(size_t p=0;p<shape.size();++p){
+   const unsigned coverage=object.shape[p];
+   if(!coverage)continue;
+   const size_t i=p*4;
+   const unsigned keep=255u-coverage;
+   for(unsigned c=0;c<4;++c){
+    // The normal Form rendered onto the original group backdrop.
+    // Subtract the uncovered backdrop to recover its object paint.
+    const unsigned original=mul255(knockout_backdrop[i+c],keep);
+    const unsigned painted=object.pixels[i+c]>original?
+       unsigned(object.pixels[i+c])-original:0u;
+    const unsigned retained=mul255(pixels[i+c],keep);
+    pixels[i+c]=uint8_t(std::min(255u,retained+painted));
+   }
+   shape[p]=uint8_t(std::min(255u,
+      coverage+mul255(shape[p],keep)));
+  }
+  return true;
+ }
  // Apply an entire rendered object to a knockout group as one unit.
  // The object's geometric shape removes previous objects; its color and
  // alpha are added once, avoiding per-primitive knockout inside nested Forms.
