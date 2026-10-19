@@ -412,6 +412,11 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
       // that would apply opacity twice. Other backdrops require a proper
       // group backdrop/alpha model and are intentionally unsupported.
       if(transparent_target||blend_mode!="Normal")return false;
+      // clear_background=false callers may pass a partially transparent
+      // RGBA page. Never treat it as an opaque group backdrop.
+      for(unsigned y=0;y<height;++y)
+       for(unsigned x=0;x<width;++x)
+        if(rgba[size_t(y)*stride+size_t(x)*4+3]!=255)return false;
       for(const auto& [name,state]:form_graphics)
        if(state.has_blend_mode&&state.blend_mode!="Normal")return false;
       if(!draw_form(rgba,stride))return false;
