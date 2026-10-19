@@ -93,8 +93,9 @@ bool evaluate_sampled_function(const SampledFunction& function,
  if(!std::isfinite(mapped))return false;
  const double position=std::clamp(mapped,0.0,double(function.count-1));
  const size_t index=size_t(position);
- const size_t next=std::min(index+1,function.count-1);
  const double fraction=position-double(index);
+ double weights[4]{};
+ sample_kernel(function.order,fraction,weights);
  auto sample_at=[&](size_t sample_index)->double {
   const size_t first_bit=sample_index*bits;
   if(expanded&&!expanded->empty())return (*expanded)[sample_index];
@@ -107,8 +108,6 @@ bool evaluate_sampled_function(const SampledFunction& function,
   const double d0=function.decode[2*j],d1=function.decode[2*j+1];
   if(!std::isfinite(lo)||!std::isfinite(hi)||lo>hi||
      !std::isfinite(d0)||!std::isfinite(d1))return false;
-  double weights[4]{};
-  sample_kernel(function.order,fraction,weights);
   double v=0;
   for(unsigned k=0;k<(function.order==3?4u:2u);++k){
    const size_t neighbor=sample_neighbor(index,k,function.count,function.order);
