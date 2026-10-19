@@ -103,3 +103,5 @@ test('rinpdf-extgstate-opacity',executable('rinpdf-extgstate-opacity','extgstate
 test('rinpdf-isolated-transparency-group',executable('rinpdf-isolated-transparency-group','isolated_transparency_group.cpp',dependencies:rinpdf_dep))
 
 test('rinpdf-premultiplied-surface',executable('rinpdf-premultiplied-surface','premultiplied_surface.cpp',dependencies:rinpdf_dep))
+
+test('rinpdf-direct-transparent-fill',executable('rinpdf-direct-transparent-fill','direct_transparent_fill.cpp',dependencies:rinpdf_dep))
