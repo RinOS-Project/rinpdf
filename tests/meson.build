@@ -81,3 +81,5 @@ endif
 if jpeg_dep.found()
  test('rinpdf-dct-valid-decode',executable('rinpdf-dct-valid-decode','dct_valid_decode.cpp',dependencies:[rinpdf_dep,jpeg_dep]))
 endif
+
+test('rinpdf-gray1-image-xobject',executable('rinpdf-gray1-image-xobject','gray1_image_xobject.cpp',dependencies:rinpdf_dep))
