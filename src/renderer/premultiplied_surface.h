@@ -45,7 +45,9 @@ struct PremultipliedSurface {
    for(unsigned c=0;c<4;++c)
     pixels[index+c]=uint8_t(mul255(pixels[index+c],remaining));
   }
-  const unsigned remain=255u-coverage;
+  // In a knockout group, geometry has already reduced the prior
+  // contribution. Multiplying it again by (1-alpha) double-attenuates.
+  const unsigned remain=knockout?255u:255u-coverage;
   const unsigned colors[3]={red,green,blue};
   for(unsigned c=0;c<3;++c)
    pixels[index+c]=uint8_t(std::min(255u,
@@ -59,13 +61,24 @@ struct PremultipliedSurface {
  bool blend_pixel(unsigned x,unsigned y,uint8_t red,uint8_t green,
                   uint8_t blue,uint8_t source_alpha,unsigned mode,
                   uint8_t geometry=255){
-  if(mode>2||x>=width||y>=height||
+  if(mode>2||(knockout&&mode!=0)||x>=width||y>=height||
      pixels.size()!=size_t(width)*height*4)return false;
   const size_t i=(size_t(y)*width+x)*4;
   if(knockout){
    const unsigned remaining=255u-geometry;
    for(unsigned c=0;c<4;++c)
     pixels[i+c]=uint8_t(mul255(pixels[i+c],remaining));
+  }
+  if(knockout){
+   // Knockout replacement adds source paint after shape attenuation.
+   // Alpha is independent of shape and must not attenuate the prior twice.
+   const unsigned src[3]={red,green,blue};
+   for(unsigned c=0;c<3;++c)
+    pixels[i+c]=uint8_t(std::min(255u,
+        unsigned(pixels[i+c])+mul255(src[c],source_alpha)));
+   pixels[i+3]=uint8_t(std::min(255u,
+        unsigned(pixels[i+3])+unsigned(source_alpha)));
+   return true;
   }
   const unsigned as=source_alpha,ad=pixels[i+3];
   const unsigned src[3]={red,green,blue};
