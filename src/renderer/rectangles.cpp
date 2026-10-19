@@ -438,14 +438,15 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
        if(!transparent_target||blend_mode!="Normal"||
           !fm.local_forms.empty()||!fm.xobject_aliases.empty())
         return false;
-       PremultipliedSurface group;
-       if(!group.resize(width,height)||
+       PremultipliedSurface backdrop,group;
+       if(!backdrop.resize(width,height)||!group.resize(width,height)||
+          !backdrop.copy_backdrop_from(*transparent_target)||
           !group.begin_nonisolated_knockout(*transparent_target))return false;
        const size_t rowbytes=size_t(width)*4;
        std::vector<uint8_t> scratch(rowbytes*height,0);
        if(!draw_form(scratch.data(),rowbytes,&group)||
           !group.composite_backdrop_difference_over(*transparent_target,
-                                                    *transparent_target))
+                                                    backdrop))
         return false;
        continue;
       }
