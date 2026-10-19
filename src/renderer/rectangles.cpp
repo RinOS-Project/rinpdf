@@ -407,28 +407,16 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
       continue;
      }
      if(fm.isolated_transparency_group){
-      // Isolated Normal groups render independently of the page backdrop.
-      // Two opaque backdrops let us recover premultiplied color and alpha
-      // without changing the existing rasterizer's opaque RGBA contract.
-      if(blend_mode!="Normal"||size_t(width)*height>1048576u)
-       return false;
+      // Render the isolated group exactly once with a transparent backdrop.
+      // All supported primitives now use the premultiplied target.
+      if(blend_mode!="Normal"||size_t(width)*height>1048576u)return false;
       for(const auto& [name,state]:form_graphics)
        if(state.has_blend_mode&&state.blend_mode!="Normal")return false;
-      const size_t rowbytes=size_t(width)*4;
-      std::vector<uint8_t> black(rowbytes*height,0);
-      std::vector<uint8_t> white(rowbytes*height,255);
-      for(size_t i=3;i<black.size();i+=4)black[i]=255;
-      if(!draw_form(black.data(),rowbytes)||
-         !draw_form(white.data(),rowbytes))return false;
       PremultipliedSurface group;
       if(!group.resize(width,height))return false;
-      for(unsigned y=0;y<height;++y){
-       for(unsigned x=0;x<width;++x){
-        const size_t i=(size_t(y)*width+x)*4;
-        if(!group.set_reconstructed(x,y,black.data()+i,white.data()+i))
-         return false;
-       }
-      }
+      const size_t rowbytes=size_t(width)*4;
+      std::vector<uint8_t> scratch(rowbytes*height,0);
+      if(!draw_form(scratch.data(),rowbytes,&group))return false;
       if(transparent_target){
        if(!group.composite_over(*transparent_target))return false;
       }else if(!group.composite_over_opaque(rgba,stride))return false;
