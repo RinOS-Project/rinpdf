@@ -408,11 +408,8 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
          width,height,target,target_stride,box,scoped_fonts,properties,
          scoped_images,scoped_forms,false,form_depth+1,form_graphics,surface);
      };
-     if(fm.knockout_transparency_group){
-      // The direct replacement path is only valid for isolated groups
-      // consisting of simple page graphics, with no nested Form calls.
-      if(!fm.isolated_transparency_group)return false;
-     }
+     if(fm.knockout_transparency_group&&!fm.transparency_group)
+      return false;
      if(transparent_target&&transparent_target->knockout&&
         !fm.transparency_group){
       // A normal nested Form contributes one painting object to a
@@ -434,6 +431,24 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
         fm.transparency_group&&!fm.isolated_transparency_group)
       return false;
      if(fm.transparency_group&&!fm.isolated_transparency_group){
+      if(fm.knockout_transparency_group){
+       // Non-isolated knockout requires a transparent parent surface,
+       // Normal group blending, and object-local graphics operations.
+       // Complex nested Forms need their own backdrop management.
+       if(!transparent_target||blend_mode!="Normal"||
+          !fm.local_forms.empty()||!fm.xobject_aliases.empty())
+        return false;
+       PremultipliedSurface group;
+       if(!group.resize(width,height)||
+          !group.begin_nonisolated_knockout(*transparent_target))return false;
+       const size_t rowbytes=size_t(width)*4;
+       std::vector<uint8_t> scratch(rowbytes*height,0);
+       if(!draw_form(scratch.data(),rowbytes,&group)||
+          !group.composite_backdrop_difference_over(*transparent_target,
+                                                    *transparent_target))
+        return false;
+       continue;
+      }
       // Normal-only non-isolated groups use the parent's live backdrop.
       // Rendering onto that backdrop directly avoids applying paint twice,
       // including when the parent itself has premultiplied transparency.
