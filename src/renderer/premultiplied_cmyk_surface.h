@@ -48,6 +48,27 @@ struct PremultipliedCMYKSurface {
   shape[p]=uint8_t(std::min(255u,geometry+mul255(shape[p],255u-geometry)));
   return true;
  }
+ // Bridge for existing RGB rasterizers until they can emit native CMYK.
+ // Premultiplied RGB is unassociated before conversion to ink components.
+ bool import_rgba(const uint8_t* rgba,size_t stride){
+  if(!rgba||stride<size_t(width)*4||
+     ink.size()!=size_t(width)*height*5)return false;
+  for(unsigned y=0;y<height;++y)for(unsigned x=0;x<width;++x){
+   const size_t source=size_t(y)*stride+size_t(x)*4;
+   const size_t destination=(size_t(y)*width+x)*5;
+   const unsigned a=rgba[source+3];
+   const auto unpremultiply=[&](unsigned channel)->uint8_t{
+    return uint8_t(a?std::min(255u,
+       (unsigned(rgba[source+channel])*255u+a/2u)/a):0u);
+   };
+   unsigned converted[4]{};
+   from_rgb(unpremultiply(0),unpremultiply(1),unpremultiply(2),converted);
+   for(unsigned c=0;c<4;++c)
+    ink[destination+c]=uint8_t(mul255(converted[c],a));
+   ink[destination+4]=uint8_t(a);
+  }
+  return true;
+ }
  bool to_rgba(std::vector<uint8_t>& rgba) const {
   if(ink.size()!=size_t(width)*height*5)return false;
   rgba.assign(size_t(width)*height*4,0);
