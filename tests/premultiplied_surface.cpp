@@ -23,5 +23,19 @@ int main(){
  const uint8_t broken_white[3]={255,100,255};
  if(surface.set_reconstructed(0,0,broken_black,broken_white))return 6;
  if(surface.resize(4096,4096))return 7;
+ // Semi-transparent destination: blend modes must use unassociated
+ // backdrop color for B(), then return premultiplied output.
+ for(unsigned mode:{0u,1u,2u}){
+  rinpdf::renderer::PremultipliedSurface layered;
+  if(!layered.resize(1,1))return 8;
+  if(!layered.blend_pixel(0,0,255,0,0,128,0))return 9;
+  if(!layered.blend_pixel(0,0,0,0,255,128,mode))return 10;
+  const auto& p=layered.pixels;
+  if(p[3]<190||p[3]>193)return 11;
+  if(mode==0&&!(p[0]>=62&&p[0]<=65&&p[2]>=127&&p[2]<=129))return 12;
+  if(mode==1&&!(p[0]>=62&&p[0]<=65&&p[2]>=62&&p[2]<=65))return 13;
+  if(mode==2&&!(p[0]>=62&&p[0]<=65&&p[2]>=127&&p[2]<=129))return 14;
+  if(p[0]>p[3]||p[1]>p[3]||p[2]>p[3])return 15;
+ }
  return 0;
 }
