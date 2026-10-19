@@ -595,7 +595,8 @@ struct Reader {
        return true;
       }
       if(!indexed&&bits->integer!=8&&
-         !(channels==1&&bits->integer==1))return false;
+         !(channels==1&&(bits->integer==1||bits->integer==2||
+                         bits->integer==4)))return false;
       // Support a same-size, 8-bit grayscale SMask image. Restrict the
       // initial implementation to raw/Flate data without predictors.
       if(const Value* smask=get(range.dictionary,"SMask")){
