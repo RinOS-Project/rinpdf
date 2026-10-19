@@ -719,7 +719,9 @@ bool evaluate_calculator_tokens(const std::vector<std::string>& parsed_tokens,
    }
    if(stack.size()!=outputs)return false;
    for(const CalcValue& value:stack)
-    if(value.kind==1||value.kind==3)return false;
+    if(value.kind==1||value.kind==3||
+       !std::isfinite(value.number)||std::abs(value.number)>1e12)
+     return false;
    for(unsigned j=0;j<outputs;++j)result[j]=stack[j].number;
  return true;
 }
