@@ -1,4 +1,5 @@
 #include "rectangles.h"
+#include "premultiplied_surface.h"
 #include "path_mask.h"
 #include "cubic_arc.h"
 #include "cubic_dash.h"
@@ -373,30 +374,16 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
       for(size_t i=3;i<black.size();i+=4)black[i]=255;
       if(!draw_form(black.data(),rowbytes)||
          !draw_form(white.data(),rowbytes))return false;
+      PremultipliedSurface group;
+      if(!group.resize(width,height))return false;
       for(unsigned y=0;y<height;++y){
        for(unsigned x=0;x<width;++x){
-        const size_t source=(size_t(y)*width+x)*4;
-        const size_t dest=size_t(y)*stride+size_t(x)*4;
-        // Alpha is a property of the pixel, not of each RGB channel.
-        // Black/white backdrop reconstruction can differ by one unit
-        // through rounding, so choose a shared median alpha.
-        unsigned a3[3]{};
-        for(unsigned c=0;c<3;++c){
-         const int estimate=255+int(black[source+c])-int(white[source+c]);
-         a3[c]=unsigned(std::clamp(estimate,0,255));
-        }
-        std::sort(std::begin(a3),std::end(a3));
-        if(a3[2]-a3[0]>2)return false;
-        const unsigned alpha=a3[1];
-        for(unsigned c=0;c<3;++c){
-         const unsigned dst=rgba[dest+c];
-         const unsigned merged=unsigned(black[source+c])+
-                                ((255-alpha)*dst+127)/255;
-         rgba[dest+c]=uint8_t(std::min(merged,255u));
-        }
-        rgba[dest+3]=255;
+        const size_t i=(size_t(y)*width+x)*4;
+        if(!group.set_reconstructed(x,y,black.data()+i,white.data()+i))
+         return false;
        }
       }
+      if(!group.composite_over_opaque(rgba,stride))return false;
      }else if(!draw_form(rgba,stride))return false;
      continue;
     }
