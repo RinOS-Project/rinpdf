@@ -17,7 +17,7 @@ struct Memory {
 };
 tsize_t read_bytes(thandle_t handle,tdata_t dest,tsize_t count){
  auto& m=*static_cast<Memory*>(handle);
- if(count<0)return 0;
+ if(count<0||m.offset>m.size)return 0;
  const size_t n=std::min(size_t(count),m.size-m.offset);
  if(n)std::memcpy(dest,m.bytes+m.offset,n);
  m.offset+=n;return tsize_t(n);
@@ -81,7 +81,9 @@ bool decode_ccitt_image(const uint8_t* data,size_t length,
  tag(259,3,k==-1?4:3);tag(262,3,0);
  tag(266,3,1);tag(273,4,uint32_t(header));
  tag(277,3,1);tag(278,4,height);tag(279,4,uint32_t(length));
- tag(292,4,byte_align?4:0);
+ // Group 3 uses T4Options (292), while Group 4 uses T6Options
+ // (293). EncodedByteAlign applies only to Group 3 fax data.
+ tag(k==-1?293:292,4,k==-1?0u:(byte_align?4u:0u));
  put32(tiff,10+tags*12,0);
  std::memcpy(tiff.data()+header,data,length);
  Memory memory{tiff.data(),tiff.size()};
