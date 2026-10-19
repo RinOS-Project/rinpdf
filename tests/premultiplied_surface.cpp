@@ -37,5 +37,14 @@ int main(){
   if(mode==2&&!(p[0]>=127&&p[0]<=129&&p[2]>=127&&p[2]<=129))return 14;
   if(p[0]>p[3]||p[1]>p[3]||p[2]>p[3])return 15;
  }
+ // Coverage/shape differs from opacity: an invisible paint can
+ // contribute shape without changing premultiplied color alpha.
+ rinpdf::renderer::PremultipliedSurface shapes,child;
+ if(!shapes.resize(1,1)||!child.resize(1,1))return 16;
+ if(!child.mark_shape(0,0,255)||!child.fill_pixel(0,0,255,0,0,0))
+  return 17;
+ if(child.shape[0]!=255||child.pixels[3]!=0)return 18;
+ if(!child.composite_over(shapes)||shapes.shape[0]!=255||
+    shapes.pixels[3]!=0)return 19;
  return 0;
 }
