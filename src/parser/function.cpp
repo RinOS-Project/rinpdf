@@ -512,9 +512,12 @@ bool evaluate_calculator_tokens(const std::vector<std::string>& parsed_tokens,
      if(n<0||n!=std::floor(n)||n>double(stack.size())||
         stack.size()+size_t(n)>64)return false;
      const size_t count=size_t(n);
-     const std::vector<CalcValue> copied(stack.end()-count,stack.end());
-     stack.insert(stack.end(),copied.begin(),copied.end());
-     
+     // Preserve indices while appending: reserve prevents reallocation and
+     // the source elements precede every newly appended element.
+     stack.reserve(64);
+     const size_t start=stack.size()-count;
+     for(size_t i=0;i<count;++i)
+      stack.push_back(stack[start+i]);
      continue;
     }
     if(opcode==uint8_t(CalculatorOp::Op3)){
