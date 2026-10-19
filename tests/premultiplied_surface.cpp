@@ -122,5 +122,20 @@ int main(){
     ko.pixels[2]!=255||ko.pixels[3]!=255)return 47;
  if(!ko.composite_backdrop_difference_over(host,host)||
     host.pixels!=ko.pixels)return 48;
+ // A non-isolated group cannot overwrite a parent that changed after
+ // the backdrop snapshot was taken.
+ rinpdf::renderer::PremultipliedSurface stale_parent,stale_backdrop,stale_group;
+ if(!stale_parent.resize(1,1)||!stale_backdrop.resize(1,1)||
+    !stale_group.resize(1,1))return 49;
+ if(!stale_parent.fill_pixel(0,0,120,80,40,255)||
+    !stale_backdrop.copy_backdrop_from(stale_parent)||
+    !stale_group.copy_backdrop_from(stale_parent))return 50;
+ if(!stale_group.mark_shape(0,0,255)||
+    !stale_group.fill_pixel(0,0,255,0,0,128))return 51;
+ if(!stale_parent.fill_pixel(0,0,0,0,255,255))return 52;
+ const auto saved=stale_parent.pixels;
+ if(stale_group.composite_backdrop_difference_over(stale_parent,stale_backdrop))
+  return 53;
+ if(stale_parent.pixels!=saved)return 54;
  return 0;
 }
