@@ -419,6 +419,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
              size_t(width)*height*4)return false;
       PremultipliedSurface object;
       if(!object.resize(width,height))return false;
+      object.grayscale_group=transparent_target->grayscale_group;
       object.pixels=transparent_target->knockout_backdrop;
       const size_t pitch=size_t(width)*4;
       std::vector<uint8_t> scratch(pitch*height,0);
@@ -433,6 +434,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
       // knockout group. Render its internal paints normally first.
       PremultipliedSurface object;
       if(!object.resize(width,height))return false;
+      object.grayscale_group=transparent_target->grayscale_group;
       const size_t rowbytes=size_t(width)*4;
       std::vector<uint8_t> scratch(rowbytes*height,0);
       // The Form is painted as one knockout object, but its own
@@ -453,6 +455,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
        return false;
       PremultipliedSurface object;
       if(!object.resize(width,height))return false;
+      object.grayscale_group=transparent_target->grayscale_group;
       if(transparent_target->knockout_nonisolated){
        if(transparent_target->knockout_backdrop.size()!=size_t(width)*height*4)
         return false;
@@ -540,6 +543,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
          return false;
         PremultipliedSurface object;
         if(!object.resize(width,height))return false;
+      object.grayscale_group=transparent_target->grayscale_group;
         object.pixels=transparent_target->knockout_backdrop;
         if(!group.composite_over(object)||
            !transparent_target->composite_nonisolated_knockout_object(object))
