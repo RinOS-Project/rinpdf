@@ -105,3 +105,5 @@ test('rinpdf-isolated-transparency-group',executable('rinpdf-isolated-transparen
 test('rinpdf-premultiplied-surface',executable('rinpdf-premultiplied-surface','premultiplied_surface.cpp',dependencies:rinpdf_dep))
 
 test('rinpdf-direct-transparent-fill',executable('rinpdf-direct-transparent-fill','direct_transparent_fill.cpp',dependencies:rinpdf_dep))
+
+test('rinpdf-direct-transparent-image',executable('rinpdf-direct-transparent-image','direct_transparent_image.cpp',dependencies:rinpdf_dep))
