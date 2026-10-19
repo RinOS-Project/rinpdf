@@ -410,11 +410,12 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
       scoped_forms=forms;
      }
      auto draw_form=[&](uint8_t* target,size_t target_stride,
-                        PremultipliedSurface* surface=nullptr)->bool{
+                        PremultipliedSurface* surface=nullptr,
+                        PremultipliedCMYKSurface* ink=nullptr)->bool{
       return render_rectangles_box_with_fonts(
          reinterpret_cast<const uint8_t*>(stream.data()),stream.size(),
          width,height,target,target_stride,box,scoped_fonts,properties,
-         scoped_images,scoped_forms,false,form_depth+1,form_graphics,surface);
+         scoped_images,scoped_forms,false,form_depth+1,form_graphics,surface,ink);
      };
      if(fm.knockout_transparency_group&&!fm.transparency_group)
       return false;
@@ -561,17 +562,17 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
       if(group.cmyk_group&&group.knockout)return false;
       const size_t rowbytes=size_t(width)*4;
       std::vector<uint8_t> scratch(rowbytes*height,0);
-      if(!draw_form(scratch.data(),rowbytes,&group))return false;
       if(group.cmyk_group){
-       // Bridge the current RGB rasterizer into four-channel CMYK storage.
-       // Once paint operators emit ink directly this conversion is removed.
+       // Native CMYK rasterization, currently for vector fills/strokes.
+       // Unsupported child operations fail closed instead of being lost.
        PremultipliedCMYKSurface ink_group;
        std::vector<uint8_t> converted;
        if(!ink_group.resize(width,height)||
-          !ink_group.import_rgba(group.pixels.data(),rowbytes)||
+          !draw_form(scratch.data(),rowbytes,nullptr,&ink_group)||
           !ink_group.to_rgba(converted))return false;
        group.pixels=std::move(converted);
-      }
+       group.shape=std::move(ink_group.shape);
+      }else if(!draw_form(scratch.data(),rowbytes,&group))return false;
       const unsigned external_mode=transparent_blend_mode();
       if(transparent_target){
        if(transparent_target->knockout_nonisolated){
