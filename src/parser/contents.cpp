@@ -1124,10 +1124,14 @@ struct Reader {
       (knockout&&knockout->kind!=Value::Kind::Boolean))
     return false;
    if(const Value* cs=get(group,"CS")){
-    // The existing compositor uses RGB group colors and does not yet
-    // support ICCBased, CalRGB or custom group blend spaces.
-    if(cs->kind!=Value::Kind::Name||cs->text!="DeviceRGB")
-     return false;
+    // Resolve an indirect color-space name, but reject other families
+    // rather than interpreting them as DeviceRGB.
+    Value color_space;
+    if(cs->kind==Value::Kind::Reference){
+     if(!object(*cs,color_space))return false;
+    }else color_space=*cs;
+    if(color_space.kind!=Value::Kind::Name||
+       color_space.text!="DeviceRGB")return false;
     form.group_color_space="DeviceRGB";
    }
    form.transparency_group=true;
