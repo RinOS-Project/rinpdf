@@ -93,3 +93,7 @@ test('rinpdf-cmyk-decode-image',executable('rinpdf-cmyk-decode-image','cmyk_deco
 test('rinpdf-image-color-key',executable('rinpdf-image-color-key','image_color_key.cpp',dependencies:rinpdf_dep))
 
 test('rinpdf-smask-decode-image',executable('rinpdf-smask-decode-image','smask_decode_image.cpp',dependencies:rinpdf_dep))
+
+if jpeg_dep.found()
+ test('rinpdf-jpeg-smask-image',executable('rinpdf-jpeg-smask-image','jpeg_smask_image.cpp',dependencies:[rinpdf_dep,jpeg_dep]))
+endif
