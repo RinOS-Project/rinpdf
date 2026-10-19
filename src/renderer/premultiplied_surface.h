@@ -54,6 +54,20 @@ struct PremultipliedSurface {
   pixels[index+3]=uint8_t(alpha);
   return true;
  }
+ // Source-over another premultiplied surface; preserve both alphas.
+ bool composite_over(PremultipliedSurface& destination) const {
+  if(width!=destination.width||height!=destination.height||
+     pixels.size()!=destination.pixels.size())return false;
+  for(size_t i=0;i<pixels.size();i+=4){
+   const unsigned remaining=255u-pixels[i+3];
+   for(unsigned c=0;c<3;++c)
+    destination.pixels[i+c]=uint8_t(std::min(255u,
+       unsigned(pixels[i+c])+mul255(destination.pixels[i+c],remaining)));
+   destination.pixels[i+3]=uint8_t(std::min(255u,
+       unsigned(pixels[i+3])+mul255(destination.pixels[i+3],remaining)));
+  }
+  return true;
+ }
  bool composite_over_opaque(uint8_t* dst,size_t stride) const {
   if(!dst||stride<size_t(width)*4||pixels.size()!=size_t(width)*height*4)
    return false;
