@@ -1766,6 +1766,14 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
     alpha=(alpha*unsigned(std::lround(stroke_alpha*255))+127)/255;
     if(clip_mask!=nullptr)alpha=(alpha*(*clip_mask)[i]+127)/255;
     if(!alpha&&!(transparent_target&&transparent_target->knockout))continue;
+    if(cmyk_target){
+     unsigned geometry=(hits*255+2)/4;
+     if(clip_mask)geometry=(geometry*(*clip_mask)[i]+127)/255;
+     if(!cmyk_target->paint_rgb(x,y,cr,cg,cb,uint8_t(alpha),
+                                transparent_blend_mode(),uint8_t(geometry)))
+      return false;
+     continue;
+    }
     if(transparent_target){
      unsigned geometry=(hits*255+2)/4;
      if(clip_mask)geometry=(geometry*(*clip_mask)[i]+127)/255;
@@ -1806,6 +1814,14 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
     alpha=(alpha*unsigned(std::lround(fill_alpha*255))+127)/255;
     if(clip_mask!=nullptr)alpha=(alpha*(*clip_mask)[i]+127)/255;
     if(!alpha&&!(transparent_target&&transparent_target->knockout))continue;
+    if(cmyk_target){
+     unsigned geometry=antialias?coverage[i]:255;
+     if(clip_mask)geometry=(geometry*(*clip_mask)[i]+127)/255;
+     if(!cmyk_target->paint_rgb(x,y,cr,cg,cb,uint8_t(alpha),
+                                transparent_blend_mode(),uint8_t(geometry)))
+      return false;
+     continue;
+    }
     if(transparent_target){
      unsigned geometry=antialias?coverage[i]:255;
      if(clip_mask)geometry=(geometry*(*clip_mask)[i]+127)/255;
