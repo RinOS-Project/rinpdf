@@ -61,5 +61,29 @@ int main(){
      overlap_pixels[i+2]<158||overlap_pixels[i+2]>162||
      overlap_pixels[i+3]!=255)return 6;
  }
+ // Multiply and Screen are now permitted inside isolated groups.
+ // The initial opaque gray makes their results unambiguous.
+ rinpdf::parser::PageGraphicsState multiply,screen;
+ multiply.blend_mode="Multiply";multiply.has_blend_mode=true;
+ screen.blend_mode="Screen";screen.has_blend_mode=true;
+ states.emplace("Mul",multiply);
+ states.emplace("Scr",screen);
+ for(const auto& mode:{"Mul","Scr"}){
+  const std::string commands=std::string("0.5 g 0 0 8 8 re f /")+
+                             mode+" gs 0.5 g 0 0 8 8 re f";
+  form.content.assign(commands.begin(),commands.end());
+  forms["Group"]=form;
+  const std::string only_group="/Group Do";
+  std::vector<uint8_t> result(8*8*4);
+  if(!rinpdf::renderer::render_rectangles_box_with_fonts(
+       reinterpret_cast<const uint8_t*>(only_group.data()),only_group.size(),
+       8,8,result.data(),32,{0,0,8,8},{},{},{},forms,true,0,states))
+   return 7;
+  const unsigned expected=std::string(mode)=="Mul"?64u:192u;
+  for(size_t i=0;i<result.size();i+=4)
+   if(result[i]<expected-2||result[i]>expected+2||
+      result[i+1]!=result[i]||result[i+2]!=result[i]||
+      result[i+3]!=255)return 8;
+ }
  return 0;
 }
