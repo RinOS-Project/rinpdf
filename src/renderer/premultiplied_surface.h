@@ -115,6 +115,28 @@ struct PremultipliedSurface {
   pixels[index+3]=uint8_t(alpha);
   return true;
  }
+ // Apply an entire rendered object to a knockout group as one unit.
+ // The object's geometric shape removes previous objects; its color and
+ // alpha are added once, avoiding per-primitive knockout inside nested Forms.
+ bool composite_knockout_object(const PremultipliedSurface& object){
+  if(!knockout||width!=object.width||height!=object.height||
+     pixels.size()!=object.pixels.size()||
+     shape.size()!=object.shape.size()||
+     pixels.size()!=size_t(width)*height*4||
+     shape.size()!=size_t(width)*height)return false;
+  for(size_t p=0;p<shape.size();++p){
+   const unsigned coverage=object.shape[p];
+   if(!coverage)continue;
+   const unsigned keep=255u-coverage;
+   const size_t i=p*4;
+   for(unsigned c=0;c<4;++c)
+    pixels[i+c]=uint8_t(std::min(255u,
+       mul255(pixels[i+c],keep)+unsigned(object.pixels[i+c])));
+   shape[p]=uint8_t(std::min(255u,
+       coverage+mul255(shape[p],keep)));
+  }
+  return true;
+ }
  // Source-over another premultiplied surface; preserve both alphas.
  bool composite_over(PremultipliedSurface& destination) const {
   if(width!=destination.width||height!=destination.height||
