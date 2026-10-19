@@ -374,6 +374,7 @@ bool evaluate_calculator_tokens(const std::vector<std::string>& parsed_tokens,
  if(instructions){
   // Reject malformed IR before execution; do not fall back to textual
   // interpretation for compiled programs.
+  std::vector<size_t> brace_stack;
   for(size_t i=0;i<instructions->size();++i){
    const auto& instruction=(*instructions)[i];
    if(instruction.kind>4)return false;
@@ -394,6 +395,14 @@ bool evaluate_calculator_tokens(const std::vector<std::string>& parsed_tokens,
    if(instruction.kind==1&&
       (instruction.number!=0.0&&instruction.number!=1.0))
     return false;
+   if(instruction.kind==2){
+    if(brace_stack.size()>=8)return false;
+    brace_stack.push_back(i);
+   }else if(instruction.kind==3){
+    if(brace_stack.empty()||
+       brace_stack.back()!=instruction.matching_brace)return false;
+    brace_stack.pop_back();
+   }
    if(instruction.kind==2||instruction.kind==3){
     if(instruction.matching_brace>=instructions->size())return false;
     const auto& other=(*instructions)[instruction.matching_brace];
@@ -401,6 +410,7 @@ bool evaluate_calculator_tokens(const std::vector<std::string>& parsed_tokens,
        other.kind!=(instruction.kind==2?3:2))return false;
    }
   }
+  if(!brace_stack.empty())return false;
  }
  const auto& tokens=parsed_tokens;
  struct CalcValue { double number; uint8_t kind; size_t procedure; };
