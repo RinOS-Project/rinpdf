@@ -451,14 +451,12 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
       // This avoids exposing prior knockout objects to the child group.
       if(blend_mode!="Normal"||fm.knockout_transparency_group)
        return false;
-      PremultipliedSurface object,original;
-      if(!object.resize(width,height)||!original.resize(width,height))
-       return false;
+      PremultipliedSurface object;
+      if(!object.resize(width,height))return false;
       if(transparent_target->knockout_nonisolated){
        if(transparent_target->knockout_backdrop.size()!=size_t(width)*height*4)
         return false;
        object.pixels=transparent_target->knockout_backdrop;
-       original.pixels=transparent_target->knockout_backdrop;
       }
       const size_t pitch=size_t(width)*4;
       std::vector<uint8_t> scratch(pitch*height,0);
