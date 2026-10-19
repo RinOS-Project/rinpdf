@@ -14,11 +14,21 @@ struct PremultipliedSurface {
  // Geometric group shape is distinct from composited opacity.
  std::vector<uint8_t> shape;
  bool knockout=false;
+ bool knockout_nonisolated=false;
+ std::vector<uint8_t> knockout_backdrop;
  bool resize(unsigned w,unsigned h){
   if(!w||!h||size_t(w)*h>1048576u)return false;
   width=w;height=h;
   pixels.assign(size_t(w)*h*4,0);
   shape.assign(size_t(w)*h,0);
+  return true;
+ }
+ // Start a non-isolated knockout group with its parent's backdrop.
+ bool begin_nonisolated_knockout(const PremultipliedSurface& parent){
+  if(!copy_backdrop_from(parent))return false;
+  knockout=true;
+  knockout_nonisolated=true;
+  knockout_backdrop=pixels;
   return true;
  }
  // Union geometric coverage independently of source opacity.
@@ -64,6 +74,20 @@ struct PremultipliedSurface {
   if(mode>2||(knockout&&mode!=0)||x>=width||y>=height||
      pixels.size()!=size_t(width)*height*4)return false;
   const size_t i=(size_t(y)*width+x)*4;
+  if(knockout_nonisolated){
+   if(mode!=0||knockout_backdrop.size()!=pixels.size()||
+      source_alpha>geometry)return false;
+   const unsigned keep=255u-geometry;
+   const unsigned backdrop_weight=geometry-source_alpha;
+   const unsigned src[3]={red,green,blue};
+   for(unsigned c=0;c<4;++c){
+    const unsigned source=c==3?source_alpha:mul255(src[c],source_alpha);
+    pixels[i+c]=uint8_t(std::min(255u,
+      mul255(pixels[i+c],keep)+
+      mul255(knockout_backdrop[i+c],backdrop_weight)+source));
+   }
+   return true;
+  }
   if(knockout){
    const unsigned remaining=255u-geometry;
    for(unsigned c=0;c<4;++c)
