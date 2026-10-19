@@ -1,5 +1,6 @@
 #include "rectangles.h"
 #include "premultiplied_surface.h"
+#include "premultiplied_cmyk_surface.h"
 #include "path_mask.h"
 #include "cubic_arc.h"
 #include "cubic_dash.h"
@@ -554,6 +555,16 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
       const size_t rowbytes=size_t(width)*4;
       std::vector<uint8_t> scratch(rowbytes*height,0);
       if(!draw_form(scratch.data(),rowbytes,&group))return false;
+      if(group.cmyk_group){
+       // Bridge the current RGB rasterizer into four-channel CMYK storage.
+       // Once paint operators emit ink directly this conversion is removed.
+       PremultipliedCMYKSurface ink_group;
+       std::vector<uint8_t> converted;
+       if(!ink_group.resize(width,height)||
+          !ink_group.import_rgba(group.pixels.data(),rowbytes)||
+          !ink_group.to_rgba(converted))return false;
+       group.pixels=std::move(converted);
+      }
       const unsigned external_mode=transparent_blend_mode();
       if(transparent_target){
        if(transparent_target->knockout_nonisolated){
