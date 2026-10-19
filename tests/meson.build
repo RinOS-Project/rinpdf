@@ -69,3 +69,5 @@ test('rinpdf-calculator-division-type',executable('rinpdf-calculator-division-ty
 test('rinpdf-function-sample-budget',executable('rinpdf-function-sample-budget','function_sample_budget.cpp',dependencies:rinpdf_dep))
 
 test('rinpdf-function-sample-validation',executable('rinpdf-function-sample-validation','function_sample_validation.cpp',dependencies:rinpdf_dep))
+
+test('rinpdf-image-decoder-bounds',executable('rinpdf-image-decoder-bounds','image_decoder_bounds.cpp',dependencies:rinpdf_dep))
