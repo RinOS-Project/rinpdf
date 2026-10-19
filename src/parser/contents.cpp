@@ -550,8 +550,31 @@ struct Reader {
       const unsigned channels=indexed?1:separation?device_inputs:lab?3:calibrated?calibrated:icc_channels?icc_channels:
         cs->text=="DeviceGray"?1:cs->text=="DeviceRGB"?3:
         cs->text=="DeviceCMYK"?4:0;
-      if(!channels||(!indexed&&bits->integer!=8&&channels!=1)||
-         get(range.dictionary,"Mask"))return false;
+      if(!channels||(!indexed&&bits->integer!=8&&channels!=1))
+       return false;
+      // Color-key masking compares original integer samples, before
+      // Decode and color-space conversion. Restrict it to 8-bit devices.
+      std::array<unsigned,8> mask_bounds{};
+      bool has_color_key=false;
+      if(const Value* mask=get(range.dictionary,"Mask")){
+       if(bits->integer!=8||indexed||separation||calibrated||lab||
+          icc_channels||cs->kind!=Value::Kind::Name||
+          (cs->text!="DeviceGray"&&cs->text!="DeviceRGB"&&
+           cs->text!="DeviceCMYK")||
+          get(range.dictionary,"SMask")||
+          mask->kind!=Value::Kind::Array||
+          mask->array.size()!=size_t(channels)*2)return false;
+       for(unsigned c=0;c<channels;++c){
+        for(unsigned j=0;j<2;++j){
+         const Value& v=mask->array[2*c+j];
+         if(v.kind!=Value::Kind::Integer||
+            v.integer<0||v.integer>255)return false;
+         mask_bounds[2*c+j]=unsigned(v.integer);
+        }
+        if(mask_bounds[2*c]>mask_bounds[2*c+1])return false;
+       }
+       has_color_key=true;
+      }
       // Apply DeviceGray/RGB/CMYK Decode independently by component.
       // Packed DeviceGray only admits normal or reversed endpoints.
       std::array<double,8> decode_endpoints{};
@@ -585,6 +608,21 @@ struct Reader {
         const double normalized=double(image.pixels[i])/255;
         image.pixels[i]=uint8_t(std::lround(
           255*std::clamp(lo+normalized*(hi-lo),0.0,1.0)));
+       }
+      };
+      auto apply_color_key=[&](){
+       if(!has_color_key)return;
+       const size_t pixels=size_t(image.width)*image.height;
+       image.alpha.assign(pixels,255);
+       for(size_t i=0;i<pixels;++i){
+        bool match=true;
+        for(unsigned c=0;c<channels;++c){
+         const unsigned value=image.pixels[i*channels+c];
+         if(value<mask_bounds[2*c]||value>mask_bounds[2*c+1]){
+          match=false;break;
+         }
+        }
+        if(match)image.alpha[i]=0;
        }
       };
       const size_t expected=size_t(w->integer)*size_t(h->integer)*channels;
@@ -674,6 +712,7 @@ struct Reader {
           !decode_dct_image(data+range.offset,range.length,
              unsigned(w->integer),unsigned(h->integer),channels,
              image.pixels)){return false;}
+       apply_color_key();
        apply_device_decode();
        return true;
       }
@@ -721,6 +760,7 @@ struct Reader {
                     (sample*255u+max_sample/2u)/max_sample);
         }
       }else image.pixels=std::move(decoded);
+      apply_color_key();
       apply_device_decode();
       if(indexed){
        std::vector<uint8_t> rgb(size_t(image.width)*image.height*3);
