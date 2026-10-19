@@ -1308,9 +1308,19 @@ struct Reader {
         else item.has_stroke_alpha=true;
        }
       }
-      // Other transparency features require separate compositing support.
-      if(get(state,"SMask")||get(state,"BM")||get(state,"AIS")||
-         get(state,"OP")||get(state,"op")){
+      // Explicit defaults are common in real ExtGState dictionaries.
+      // Accept them without claiming support for non-Normal blending.
+      if(const Value* blend=get(state,"BM")){
+       if(blend->kind!=Value::Kind::Name||blend->text!="Normal"){
+        active.erase(id);return false;
+       }
+      }
+      if(const Value* soft=get(state,"SMask")){
+       if(soft->kind!=Value::Kind::Name||soft->text!="None"){
+        active.erase(id);return false;
+       }
+      }
+      if(get(state,"AIS")||get(state,"OP")||get(state,"op")){
        active.erase(id);return false;
       }
       output.emplace(name,item);
