@@ -32,6 +32,14 @@ struct PremultipliedSurface {
   knockout_backdrop=pixels;
   return true;
  }
+ // DeviceGray groups can inherit a premultiplied backdrop without a
+ // color-space conversion only when that backdrop is already gray.
+ bool has_grayscale_backdrop() const {
+  if(pixels.size()!=size_t(width)*height*4)return false;
+  for(size_t i=0;i<pixels.size();i+=4)
+   if(pixels[i]!=pixels[i+1]||pixels[i]!=pixels[i+2])return false;
+  return true;
+ }
  // Union geometric coverage independently of source opacity.
  bool mark_shape(unsigned x,unsigned y,uint8_t coverage){
   if(x>=width||y>=height||shape.size()!=size_t(width)*height)
