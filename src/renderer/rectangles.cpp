@@ -96,7 +96,6 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
 
  // Explicit opt-in diagnostic font only: does not pretend to be Courier.
  auto diagnostic_show=[&](const std::vector<TextRun>& runs)->bool{
-  if(fill_alpha!=1||stroke_alpha!=1)return false;
   const auto it=fonts.find(selected_font);
   if(it==fonts.end()||it->second.base_font!="RinPDF-Diagnostic"||
      selected_font_size<=0||selected_font_size>1000||
@@ -138,7 +137,6 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
  // Restricted embedded TrueType rendering for explicitly WinAnsi encoded
  // simple fonts. Unknown mappings and transformed text fail closed.
  auto truetype_show=[&](const std::vector<TextRun>& runs)->bool{
-  if(fill_alpha!=1||stroke_alpha!=1)return false;
   const auto it=fonts.find(selected_font);
   if(it==fonts.end()||
      !(it->second.subtype=="TrueType"&&
@@ -175,6 +173,29 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
   if(!std::isfinite(new_x)||!std::isfinite(new_y)||
      std::abs(new_x)>10000000||std::abs(new_y)>10000000)return false;
   text_x=new_x;text_y=new_y;return true;
+ };
+ // Apply nonstroking opacity to both supported font renderers.
+ // Rendering over a snapshot preserves glyph coverage and existing antialiasing.
+ auto paint_text=[&](auto&& draw)->bool{
+  if(fill_alpha==1)return draw();
+  const size_t row_bytes=size_t(width)*4;
+  std::vector<uint8_t> original(row_bytes*height);
+  for(unsigned y=0;y<height;++y)
+   std::memcpy(original.data()+size_t(y)*row_bytes,
+               rgba+size_t(y)*stride,row_bytes);
+  if(!draw())return false;
+  const unsigned opacity=unsigned(std::lround(fill_alpha*255));
+  for(unsigned y=0;y<height;++y){
+   uint8_t* pixel=rgba+size_t(y)*stride;
+   const uint8_t* before=original.data()+size_t(y)*row_bytes;
+   for(size_t x=0;x<row_bytes;x+=4){
+    for(unsigned c=0;c<3;++c)
+     pixel[x+c]=uint8_t((unsigned(pixel[x+c])*opacity+
+                          unsigned(before[x+c])*(255-opacity)+127)/255);
+    pixel[x+3]=before[x+3];
+   }
+  }
+  return true;
  };
  // Share PDF tokenization rules with the object parser. Whitespace inside
  // literal strings, nested parentheses and hex-string bytes stay atomic.
@@ -400,9 +421,9 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
    if(selected==fonts.end())return false;
    double advance=0;
    if(selected->second.base_font=="RinPDF-Diagnostic")
-    {if(!diagnostic_show(runs))return false;continue;}
+    {if(!paint_text([&](){return diagnostic_show(runs);}))return false;continue;}
    if(!selected->second.embedded_truetype.empty())
-    {if(!truetype_show(runs))return false;continue;}
+    {if(!paint_text([&](){return truetype_show(runs);}))return false;continue;}
    if(!courier_text_advance(selected->second.base_font,runs,selected_font_size,
                             char_spacing,word_spacing,horizontal_scale,advance)||
       !advance_text_origin(advance,text_a,text_b,text_x,text_y))return false;
@@ -481,12 +502,12 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
    if(selected==fonts.end())return false;
    double advance=0;
    if(selected->second.base_font=="RinPDF-Diagnostic"){
-    if(!diagnostic_show({{false,pending_text,0}}))return false;
+    if(!paint_text([&](){return diagnostic_show({{false,pending_text,0}});}))return false;
     pending_text.clear();has_pending_text=false;
     continue;
    }
    if(!selected->second.embedded_truetype.empty()){
-    if(!truetype_show({{false,pending_text,0}}))return false;
+    if(!paint_text([&](){return truetype_show({{false,pending_text,0}});}))return false;
     pending_text.clear();has_pending_text=false;
     continue;
    }
@@ -538,7 +559,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
    }
    stack.clear();
    line_x=text_x=nx;line_y=text_y=ny;
-   if(!truetype_show({{false,pending_text,0}}))return false;
+   if(!paint_text([&](){return truetype_show({{false,pending_text,0}});}))return false;
    pending_text.clear();has_pending_text=false;
   }else if(word=="i"){
    // The graphics-state flatness parameter is device dependent.
