@@ -264,14 +264,25 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
     // Dispatch image painting through the normal Do branch.
     const auto form=forms.find(pending_image);
     if(form!=forms.end()){
-     if(form_depth>=8||fill_alpha!=1||stroke_alpha!=1)return false;
+     if(form_depth>=8)return false;
      // A recursive call begins with the current page pixels and a fresh
      // graphics state. Do not attempt nested forms or inherited clipping.
      if(clip_mask||clip.x0||clip.y0||clip.x1!=width||clip.y1!=height||
         !path.empty()||!polygons.empty())return false;
      const auto& fm=form->second;
      auto number_text=[](double value){return std::to_string(value);};
-     std::string stream="q ";
+     // Each recursive Form starts with fresh state, so pass its inherited
+     // nonstroking/stroking opacity through an explicit internal gs entry.
+     GraphicsStateResources form_graphics=graphic_states;
+     std::string inherited_name="RinPDFFormInheritedAlpha";
+     while(form_graphics.count(inherited_name))inherited_name+="_";
+     parser::PageGraphicsState inherited;
+     inherited.fill_alpha=fill_alpha;
+     inherited.stroke_alpha=stroke_alpha;
+     inherited.has_fill_alpha=true;
+     inherited.has_stroke_alpha=true;
+     form_graphics.emplace(inherited_name,inherited);
+     std::string stream="q /"+inherited_name+" gs ";
      // Form XObjects inherit the caller's graphics state. The recursive
      // renderer starts fresh, so serialize supported state explicitly.
      for(double v:{red,green,blue})stream+=number_text(v)+" ";
@@ -329,7 +340,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      if(!render_rectangles_box_with_fonts(
            reinterpret_cast<const uint8_t*>(stream.data()),stream.size(),
            width,height,rgba,stride,box,scoped_fonts,properties,scoped_images,
-           scoped_forms,false,form_depth+1))
+           scoped_forms,false,form_depth+1,form_graphics))
       return false;
      continue;
     }
