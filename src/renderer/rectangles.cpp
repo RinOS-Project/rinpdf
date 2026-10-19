@@ -96,6 +96,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
 
  // Explicit opt-in diagnostic font only: does not pretend to be Courier.
  auto diagnostic_show=[&](const std::vector<TextRun>& runs)->bool{
+  if(fill_alpha!=1||stroke_alpha!=1)return false;
   const auto it=fonts.find(selected_font);
   if(it==fonts.end()||it->second.base_font!="RinPDF-Diagnostic"||
      selected_font_size<=0||selected_font_size>1000||
@@ -137,6 +138,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
  // Restricted embedded TrueType rendering for explicitly WinAnsi encoded
  // simple fonts. Unknown mappings and transformed text fail closed.
  auto truetype_show=[&](const std::vector<TextRun>& runs)->bool{
+  if(fill_alpha!=1||stroke_alpha!=1)return false;
   const auto it=fonts.find(selected_font);
   if(it==fonts.end()||
      !(it->second.subtype=="TrueType"&&
@@ -239,7 +241,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
     // Dispatch image painting through the normal Do branch.
     const auto form=forms.find(pending_image);
     if(form!=forms.end()){
-     if(form_depth>=8)return false;
+     if(form_depth>=8||fill_alpha!=1||stroke_alpha!=1)return false;
      // A recursive call begins with the current page pixels and a fresh
      // graphics state. Do not attempt nested forms or inherited clipping.
      if(clip_mask||clip.x0||clip.y0||clip.x1!=width||clip.y1!=height||
