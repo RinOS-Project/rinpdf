@@ -64,5 +64,18 @@ int main() {
  malformed.instructions[0].kind=1;
  malformed.instructions[0].number=2.0;
  ok=(!evaluate_calculator_function(malformed,0.0,1,&untouched)&&untouched==42.0)&&ok;
+ // Compiled procedure braces must form properly nested, noncrossing pairs.
+ ok=expect("{ pop true { 3 } if }",true,3.0)&&ok;
+ CalculatorProgram crossing;
+ rinpdf::parser::CalculatorInstruction open0,open1,close2,close3;
+ open0.kind=2;open0.matching_brace=2;
+ open1.kind=2;open1.matching_brace=3;
+ close2.kind=3;close2.matching_brace=0;
+ close3.kind=3;close3.matching_brace=1;
+ crossing.instructions={open0,open1,close2,close3};
+ untouched=42.0;
+ ok=(!evaluate_calculator_function(crossing,0.0,1,&untouched)&&untouched==42.0)&&ok;
+ crossing.instructions.pop_back();
+ ok=(!evaluate_calculator_function(crossing,0.0,1,&untouched)&&untouched==42.0)&&ok;
  return ok?0:1;
 }
