@@ -22,6 +22,17 @@ int main(){
  pixels={1};
  if(!rejected(rinpdf::parser::decode_ccitt_image(
       malformed,sizeof(malformed),1,1,2,false,false,pixels),"CCITT K"))return 1;
+ // Neither CCITT Group 3 nor Group 4 may accept truncated fax data.
+ // Both must clear a pre-existing output on failure.
+ pixels={1};
+ if(!rejected(rinpdf::parser::decode_ccitt_image(
+      malformed,sizeof(malformed),16,16,-1,false,false,pixels),"truncated Group 4"))return 1;
+ pixels={1};
+ if(!rejected(rinpdf::parser::decode_ccitt_image(
+      malformed,sizeof(malformed),16,16,0,true,false,pixels),"truncated Group 3"))return 1;
+ pixels={1};
+ if(!rejected(rinpdf::parser::decode_ccitt_image(
+      malformed,sizeof(malformed),0,16,-1,false,false,pixels),"zero CCITT width"))return 1;
  pixels={1};
  if(!rejected(rinpdf::parser::decode_dct_image(
       malformed,sizeof(malformed),1,1,4,pixels),"unsupported JPEG channels"))return 1;
