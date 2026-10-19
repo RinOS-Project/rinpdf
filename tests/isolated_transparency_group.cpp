@@ -85,5 +85,25 @@ int main(){
       result[i+1]!=result[i]||result[i+2]!=result[i]||
       result[i+3]!=255)return 8;
  }
+ // A group's external blend mode acts on the complete group result,
+ // not on the first internal paint. White at 50% over gray is unchanged
+ // with Multiply and becomes approximately 192 with Screen.
+ const std::string white_group="/Half gs 1 g 0 0 8 8 re f";
+ form.content.assign(white_group.begin(),white_group.end());
+ forms["Group"]=form;
+ for(const auto& entry:std::vector<std::pair<std::string,unsigned>>{
+       {"Mul",128u},{"Scr",192u}}){
+  const std::string content="0.5 g 0 0 8 8 re f /"+
+       entry.first+" gs /Group Do";
+  std::vector<uint8_t> result(8*8*4);
+  if(!rinpdf::renderer::render_rectangles_box_with_fonts(
+        reinterpret_cast<const uint8_t*>(content.data()),content.size(),
+        8,8,result.data(),32,{0,0,8,8},{},{},{},forms,true,0,states))
+   return 9;
+  for(size_t i=0;i<result.size();i+=4)
+   if(result[i]<entry.second-2||result[i]>entry.second+2||
+      result[i+1]!=result[i]||result[i+2]!=result[i]||
+      result[i+3]!=255)return 10;
+ }
  return 0;
 }
