@@ -115,6 +115,40 @@ struct PremultipliedSurface {
   pixels[index+3]=uint8_t(alpha);
   return true;
  }
+ // Snapshot the parent's premultiplied backdrop without inheriting its
+ // accumulated object shape. A non-isolated group needs the colors/alpha
+ // of its parent, while its own shape starts empty.
+ bool copy_backdrop_from(const PremultipliedSurface& parent){
+  if(width!=parent.width||height!=parent.height||
+     pixels.size()!=size_t(width)*height*4||
+     parent.pixels.size()!=pixels.size()||
+     shape.size()!=size_t(width)*height)return false;
+  pixels=parent.pixels;
+  std::fill(shape.begin(),shape.end(),0);
+  return true;
+ }
+ // Track the group's contribution separately from the inherited backdrop.
+ // Only Normal source-over is currently valid for this difference.
+ bool composite_backdrop_difference_over(
+     PremultipliedSurface& parent,const PremultipliedSurface& backdrop) const {
+  if(width!=parent.width||height!=parent.height||
+     width!=backdrop.width||height!=backdrop.height||
+     pixels.size()!=parent.pixels.size()||
+     pixels.size()!=backdrop.pixels.size()||
+     shape.size()!=parent.shape.size()||
+     shape.size()!=size_t(width)*height)return false;
+  // A non-isolated Normal group already contains its inherited backdrop.
+  // Replacing those pixels (not source-overing them) prevents painting the
+  // inherited backdrop twice. Preserve parent shape outside this group.
+  for(size_t p=0;p<shape.size();++p){
+   if(!shape[p])continue;
+   const size_t i=4*p;
+   for(unsigned c=0;c<4;++c)parent.pixels[i+c]=pixels[i+c];
+   parent.shape[p]=uint8_t(std::min(255u,
+     unsigned(shape[p])+mul255(parent.shape[p],255u-shape[p])));
+  }
+  return true;
+ }
  // Apply an entire rendered object to a knockout group as one unit.
  // The object's geometric shape removes previous objects; its color and
  // alpha are added once, avoiding per-primitive knockout inside nested Forms.
