@@ -224,6 +224,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      const unsigned delta=observed>bg?observed-bg:bg-observed;
      const unsigned coverage=std::min(255u,(delta*255u+contrast/2)/contrast);
      const unsigned alpha=(coverage*opacity+127)/255;
+     if(coverage&&!transparent_target->mark_shape(x,y,uint8_t(coverage)))return false;
      if(alpha&&!transparent_target->fill_pixel(x,y,uint8_t(color[0]),
                    uint8_t(color[1]),uint8_t(color[2]),uint8_t(alpha)))
       return false;
@@ -489,6 +490,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
          unsigned(std::lround((channel==0?red:channel==1?green:blue)*255)):
          im.pixels[source+(im.channels==3?channel:0)]);
       };
+      if(!transparent_target->mark_shape(px,py,uint8_t(base_opacity)))return false;
       if(!transparent_target->blend_pixel(
             px,py,component(0),component(1),component(2),uint8_t(opacity),
             transparent_blend_mode()))
@@ -1601,7 +1603,8 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
     if(clip_mask!=nullptr)alpha=(alpha*(*clip_mask)[i]+127)/255;
     if(!alpha)continue;
     if(transparent_target){
-     if(!transparent_target->blend_pixel(x,y,cr,cg,cb,uint8_t(alpha),
+     if(!transparent_target->mark_shape(x,y,uint8_t(hits*255/4))||
+        !transparent_target->blend_pixel(x,y,cr,cg,cb,uint8_t(alpha),
                                 transparent_blend_mode()))
       return false;
      continue;
@@ -1638,7 +1641,8 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
     if(clip_mask!=nullptr)alpha=(alpha*(*clip_mask)[i]+127)/255;
     if(!alpha)continue;
     if(transparent_target){
-     if(!transparent_target->blend_pixel(x,y,cr,cg,cb,uint8_t(alpha),
+     if(!transparent_target->mark_shape(x,y,uint8_t(antialias?coverage[i]:255))||
+        !transparent_target->blend_pixel(x,y,cr,cg,cb,uint8_t(alpha),
                                 transparent_blend_mode()))
       return false;
      continue;
