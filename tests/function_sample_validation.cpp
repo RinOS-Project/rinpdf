@@ -36,18 +36,19 @@ int main(){
   rgb.decode[2*i]=0;rgb.decode[2*i+1]=1;
   rgb.range[2*i]=0;rgb.range[2*i+1]=1;
  }
- const std::vector<uint8_t> rgb_samples{0,255,0,255,0,255};
+ // Distinct channel ramps catch indexing bugs masked by equal RGB outputs.
+ const std::vector<uint8_t> rgb_samples{0,32,64,255,128,192};
  double channels[3]={-1,-1,-1};
- if(!rinpdf::parser::evaluate_sampled_function(
-       rgb,rgb_samples,0.5,channels)||
-    std::abs(channels[0]-0.5)>1e-12||
-    std::abs(channels[1]-0.5)>1e-12||
-    std::abs(channels[2]-0.5)>1e-12)return 1;
- rgb.order=3;
- if(!rinpdf::parser::evaluate_sampled_function(
-       rgb,rgb_samples,0.5,channels)||
-    std::abs(channels[0]-0.5)>1e-12||
-    std::abs(channels[1]-0.5)>1e-12||
-    std::abs(channels[2]-0.5)>1e-12)return 1;
+ for(unsigned order:{1u,3u}){
+  rgb.order=order;
+  if(!rinpdf::parser::evaluate_sampled_function(
+        rgb,rgb_samples,0.5,channels)||
+     std::abs(channels[0]-0.5)>1e-12||
+     std::abs(channels[1]-(80.0/255.0))>1e-12||
+     std::abs(channels[2]-(128.0/255.0))>1e-12){
+   std::fprintf(stderr,"RGB channel interpolation mismatch for order %u\\n",order);
+   return 1;
+  }
+ }
  return 0;
 }
