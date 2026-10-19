@@ -28,7 +28,8 @@ struct Rect {double x,y,w,h;};
 bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsigned width,unsigned height,uint8_t *rgba,size_t stride,PageBox box,const FontResources& fonts,
  const MarkedProperties& properties,const ImageResources& images,
  const FormResources& forms,bool clear_background,unsigned form_depth,
- const GraphicsStateResources& graphic_states){
+ const GraphicsStateResources& graphic_states,
+ PremultipliedSurface* transparent_target){
  if(form_depth>8)return false;
  if(!std::isfinite(box.x0)||!std::isfinite(box.y0)||!std::isfinite(box.x1)||!std::isfinite(box.y1)||box.x1<=box.x0||box.y1<=box.y0)return false;
  const double sx=(double)width/(box.x1-box.x0),sy=(double)height/(box.y1-box.y0);
@@ -36,6 +37,9 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
  if(!rgba||(!contents&&size)||!width||!height||width>16384||height>16384||stride<(size_t)width*4)return false;
  if(size>16*1024*1024)return false;
  if((size_t)width*height>16777216)return false;
+ if(transparent_target&&
+    (transparent_target->width!=width||transparent_target->height!=height||
+     transparent_target->pixels.size()!=size_t(width)*height*4))return false;
  if(clear_background)for(unsigned y=0;y<height;++y)
   std::memset(rgba+(size_t)y*stride,255,(size_t)width*4);
  double red=0,green=0,blue=0;
@@ -1565,6 +1569,12 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
     alpha=(alpha*unsigned(std::lround(fill_alpha*255))+127)/255;
     if(clip_mask!=nullptr)alpha=(alpha*(*clip_mask)[i]+127)/255;
     if(!alpha)continue;
+    if(transparent_target){
+     if(blend_mode!="Normal"||
+        !transparent_target->fill_pixel(x,y,cr,cg,cb,uint8_t(alpha)))
+      return false;
+     continue;
+    }
     pixel[0]=(uint8_t)((alpha*blend_channel(cr,pixel[0])+(255-alpha)*pixel[0]+127)/255);
     pixel[1]=(uint8_t)((alpha*blend_channel(cg,pixel[1])+(255-alpha)*pixel[1]+127)/255);
     pixel[2]=(uint8_t)((alpha*blend_channel(cb,pixel[2])+(255-alpha)*pixel[2]+127)/255);
