@@ -541,7 +541,11 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      const unsigned base_opacity=im.stencil?
        im.pixels[size_t(iy)*im.width+ix]:
        (im.alpha.empty()?255:im.alpha[size_t(iy)*im.width+ix]);
-     const unsigned opacity=(base_opacity*unsigned(std::lround(fill_alpha*255))+127)/255;
+     const unsigned clip_coverage=clip_mask?
+         (*clip_mask)[size_t(py)*width+px]:255u;
+     const unsigned opacity=(base_opacity*
+         unsigned(std::lround(fill_alpha*255))+127)/255*
+         clip_coverage/255;
      if(!opacity&&!(transparent_target&&transparent_target->knockout))continue;
      if(transparent_target){
       const auto component=[&](unsigned channel)->uint8_t{
@@ -549,10 +553,14 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
          unsigned(std::lround((channel==0?red:channel==1?green:blue)*255)):
          im.pixels[source+(im.channels==3?channel:0)]);
       };
-      if(!transparent_target->mark_shape(px,py,uint8_t(base_opacity)))return false;
+      // SMask/constant alpha changes opacity, not the geometric shape
+      // of a regular image. Image masks use their stencil coverage.
+      const unsigned geometry=(im.stencil?base_opacity:255u)*
+                              clip_coverage/255u;
+      if(!transparent_target->mark_shape(px,py,uint8_t(geometry)))return false;
       if(!transparent_target->blend_pixel(
             px,py,component(0),component(1),component(2),uint8_t(opacity),
-            transparent_blend_mode(),uint8_t(base_opacity)))
+            transparent_blend_mode(),uint8_t(geometry)))
        return false;
       continue;
      }
