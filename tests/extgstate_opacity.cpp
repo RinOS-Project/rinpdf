@@ -1,6 +1,7 @@
 #include "../src/renderer/rectangles.h"
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -93,5 +94,21 @@ int main(){
     half->second.fill_alpha!=0.5||
     !stroke->second.has_stroke_alpha||stroke->second.has_fill_alpha||
     stroke->second.stroke_alpha!=0.25)return 4;
+ // Multiply and Screen must blend against the existing page color.
+ rinpdf::parser::PageGraphicsState mul,scr;
+ mul.blend_mode="Multiply";mul.has_blend_mode=true;
+ scr.blend_mode="Screen";scr.has_blend_mode=true;
+ states.emplace("Mul",mul);states.emplace("Scr",scr);
+ auto render_blend=[&](const char* commands,unsigned expected)->bool{
+  std::vector<uint8_t> out(4*4*4);
+  if(!rinpdf::renderer::render_rectangles_box_with_fonts(
+       reinterpret_cast<const uint8_t*>(commands),std::strlen(commands),
+       4,4,out.data(),16,{0,0,4,4},{},{},{},{},true,0,states))
+   return false;
+  return out[0]==expected && out[1]==expected && out[2]==expected;
+ };
+ const char* multiply="0.5 g 0 0 4 4 re f q /Mul gs 0.5 g 0 0 4 4 re f Q";
+ const char* screen="0.5 g 0 0 4 4 re f q /Scr gs 0.5 g 0 0 4 4 re f Q";
+ if(!render_blend(multiply,64)||!render_blend(screen,192))return 11;
  return 0;
 }
