@@ -537,8 +537,11 @@ bool evaluate_calculator_tokens(const std::vector<std::string>& parsed_tokens,
      if(stack.back().kind==1||stack.back().kind==3)return false;
      double& value=stack.back().number;
      if(opcode==uint8_t(CalculatorOp::Op8)){
-      if(value< -2147483648.0||value>2147483647.0)return false;
-      value=std::trunc(value);
+      // cvi truncates toward zero before checking the integer range.
+      // Values such as 2147483647.9 are valid after truncation.
+      const double integer=std::trunc(value);
+      if(integer< -2147483648.0||integer>2147483647.0)return false;
+      value=integer;
      }else if(opcode==uint8_t(CalculatorOp::Op13))value=std::trunc(value);
      else if(opcode==uint8_t(CalculatorOp::Op10))value=std::floor(value);
      else if(opcode==uint8_t(CalculatorOp::Op11))value=std::ceil(value);
