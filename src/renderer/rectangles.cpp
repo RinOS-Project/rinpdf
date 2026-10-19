@@ -1538,6 +1538,12 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
     alpha=(alpha*unsigned(std::lround(stroke_alpha*255))+127)/255;
     if(clip_mask!=nullptr)alpha=(alpha*(*clip_mask)[i]+127)/255;
     if(!alpha)continue;
+    if(transparent_target){
+     if(blend_mode!="Normal"||
+        !transparent_target->fill_pixel(x,y,cr,cg,cb,uint8_t(alpha)))
+      return false;
+     continue;
+    }
     uint8_t* pixel=rgba+(size_t)y*stride+(size_t)x*4;
     pixel[0]=(uint8_t)((alpha*blend_channel(cr,pixel[0])+(255-alpha)*pixel[0]+127)/255);
     pixel[1]=(uint8_t)((alpha*blend_channel(cg,pixel[1])+(255-alpha)*pixel[1]+127)/255);
