@@ -87,3 +87,5 @@ test('rinpdf-gray1-image-xobject',executable('rinpdf-gray1-image-xobject','gray1
 test('rinpdf-gray-packed-image-xobject',executable('rinpdf-gray-packed-image-xobject','gray_packed_image_xobject.cpp',dependencies:rinpdf_dep))
 
 test('rinpdf-rgb-decode-image',executable('rinpdf-rgb-decode-image','rgb_decode_image.cpp',dependencies:rinpdf_dep))
+
+test('rinpdf-cmyk-decode-image',executable('rinpdf-cmyk-decode-image','cmyk_decode_image.cpp',dependencies:rinpdf_dep))
