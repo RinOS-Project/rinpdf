@@ -92,6 +92,52 @@ struct PremultipliedSurface {
   }
   return true;
  }
+ // Composite an isolated group with the group's external blend mode.
+ // The input remains premultiplied; its unassociated color is used for B().
+ bool composite_blend_over(PremultipliedSurface& destination,unsigned mode) const {
+  if(mode>2||width!=destination.width||height!=destination.height||
+     pixels.size()!=destination.pixels.size()||
+     pixels.size()!=size_t(width)*height*4)return false;
+  if(mode==0)return composite_over(destination);
+  for(size_t i=0;i<pixels.size();i+=4){
+   const unsigned alpha=pixels[i+3];
+   if(!alpha)continue;
+   const uint8_t red=uint8_t(std::min(255u,
+                       (unsigned(pixels[i])*255u+alpha/2)/alpha));
+   const uint8_t green=uint8_t(std::min(255u,
+                       (unsigned(pixels[i+1])*255u+alpha/2)/alpha));
+   const uint8_t blue=uint8_t(std::min(255u,
+                       (unsigned(pixels[i+2])*255u+alpha/2)/alpha));
+   if(!destination.blend_pixel(unsigned((i/4)%width),
+          unsigned((i/4)/width),red,green,blue,uint8_t(alpha),mode))
+    return false;
+  }
+  return true;
+ }
+ bool composite_blend_over_opaque(uint8_t* dst,size_t stride,
+                                  unsigned mode) const {
+  if(mode>2||!dst||stride<size_t(width)*4||
+     pixels.size()!=size_t(width)*height*4)return false;
+  if(mode==0)return composite_over_opaque(dst,stride);
+  for(unsigned y=0;y<height;++y)
+   for(unsigned x=0;x<width;++x){
+    const size_t i=(size_t(y)*width+x)*4;
+    const unsigned alpha=pixels[i+3];
+    if(!alpha)continue;
+    uint8_t* d=dst+size_t(y)*stride+size_t(x)*4;
+    for(unsigned c=0;c<3;++c){
+     const unsigned src=std::min(255u,
+              (unsigned(pixels[i+c])*255u+alpha/2)/alpha);
+     const unsigned backdrop=d[c];
+     const unsigned blend=mode==1?(src*backdrop+127)/255:
+              255-((255-src)*(255-backdrop)+127)/255;
+     d[c]=uint8_t(mul255(blend,alpha)+
+                     mul255(backdrop,255-alpha));
+    }
+    d[3]=255;
+   }
+  return true;
+ }
  bool composite_over_opaque(uint8_t* dst,size_t stride) const {
   if(!dst||stride<size_t(width)*4||pixels.size()!=size_t(width)*height*4)
    return false;
