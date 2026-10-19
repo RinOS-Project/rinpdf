@@ -26,5 +26,28 @@ int main(){
    return 1;
   }
  }
+ // Interleaved RGB samples use one interpolation position, but each
+ // output must read its own channel from the sample table.
+ rinpdf::parser::SampledFunction rgb;
+ rgb.count=2;rgb.bits=8;rgb.outputs=3;rgb.order=1;
+ rgb.domain[0]=0;rgb.domain[1]=1;
+ rgb.encode[0]=0;rgb.encode[1]=1;
+ for(unsigned i=0;i<3;++i){
+  rgb.decode[2*i]=0;rgb.decode[2*i+1]=1;
+  rgb.range[2*i]=0;rgb.range[2*i+1]=1;
+ }
+ const std::vector<uint8_t> rgb_samples{0,255,0,255,0,255};
+ double channels[3]={-1,-1,-1};
+ if(!rinpdf::parser::evaluate_sampled_function(
+       rgb,rgb_samples,0.5,channels)||
+    std::abs(channels[0]-0.5)>1e-12||
+    std::abs(channels[1]-0.5)>1e-12||
+    std::abs(channels[2]-0.5)>1e-12)return 1;
+ rgb.order=3;
+ if(!rinpdf::parser::evaluate_sampled_function(
+       rgb,rgb_samples,0.5,channels)||
+    std::abs(channels[0]-0.5)>1e-12||
+    std::abs(channels[1]-0.5)>1e-12||
+    std::abs(channels[2]-0.5)>1e-12)return 1;
  return 0;
 }
