@@ -552,23 +552,40 @@ struct Reader {
         cs->text=="DeviceCMYK"?4:0;
       if(!channels||(!indexed&&bits->integer!=8&&channels!=1)||
          get(range.dictionary,"Mask"))return false;
-      // Support normal and reversed Decode for device grayscale images.
-      // Other color spaces still require their own component mappings.
-      bool invert_gray=false;
+      // Apply 8-bit DeviceGray/DeviceRGB Decode independently by channel.
+      // Packed DeviceGray only admits normal or reversed endpoints.
+      std::array<double,8> decode_endpoints{};
+      bool has_device_decode=false;
       if(const Value* decode=get(range.dictionary,"Decode")){
-       if(cs->kind!=Value::Kind::Name||cs->text!="DeviceGray"||
-          decode->kind!=Value::Kind::Array||decode->array.size()!=2)
-        return false;
-       double endpoints[2]{};
-       for(unsigned i=0;i<2;++i){
+       if(cs->kind!=Value::Kind::Name||
+          (cs->text!="DeviceGray"&&cs->text!="DeviceRGB")||
+          decode->kind!=Value::Kind::Array||
+          decode->array.size()!=2*channels)return false;
+       if(bits->integer!=8&&channels!=1)return false;
+       for(size_t i=0;i<2*channels;++i){
         const Value& v=decode->array[i];
-        if(v.kind==Value::Kind::Integer)endpoints[i]=double(v.integer);
-        else if(v.kind==Value::Kind::Real)endpoints[i]=v.real;
+        if(v.kind==Value::Kind::Integer)decode_endpoints[i]=double(v.integer);
+        else if(v.kind==Value::Kind::Real)decode_endpoints[i]=v.real;
         else return false;
+        if(!std::isfinite(decode_endpoints[i])||
+           decode_endpoints[i]<0||decode_endpoints[i]>1)return false;
        }
-       if(endpoints[0]==1&&endpoints[1]==0)invert_gray=true;
-       else if(endpoints[0]!=0||endpoints[1]!=1)return false;
+       if(bits->integer!=8&&
+          !((decode_endpoints[0]==0&&decode_endpoints[1]==1)||
+            (decode_endpoints[0]==1&&decode_endpoints[1]==0)))return false;
+       has_device_decode=true;
       }
+      auto apply_device_decode=[&](){
+       if(!has_device_decode)return;
+       for(size_t i=0;i<image.pixels.size();++i){
+        const unsigned channel=unsigned(i%channels);
+        const double lo=decode_endpoints[2*channel];
+        const double hi=decode_endpoints[2*channel+1];
+        const double normalized=double(image.pixels[i])/255;
+        image.pixels[i]=uint8_t(std::lround(
+          255*std::clamp(lo+normalized*(hi-lo),0.0,1.0)));
+       }
+      };
       const size_t expected=size_t(w->integer)*size_t(h->integer)*channels;
       if(expected>32*1024*1024){return false;}
       image=PageImage{};
@@ -656,8 +673,7 @@ struct Reader {
           !decode_dct_image(data+range.offset,range.length,
              unsigned(w->integer),unsigned(h->integer),channels,
              image.pixels)){return false;}
-       if(invert_gray)
-        for(auto& pixel:image.pixels)pixel=uint8_t(255u-pixel);
+       apply_device_decode();
        return true;
       }
       // Predictor handling is centralized in decode_stream for both
@@ -704,8 +720,7 @@ struct Reader {
                     (sample*255u+max_sample/2u)/max_sample);
         }
       }else image.pixels=std::move(decoded);
-      if(invert_gray)
-       for(auto& pixel:image.pixels)pixel=uint8_t(255u-pixel);
+      apply_device_decode();
       if(indexed){
        std::vector<uint8_t> rgb(size_t(image.width)*image.height*3);
        for(size_t i=0;i<size_t(image.width)*image.height;++i){
