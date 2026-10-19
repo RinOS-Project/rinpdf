@@ -38,6 +38,8 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
   std::memset(rgba+(size_t)y*stride,255,(size_t)width*4);
  double red=0,green=0,blue=0;
  double fill_alpha=1,stroke_alpha=1;
+ std::string blend_mode="Normal";
+ std::vector<std::string> saved_blend;
  std::vector<std::pair<double,double>> saved_alpha;
  struct Color { double r,g,b,a,bx,cx,d,e,f,width,sr,sg,sb; int cap,join; double miter,flatness; std::vector<double> dash; double dash_phase; };
  double a=1,bx=0,cx=0,d=1,e=0,f=0;
@@ -176,7 +178,14 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
  };
  // Apply nonstroking opacity to both supported font renderers.
  // Rendering over a snapshot preserves glyph coverage and existing antialiasing.
+ // Blend the opaque source and destination before source-over opacity.
+ auto blend_channel=[&](unsigned src,unsigned dst)->unsigned{
+  if(blend_mode=="Multiply")return (src*dst+127)/255;
+  if(blend_mode=="Screen")return 255-((255-src)*(255-dst)+127)/255;
+  return src;
+ };
  auto paint_text=[&](auto&& draw)->bool{
+  if(blend_mode!="Normal")return false;
   if(fill_alpha==1)return draw();
   const size_t row_bytes=size_t(width)*4;
   std::vector<uint8_t> original(row_bytes*height);
@@ -255,6 +264,8 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      fill_alpha=state->second.fill_alpha;
     if(state->second.has_stroke_alpha)
      stroke_alpha=state->second.stroke_alpha;
+    if(state->second.has_blend_mode)
+     blend_mode=state->second.blend_mode;
     lex=look;continue;
    }
    if(!in_text&&next.kind==parser::TokenKind::Keyword&&
@@ -283,6 +294,8 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      inherited.stroke_alpha=stroke_alpha;
      inherited.has_fill_alpha=true;
      inherited.has_stroke_alpha=true;
+     inherited.blend_mode=blend_mode;
+     inherited.has_blend_mode=true;
      form_graphics.emplace(inherited_name,inherited);
      std::string stream="q /"+inherited_name+" gs ";
      // Form XObjects inherit the caller's graphics state. The recursive
@@ -395,7 +408,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
          im.pixels[source+(im.channels==3?channel:0)];
       const unsigned dst=rgba[target+channel];
       rgba[target+channel]=uint8_t(
-        (src*opacity+dst*(255-opacity)+127)/255);
+        (blend_channel(src,dst)*opacity+dst*(255-opacity)+127)/255);
      }
      rgba[target+3]=255;
     }
@@ -451,6 +464,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
    if((pending_rect_clip||pending_path_clip)||!stack.empty()||saved.size()>=64)return false;
    saved.push_back({red,green,blue,a,bx,cx,d,e,f,line_width,stroke_red,stroke_green,stroke_blue,line_cap,line_join,miter_limit,flatness,dash_pattern,dash_phase});
    saved_alpha.emplace_back(fill_alpha,stroke_alpha);
+   saved_blend.push_back(blend_mode);
    clip_stack.push_back(clip);
    clip_mask_stack.push_back(clip_mask);
 
@@ -460,6 +474,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
    fill_alpha=saved_alpha.back().first;
    stroke_alpha=saved_alpha.back().second;
    saved_alpha.pop_back();
+   blend_mode=saved_blend.back();saved_blend.pop_back();
    red=color.r;green=color.g;blue=color.b;a=color.a;bx=color.bx;cx=color.cx;d=color.d;e=color.e;f=color.f;line_width=color.width;stroke_red=color.sr;stroke_green=color.sg;stroke_blue=color.sb;line_cap=color.cap;line_join=color.join;miter_limit=color.miter;flatness=color.flatness;dash_pattern=color.dash;dash_phase=color.dash_phase;
    clip=clip_stack.back();clip_stack.pop_back();
    clip_mask=std::move(clip_mask_stack.back());clip_mask_stack.pop_back();
@@ -1492,9 +1507,9 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
     if(clip_mask!=nullptr)alpha=(alpha*(*clip_mask)[i]+127)/255;
     if(!alpha)continue;
     uint8_t* pixel=rgba+(size_t)y*stride+(size_t)x*4;
-    pixel[0]=(uint8_t)((alpha*cr+(255-alpha)*pixel[0]+127)/255);
-    pixel[1]=(uint8_t)((alpha*cg+(255-alpha)*pixel[1]+127)/255);
-    pixel[2]=(uint8_t)((alpha*cb+(255-alpha)*pixel[2]+127)/255);
+    pixel[0]=(uint8_t)((alpha*blend_channel(cr,pixel[0])+(255-alpha)*pixel[0]+127)/255);
+    pixel[1]=(uint8_t)((alpha*blend_channel(cg,pixel[1])+(255-alpha)*pixel[1]+127)/255);
+    pixel[2]=(uint8_t)((alpha*blend_channel(cb,pixel[2])+(255-alpha)*pixel[2]+127)/255);
     pixel[3]=255;
    }
    path.clear();polygons.clear();polygon_matrices.clear();rect_matrices.clear();cubic_strokes.clear();
@@ -1522,9 +1537,9 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
     alpha=(alpha*unsigned(std::lround(fill_alpha*255))+127)/255;
     if(clip_mask!=nullptr)alpha=(alpha*(*clip_mask)[i]+127)/255;
     if(!alpha)continue;
-    pixel[0]=(uint8_t)((alpha*cr+(255-alpha)*pixel[0]+127)/255);
-    pixel[1]=(uint8_t)((alpha*cg+(255-alpha)*pixel[1]+127)/255);
-    pixel[2]=(uint8_t)((alpha*cb+(255-alpha)*pixel[2]+127)/255);
+    pixel[0]=(uint8_t)((alpha*blend_channel(cr,pixel[0])+(255-alpha)*pixel[0]+127)/255);
+    pixel[1]=(uint8_t)((alpha*blend_channel(cg,pixel[1])+(255-alpha)*pixel[1]+127)/255);
+    pixel[2]=(uint8_t)((alpha*blend_channel(cb,pixel[2])+(255-alpha)*pixel[2]+127)/255);
     pixel[3]=255;
    }
    path.clear();polygons.clear();polygon_matrices.clear();rect_matrices.clear();cubic_strokes.clear();
