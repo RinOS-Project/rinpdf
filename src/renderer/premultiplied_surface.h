@@ -14,6 +14,7 @@ struct PremultipliedSurface {
  // Geometric group shape is distinct from composited opacity.
  std::vector<uint8_t> shape;
  bool knockout=false;
+ bool grayscale_group=false;
  bool knockout_nonisolated=false;
  std::vector<uint8_t> knockout_backdrop;
  bool resize(unsigned w,unsigned h){
@@ -60,7 +61,9 @@ struct PremultipliedSurface {
   // In a knockout group, geometry has already reduced the prior
   // contribution. Multiplying it again by (1-alpha) double-attenuates.
   const unsigned remain=knockout?255u:255u-coverage;
-  const unsigned colors[3]={red,green,blue};
+  const unsigned gray=(77u*red+150u*green+29u*blue+128u)/256u;
+  const unsigned colors[3]={grayscale_group?gray:red,
+   grayscale_group?gray:green,grayscale_group?gray:blue};
   for(unsigned c=0;c<3;++c)
    pixels[index+c]=uint8_t(std::min(255u,
       mul255(colors[c],coverage)+mul255(pixels[index+c],remain)));
@@ -81,7 +84,9 @@ struct PremultipliedSurface {
       source_alpha>geometry)return false;
    const unsigned keep=255u-geometry;
    const unsigned backdrop_weight=geometry-source_alpha;
-   const unsigned src[3]={red,green,blue};
+   const unsigned gray=(77u*red+150u*green+29u*blue+128u)/256u;
+  const unsigned src[3]={grayscale_group?gray:red,
+   grayscale_group?gray:green,grayscale_group?gray:blue};
    for(unsigned c=0;c<4;++c){
     const unsigned source=c==3?source_alpha:mul255(src[c],source_alpha);
     pixels[i+c]=uint8_t(std::min(255u,
