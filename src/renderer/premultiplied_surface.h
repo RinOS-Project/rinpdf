@@ -15,6 +15,7 @@ struct PremultipliedSurface {
  std::vector<uint8_t> shape;
  bool knockout=false;
  bool grayscale_group=false;
+ bool cmyk_group=false;
  bool knockout_nonisolated=false;
  std::vector<uint8_t> knockout_backdrop;
  bool resize(unsigned w,unsigned h){
@@ -119,6 +120,17 @@ struct PremultipliedSurface {
       unsigned(coverage)+mul255(pixels[index+3],remain)));
   return true;
  }
+ // Approximate subtractive DeviceCMYK component blending using a
+ // black-generated RGB<->CMYK transform. This is not ICC color matching.
+ static void rgb_to_cmyk(const unsigned rgb[3],unsigned ink[4]){
+  const unsigned c=255u-rgb[0],m=255u-rgb[1],y=255u-rgb[2];
+  const unsigned k=std::min(c,std::min(m,y));
+  ink[0]=c-k;ink[1]=m-k;ink[2]=y-k;ink[3]=k;
+ }
+ static void cmyk_to_rgb(const unsigned ink[4],unsigned rgb[3]){
+  for(unsigned c=0;c<3;++c)
+   rgb[c]=255u-std::min(255u,ink[c]+ink[3]);
+ }
  // PDF separable blending on a transparent premultiplied backdrop.
  // Modes: 0 Normal, 1 Multiply, 2 Screen. Source colors are unassociated.
  bool blend_pixel(unsigned x,unsigned y,uint8_t red,uint8_t green,
@@ -165,8 +177,25 @@ struct PremultipliedSurface {
    const unsigned dest_p=pixels[i+c];
    // Unassociate only for computing the blend function; never divide by 0.
    const unsigned dest=ad?std::min(255u,(dest_p*255u+ad/2)/ad):0u;
-   const unsigned blended=mode==1?(src[c]*dest+127u)/255u:
+   unsigned blended=mode==1?(src[c]*dest+127u)/255u:
       mode==2?255u-((255u-src[c])*(255u-dest)+127u)/255u:src[c];
+   if(cmyk_group&&mode!=0){
+    // Component-wise CMYK blend uses the same separable blend function
+    // in all four ink channels, then converts the result to RGB.
+    unsigned dest_rgb[3]{},source_rgb[3]{};
+    for(unsigned j=0;j<3;++j){
+     source_rgb[j]=src[j];
+     dest_rgb[j]=ad?std::min(255u,
+       (unsigned(pixels[i+j])*255u+ad/2u)/ad):0u;
+    }
+    unsigned di[4]{},si[4]{},bi[4]{},out_rgb[3]{};
+    rgb_to_cmyk(dest_rgb,di);rgb_to_cmyk(source_rgb,si);
+    for(unsigned j=0;j<4;++j)
+     bi[j]=mode==1?(si[j]*di[j]+127u)/255u:
+          255u-((255u-si[j])*(255u-di[j])+127u)/255u;
+    cmyk_to_rgb(bi,out_rgb);
+    blended=out_rgb[c];
+   }
    // Co = (1-as)*Dp + (1-ad)*as*Cs + as*ad*Blend(Cs,Cd).
    const uint64_t numerator=uint64_t(dest_p)*(255u-as)*255u+
       uint64_t(src[c])*as*(255u-ad)+uint64_t(blended)*as*ad;
