@@ -111,3 +111,5 @@ test('rinpdf-direct-transparent-image',executable('rinpdf-direct-transparent-ima
 test('rinpdf-direct-transparent-text',executable('rinpdf-direct-transparent-text','direct_transparent_text.cpp',dependencies:rinpdf_dep))
 
 test('rinpdf-nested-transparent-forms',executable('rinpdf-nested-transparent-forms','nested_transparent_forms.cpp',dependencies:rinpdf_dep))
+
+test('rinpdf-nonisolated-transparency-group',executable('rinpdf-nonisolated-transparency-group','nonisolated_transparency_group.cpp',dependencies:rinpdf_dep))
