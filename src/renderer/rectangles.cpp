@@ -410,6 +410,23 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      };
      if(fm.knockout_transparency_group&&!fm.transparency_group)
       return false;
+     if(transparent_target&&transparent_target->knockout_nonisolated&&
+        !fm.transparency_group){
+      // Treat a regular nested Form as one object against the original
+      // backdrop, then knock it into the accumulated group once.
+      if(blend_mode!="Normal"||
+         transparent_target->knockout_backdrop.size()!=
+             size_t(width)*height*4)return false;
+      PremultipliedSurface object;
+      if(!object.resize(width,height))return false;
+      object.pixels=transparent_target->knockout_backdrop;
+      const size_t pitch=size_t(width)*4;
+      std::vector<uint8_t> scratch(pitch*height,0);
+      if(!draw_form(scratch.data(),pitch,&object)||
+         !transparent_target->composite_nonisolated_knockout_object(object))
+       return false;
+      continue;
+     }
      if(transparent_target&&transparent_target->knockout&&
         !fm.transparency_group){
       // A normal nested Form contributes one painting object to a
@@ -435,9 +452,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
        // Non-isolated knockout requires a transparent parent surface,
        // Normal group blending, and object-local graphics operations.
        // Complex nested Forms need their own backdrop management.
-       if(!transparent_target||blend_mode!="Normal"||
-          !fm.local_forms.empty()||!fm.xobject_aliases.empty())
-        return false;
+       if(!transparent_target||blend_mode!="Normal")return false;
        PremultipliedSurface backdrop,group;
        if(!backdrop.resize(width,height)||!group.resize(width,height)||
           !backdrop.copy_backdrop_from(*transparent_target)||
