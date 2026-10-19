@@ -100,5 +100,12 @@ int main() {
  ok=expect("{ pop 2.5 round }",true,3.0)&&ok;
  ok=expect("{ pop -1.5 truncate }",true,-1.0)&&ok;
  ok=expect("{ pop -1.5 floor }",true,-2.0)&&ok;
+ // A literal-only program must enforce the same finite magnitude budget
+ // as calculations, without modifying the caller's output on failure.
+ ok=expect("{ pop 1000000000000 }",true,1000000000000.0)&&ok;
+ ok=expect("{ pop 1000000000001 }",false)&&ok;
+ ok=expect("{ pop -1000000000001 }",false)&&ok;
+ double large_output=17.0;
+ ok=(!run("{ pop 1000000000001 }",large_output)&&large_output==17.0)&&ok;
  return ok?0:1;
 }
