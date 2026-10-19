@@ -474,9 +474,12 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
       continue;
      }
      if(fm.transparency_group&&!fm.isolated_transparency_group){
-      // Non-isolated DeviceGray needs a converted gray backdrop and
-      // group alpha reconstruction. Do not silently use RGB semantics.
-      if(fm.group_color_space=="DeviceGray")return false;
+      // Non-isolated DeviceGray may reuse a grayscale parent backdrop.
+      // A colored backdrop requires actual group color-space conversion.
+      const bool group_gray=fm.group_color_space=="DeviceGray";
+      if(group_gray&&(!transparent_target||
+                      !transparent_target->has_grayscale_backdrop()))
+       return false;
       if(fm.knockout_transparency_group){
        // Non-isolated knockout requires a transparent parent surface,
        // Normal group blending, and object-local graphics operations.
@@ -486,6 +489,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
        if(!backdrop.resize(width,height)||!group.resize(width,height)||
           !backdrop.copy_backdrop_from(*transparent_target)||
           !group.begin_nonisolated_knockout(*transparent_target))return false;
+       group.grayscale_group=group_gray;
        const size_t rowbytes=size_t(width)*4;
        std::vector<uint8_t> scratch(rowbytes*height,0);
        if(!draw_form(scratch.data(),rowbytes,&group)||
@@ -507,6 +511,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
        if(!backdrop.resize(width,height)||!group.resize(width,height)||
           !backdrop.copy_backdrop_from(*transparent_target)||
           !group.copy_backdrop_from(*transparent_target))return false;
+       group.grayscale_group=group_gray;
        // The group sees the parent's live colors, but owns fresh shape.
        if(!draw_form(rgba,stride,&group)||
           !group.composite_backdrop_difference_over(*transparent_target,backdrop))
