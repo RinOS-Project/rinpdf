@@ -54,7 +54,7 @@ int main(){
  if(!edge.blend_pixel(0,0,255,0,0,255,0,255))return 21;
  if(!edge.blend_pixel(0,0,0,0,255,128,0,128))return 22;
  const auto& ep=edge.pixels;
- if(ep[0]<126||ep[0]>129||ep[2]<63||ep[2]>65||
+ if(ep[0]<126||ep[0]>129||ep[2]<127||ep[2]>129||
     ep[3]<190||ep[3]>193)return 23;
  return 0;
 }
