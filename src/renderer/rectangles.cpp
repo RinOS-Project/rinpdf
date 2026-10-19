@@ -421,6 +421,11 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
       if(!object.resize(width,height))return false;
       const size_t rowbytes=size_t(width)*4;
       std::vector<uint8_t> scratch(rowbytes*height,0);
+      // The Form is painted as one knockout object, but its own
+      // internal blend operations are evaluated before parent knockout.
+      // A parent's Multiply/Screen state cannot be applied by the
+      // object-level knockout compositor yet.
+      if(blend_mode!="Normal")return false;
       if(!draw_form(scratch.data(),rowbytes,&object)||
          !transparent_target->composite_knockout_object(object))return false;
       continue;
