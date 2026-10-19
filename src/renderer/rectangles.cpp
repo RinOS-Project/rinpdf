@@ -334,7 +334,6 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
     // Dispatch image painting through the normal Do branch.
     const auto form=forms.find(pending_image);
     if(form!=forms.end()){
-     if(cmyk_target)return false;
      if(form_depth>=8)return false;
      // A recursive call begins with the current page pixels and a fresh
      // graphics state. Do not attempt nested forms or inherited clipping.
@@ -424,6 +423,14 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      };
      if(fm.knockout_transparency_group&&!fm.transparency_group)
       return false;
+     if(cmyk_target){
+      // An ordinary Form shares the CMYK group's paint destination.
+      // Nested transparency groups require separate CMYK compositing.
+      if(fm.transparency_group)return false;
+      if(!draw_form(rgba,stride,nullptr,cmyk_target))return false;
+      continue;
+     }
+
      if(transparent_target&&transparent_target->knockout_nonisolated&&
         !fm.transparency_group){
       // Treat a regular nested Form as one object against the original
