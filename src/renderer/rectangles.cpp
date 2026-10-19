@@ -411,8 +411,9 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
       // including when the parent itself has premultiplied transparency.
       // More complex group blend/shape semantics need dedicated tracking.
       if(blend_mode!="Normal")return false;
-      for(const auto& [name,state]:form_graphics)
-       if(state.has_blend_mode&&state.blend_mode!="Normal")return false;
+      // Internal Multiply/Screen paint is evaluated against the inherited
+      // live backdrop by the ordinary rasterizer. Do not reject a group
+      // just because its resource dictionary contains those states.
       if(!draw_form(rgba,stride,transparent_target))return false;
       continue;
      }
