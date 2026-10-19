@@ -1,6 +1,7 @@
 #include "../src/renderer/rectangles.h"
 #include <cstdint>
 #include <cstdio>
+#include <string>
 #include <vector>
 
 int main(){
@@ -22,5 +23,38 @@ int main(){
  // Opaque black should cover the bottom-left quarter after Q restores
  // normal opacity. The other regions remain half black over white.
  if(value(1,6)!=0||value(6,1)!=127||value(6,6)!=127)return 2;
+ // Verify the public page-resource resolver, including parent inheritance
+ // and partial ExtGState keys that must not reset unrelated opacity.
+ std::string pdf="%PDF-1.4\n";
+ size_t offset[6]{};
+ auto add=[&](unsigned id,const std::string& body){
+  offset[id]=pdf.size();
+  pdf+=std::to_string(id)+" 0 obj\n"+body+"\nendobj\n";
+ };
+ add(1,"<< /Type /Catalog /Pages 2 0 R >>");
+ add(2,"<< /Type /Pages /Kids [3 0 R] /Count 1 /Resources << /ExtGState << /Half 4 0 R /StrokeOnly 5 0 R >> >> >>");
+ add(3,"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 8 8] >>");
+ add(4,"<< /Type /ExtGState /ca 0.5 /BM /Normal /SMask /None >>");
+ add(5,"<< /Type /ExtGState /CA 0.25 >>");
+ const size_t startxref=pdf.size();
+ pdf+="xref\n0 6\n0000000000 65535 f \n";
+ for(unsigned id=1;id<=5;++id){
+  char entry[32];
+  std::snprintf(entry,sizeof(entry),"%010zu 00000 n \n",offset[id]);
+  pdf+=entry;
+ }
+ pdf+="trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n"+
+      std::to_string(startxref)+"\n%%EOF\n";
+ rinpdf::parser::PageGraphicsStates parsed;
+ if(!rinpdf::parser::read_page_graphics_states(
+       reinterpret_cast<const uint8_t*>(pdf.data()),pdf.size(),0,parsed))
+  return 3;
+ const auto half=parsed.find("Half");
+ const auto stroke=parsed.find("StrokeOnly");
+ if(half==parsed.end()||stroke==parsed.end()||
+    !half->second.has_fill_alpha||half->second.has_stroke_alpha||
+    half->second.fill_alpha!=0.5||
+    !stroke->second.has_stroke_alpha||stroke->second.has_fill_alpha||
+    stroke->second.stroke_alpha!=0.25)return 4;
  return 0;
 }
