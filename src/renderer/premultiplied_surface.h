@@ -163,6 +163,9 @@ struct PremultipliedSurface {
      pixels.size()!=backdrop.pixels.size()||
      shape.size()!=parent.shape.size()||
      shape.size()!=size_t(width)*height)return false;
+  // The parent must still be the backdrop against which the group was
+  // rendered. Replacing pixels after a parent mutation would discard paint.
+  if(parent.pixels!=backdrop.pixels)return false;
   // A non-isolated Normal group already contains its inherited backdrop.
   // Replacing those pixels (not source-overing them) prevents painting the
   // inherited backdrop twice. Preserve parent shape outside this group.
