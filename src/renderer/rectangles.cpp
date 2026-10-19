@@ -445,8 +445,33 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
       continue;
      }
      if(transparent_target&&transparent_target->knockout&&
-        fm.transparency_group&&!fm.isolated_transparency_group)
-      return false;
+        fm.transparency_group&&!fm.isolated_transparency_group){
+      // Non-isolated nested groups are evaluated against the parent's
+      // original knockout backdrop and committed as a single object.
+      // This avoids exposing prior knockout objects to the child group.
+      if(blend_mode!="Normal"||fm.knockout_transparency_group)
+       return false;
+      PremultipliedSurface object,original;
+      if(!object.resize(width,height)||!original.resize(width,height))
+       return false;
+      if(transparent_target->knockout_nonisolated){
+       if(transparent_target->knockout_backdrop.size()!=size_t(width)*height*4)
+        return false;
+       object.pixels=transparent_target->knockout_backdrop;
+       original.pixels=transparent_target->knockout_backdrop;
+      }
+      const size_t pitch=size_t(width)*4;
+      std::vector<uint8_t> scratch(pitch*height,0);
+      if(!draw_form(scratch.data(),pitch,&object))return false;
+      if(transparent_target->knockout_nonisolated){
+       if(!transparent_target->composite_nonisolated_knockout_object(object))
+        return false;
+      }else{
+       // Isolated parent: the non-isolated child inherits transparent black.
+       if(!transparent_target->composite_knockout_object(object))return false;
+      }
+      continue;
+     }
      if(fm.transparency_group&&!fm.isolated_transparency_group){
       if(fm.knockout_transparency_group){
        // Non-isolated knockout requires a transparent parent surface,
