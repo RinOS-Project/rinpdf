@@ -13,6 +13,7 @@ struct PremultipliedSurface {
  std::vector<uint8_t> pixels;
  // Geometric group shape is distinct from composited opacity.
  std::vector<uint8_t> shape;
+ bool knockout=false;
  bool resize(unsigned w,unsigned h){
   if(!w||!h||size_t(w)*h>1048576u)return false;
   width=w;height=h;
@@ -39,6 +40,9 @@ struct PremultipliedSurface {
   if(x>=width||y>=height||
      pixels.size()!=size_t(width)*height*4)return false;
   const size_t index=(size_t(y)*width+x)*4;
+  if(knockout){
+   for(unsigned c=0;c<4;++c)pixels[index+c]=0;
+  }
   const unsigned remain=255u-coverage;
   const unsigned colors[3]={red,green,blue};
   for(unsigned c=0;c<3;++c)
@@ -55,6 +59,9 @@ struct PremultipliedSurface {
   if(mode>2||x>=width||y>=height||
      pixels.size()!=size_t(width)*height*4)return false;
   const size_t i=(size_t(y)*width+x)*4;
+  if(knockout){
+   for(unsigned c=0;c<4;++c)pixels[i+c]=0;
+  }
   const unsigned as=source_alpha,ad=pixels[i+3];
   const unsigned src[3]={red,green,blue};
   for(unsigned c=0;c<3;++c){
