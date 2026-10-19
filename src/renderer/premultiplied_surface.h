@@ -50,6 +50,8 @@ struct PremultipliedSurface {
   if(x>=width||y>=height||
      pixels.size()!=size_t(width)*height*4)return false;
   const size_t index=(size_t(y)*width+x)*4;
+  if(knockout_nonisolated)
+   return blend_pixel(x,y,red,green,blue,coverage,0,geometry);
   if(knockout){
    const unsigned remaining=255u-geometry;
    for(unsigned c=0;c<4;++c)
