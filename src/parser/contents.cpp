@@ -691,13 +691,30 @@ struct Reader {
           !mc||mc->kind!=Value::Kind::Name||mc->text!="DeviceGray"||
           get(mask_range.dictionary,"SMask")||
           get(mask_range.dictionary,"Mask")||
-          get(mask_range.dictionary,"Decode")||
-          get(mask_range.dictionary,"DecodeParms")||
-          !decode_stream(data,size,mask_range,image.alpha,
-                         size_t(w->integer)*size_t(h->integer))||
-          image.alpha.size()!=size_t(w->integer)*size_t(h->integer)){
-        return false;
+          get(mask_range.dictionary,"DecodeParms"))return false;
+       // Soft-mask grayscale may reverse its opacity mapping via Decode.
+       // Do not accept arbitrary ranges until the full mask color model
+       // and matte processing are implemented.
+       bool invert_alpha=false;
+       if(const Value* mask_decode=get(mask_range.dictionary,"Decode")){
+        if(mask_decode->kind!=Value::Kind::Array||
+           mask_decode->array.size()!=2)return false;
+        double bounds[2]{};
+        for(unsigned j=0;j<2;++j){
+         const Value& value=mask_decode->array[j];
+         if(value.kind==Value::Kind::Integer)bounds[j]=double(value.integer);
+         else if(value.kind==Value::Kind::Real)bounds[j]=value.real;
+         else return false;
+        }
+        if(bounds[0]==1&&bounds[1]==0)invert_alpha=true;
+        else if(bounds[0]!=0||bounds[1]!=1)return false;
        }
+       if(!decode_stream(data,size,mask_range,image.alpha,
+                         size_t(w->integer)*size_t(h->integer))||
+          image.alpha.size()!=size_t(w->integer)*size_t(h->integer))
+        return false;
+       if(invert_alpha)
+        for(auto& value:image.alpha)value=uint8_t(255u-value);
       }
       const bool dct=filter&&filter->kind==Value::Kind::Name&&
         (filter->text=="DCTDecode"||filter->text=="DCT");
