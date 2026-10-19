@@ -1107,9 +1107,25 @@ struct Reader {
   const Value* subtype=get(range.dictionary,"Subtype");
   const Value* form_type=get(range.dictionary,"FormType");
   if(!subtype||subtype->kind!=Value::Kind::Name||subtype->text!="Form"||
-     get(range.dictionary,"Group")||
      (form_type&&(form_type->kind!=Value::Kind::Integer||form_type->integer!=1)))
    return false;
+  if(const Value* group_ref=get(range.dictionary,"Group")){
+   Value group;
+   if(group_ref->kind==Value::Kind::Reference){
+    if(!object(*group_ref,group))return false;
+   }else group=*group_ref;
+   if(group.kind!=Value::Kind::Dictionary)return false;
+   const Value* subtype=get(group,"S");
+   const Value* isolated=get(group,"I");
+   const Value* knockout=get(group,"K");
+   if(!subtype||subtype->kind!=Value::Kind::Name||
+      subtype->text!="Transparency"||
+      !isolated||isolated->kind!=Value::Kind::Boolean||!isolated->boolean||
+      (knockout&&(knockout->kind!=Value::Kind::Boolean||knockout->boolean))||
+      get(group,"CS"))
+    return false;
+   form.isolated_transparency_group=true;
+  }
   const Value* bbox=get(range.dictionary,"BBox");
   if(!bbox||bbox->kind!=Value::Kind::Array||bbox->array.size()!=4)return false;
   auto number=[](const Value& value,double& out){
