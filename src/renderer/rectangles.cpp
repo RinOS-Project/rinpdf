@@ -405,6 +405,18 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
          width,height,target,target_stride,box,scoped_fonts,properties,
          scoped_images,scoped_forms,false,form_depth+1,form_graphics,surface);
      };
+     if(fm.transparency_group&&!fm.isolated_transparency_group){
+      // With a fully opaque backdrop and Normal compositing, drawing
+      // directly onto the inherited backdrop is equivalent to the
+      // non-isolated group's final color. Do not copy and composite again:
+      // that would apply opacity twice. Other backdrops require a proper
+      // group backdrop/alpha model and are intentionally unsupported.
+      if(transparent_target||blend_mode!="Normal")return false;
+      for(const auto& [name,state]:form_graphics)
+       if(state.has_blend_mode&&state.blend_mode!="Normal")return false;
+      if(!draw_form(rgba,stride))return false;
+      continue;
+     }
      if(transparent_target&&!fm.isolated_transparency_group){
       // A regular Form shares its caller's backdrop and graphics state.
       // Render directly into the same premultiplied surface.
