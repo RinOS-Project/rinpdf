@@ -40,5 +40,26 @@ int main(){
  for(size_t i=0;i<rgb.size();i+=4)
   if(rgb[i]<190||rgb[i]>193||rgb[i+1]<63||rgb[i+1]>65||
      rgb[i+2]<63||rgb[i+2]>65||rgb[i+3]!=255)return 4;
+ // Group primitives must accumulate alpha internally before the group
+ // is composited over the destination: two 50% paints do not make 100%.
+ const std::string overlapping=
+   "q /Half gs 1 0 0 rg 0 0 8 8 re f "
+   "0 0 1 rg 0 0 8 8 re f Q";
+ form.content.assign(overlapping.begin(),overlapping.end());
+ forms["Group"]=form;
+ const std::string gray="0.5 g 0 0 8 8 re f /Group Do";
+ std::vector<uint8_t> overlap_pixels(8*8*4);
+ if(!rinpdf::renderer::render_rectangles_box_with_fonts(
+      reinterpret_cast<const uint8_t*>(gray.data()),gray.size(),
+      8,8,overlap_pixels.data(),32,{0,0,8,8},{},{},{},forms,true,0,states))
+  return 5;
+ for(size_t i=0;i<overlap_pixels.size();i+=4){
+  // Premultiplied group: red ~64, blue ~128, alpha ~192.
+  // Over opaque 128 gray: RGB should be approximately 80, 32, 160.
+  if(overlap_pixels[i]<78||overlap_pixels[i]>82||
+     overlap_pixels[i+1]<30||overlap_pixels[i+1]>34||
+     overlap_pixels[i+2]<158||overlap_pixels[i+2]>162||
+     overlap_pixels[i+3]!=255)return 6;
+ }
  return 0;
 }
