@@ -1259,6 +1259,75 @@ struct Reader {
   }
   active.erase(id);return true;
  }
+ bool walk_graphics_states(const Value& ref,size_t depth,size_t& current,size_t target,
+  std::set<size_t>& active,const Value* inherited,PageGraphicsStates& output) const {
+  if(depth>64||ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
+  const size_t id=size_t(ref.integer);
+  if(!active.insert(id).second)return false;
+  Value node,owned;
+  if(!object(ref,node)){active.erase(id);return false;}
+  if(const Value* resources=get(node,"Resources")){
+   if(resources->kind==Value::Kind::Reference){
+    if(!object(*resources,owned)){active.erase(id);return false;}
+   }else owned=*resources;
+   if(owned.kind!=Value::Kind::Dictionary){active.erase(id);return false;}
+   inherited=&owned;
+  }
+  const Value* type=get(node,"Type");
+  if(!type||type->kind!=Value::Kind::Name){active.erase(id);return false;}
+  if(type->text=="Page"){
+   if(current==target&&inherited){
+    if(const Value* source=get(*inherited,"ExtGState")){
+     Value entries;
+     if(source->kind==Value::Kind::Reference){
+      if(!object(*source,entries)){active.erase(id);return false;}
+     }else entries=*source;
+     if(entries.kind!=Value::Kind::Dictionary||entries.dictionary.size()>128){
+      active.erase(id);return false;
+     }
+     for(const auto& [name,value]:entries.dictionary){
+      Value state;
+      if(value.kind==Value::Kind::Reference){
+       if(!object(value,state)){active.erase(id);return false;}
+      }else state=value;
+      if(state.kind!=Value::Kind::Dictionary){active.erase(id);return false;}
+      PageGraphicsState item;
+      for(const auto& [key,destination]:
+          std::initializer_list<std::pair<const char*,double*>>{
+           {"ca",&item.fill_alpha},{"CA",&item.stroke_alpha}}){
+       if(const Value* v=get(state,key)){
+        double number=0;
+        if(v->kind==Value::Kind::Integer)number=double(v->integer);
+        else if(v->kind==Value::Kind::Real)number=v->real;
+        else {active.erase(id);return false;}
+        if(!std::isfinite(number)||number<0||number>1){
+         active.erase(id);return false;
+        }
+        *destination=number;
+       }
+      }
+      // Other transparency features require separate compositing support.
+      if(get(state,"SMask")||get(state,"BM")||get(state,"AIS")||
+         get(state,"OP")||get(state,"op")){
+       active.erase(id);return false;
+      }
+      output.emplace(name,item);
+     }
+    }
+   }
+   ++current;active.erase(id);return true;
+  }
+  if(type->text!="Pages"){active.erase(id);return false;}
+  const Value* children=get(node,"Kids");
+  if(!children||children->kind!=Value::Kind::Array){
+   active.erase(id);return false;
+  }
+  for(const Value& child:children->array)
+   if(!walk_graphics_states(child,depth+1,current,target,active,inherited,output)){
+    active.erase(id);return false;
+   }
+  active.erase(id);return true;
+ }
  bool walk_properties(const Value& ref,size_t depth,size_t& current,size_t target,
   std::set<size_t>& active,const Value* inherited,PageProperties& output) const {
   if(depth>64||ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
@@ -1507,6 +1576,29 @@ bool read_page_fonts(const uint8_t* data,size_t size,size_t index,
   return false;
  fonts=std::move(result);
  return true;
+}
+
+bool read_page_graphics_states(const uint8_t* data,size_t size,size_t index,
+ PageGraphicsStates& states){
+ if(!data)return false;
+ std::vector<XrefEntry> xref;
+ std::vector<XrefStreamEntry> compressed;
+ Value trailer;
+ if(!read_object_xref(data,size,xref,compressed,trailer)||
+    get(trailer,"Encrypt"))return false;
+ const Value* root=get(trailer,"Root");
+ if(!root)return false;
+ Reader reader{data,size,xref,compressed,{}};
+ Value catalog;
+ if(!reader.object(*root,catalog))return false;
+ const Value* type=get(catalog,"Type"),*pages=get(catalog,"Pages");
+ if(!type||type->kind!=Value::Kind::Name||
+    type->text!="Catalog"||!pages)return false;
+ size_t current=0;std::set<size_t> active;
+ PageGraphicsStates found;
+ if(!reader.walk_graphics_states(*pages,0,current,index,active,nullptr,found)||
+    index>=current)return false;
+ states=std::move(found);return true;
 }
 
 bool read_page_properties(const uint8_t* data,size_t size,size_t index,
