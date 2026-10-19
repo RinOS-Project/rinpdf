@@ -512,9 +512,10 @@ bool evaluate_calculator_tokens(const std::vector<std::string>& parsed_tokens,
      if(n<0||n!=std::floor(n)||n>double(stack.size())||
         stack.size()+size_t(n)>64)return false;
      const size_t count=size_t(n);
-     // Preserve indices while appending: reserve prevents reallocation and
-     // the source elements precede every newly appended element.
-     stack.reserve(64);
+     if(count==0)continue;
+     // Reserve exactly the required capacity before copying by index.
+     // The source values remain stable as the destination grows.
+     stack.reserve(stack.size()+count);
      const size_t start=stack.size()-count;
      for(size_t i=0;i<count;++i)
       stack.push_back(stack[start+i]);
