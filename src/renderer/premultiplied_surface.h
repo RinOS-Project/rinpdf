@@ -36,6 +36,30 @@ struct PremultipliedSurface {
       unsigned(coverage)+mul255(pixels[index+3],remain)));
   return true;
  }
+ // PDF separable blending on a transparent premultiplied backdrop.
+ // Modes: 0 Normal, 1 Multiply, 2 Screen. Source colors are unassociated.
+ bool blend_pixel(unsigned x,unsigned y,uint8_t red,uint8_t green,
+                  uint8_t blue,uint8_t source_alpha,unsigned mode){
+  if(mode>2||x>=width||y>=height||
+     pixels.size()!=size_t(width)*height*4)return false;
+  const size_t i=(size_t(y)*width+x)*4;
+  const unsigned as=source_alpha,ad=pixels[i+3];
+  const unsigned src[3]={red,green,blue};
+  for(unsigned c=0;c<3;++c){
+   const unsigned dest_p=pixels[i+c];
+   // Unassociate only for computing the blend function; never divide by 0.
+   const unsigned dest=ad?std::min(255u,(dest_p*255u+ad/2)/ad):0u;
+   const unsigned blended=mode==1?(src[c]*dest+127u)/255u:
+      mode==2?255u-((255u-src[c])*(255u-dest)+127u)/255u:src[c];
+   // Co = (1-as)*Dp + (1-ad)*as*Cs + as*ad*Blend(Cs,Cd).
+   const uint64_t numerator=uint64_t(dest_p)*(255u-as)*255u+
+      uint64_t(src[c])*as*(255u-ad)+uint64_t(blended)*as*ad;
+   pixels[i+c]=uint8_t(std::min<uint64_t>(255u,
+                           (numerator+32512u)/65025u));
+  }
+  pixels[i+3]=uint8_t(std::min(255u,as+mul255(ad,255u-as)));
+  return true;
+ }
  bool set_reconstructed(unsigned x,unsigned y,
                         const uint8_t* black,const uint8_t* white){
   if(x>=width||y>=height||!black||!white)return false;
