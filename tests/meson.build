@@ -71,3 +71,8 @@ test('rinpdf-function-sample-budget',executable('rinpdf-function-sample-budget',
 test('rinpdf-function-sample-validation',executable('rinpdf-function-sample-validation','function_sample_validation.cpp',dependencies:rinpdf_dep))
 
 test('rinpdf-image-decoder-bounds',executable('rinpdf-image-decoder-bounds','image_decoder_bounds.cpp',dependencies:rinpdf_dep))
+
+# Requires the real libtiff codec: no fixture-less or fallback PASS.
+if tiff_dep.found()
+ test('rinpdf-ccitt-valid-decode',executable('rinpdf-ccitt-valid-decode','ccitt_valid_decode.cpp',dependencies:rinpdf_dep))
+endif
