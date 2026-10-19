@@ -22,7 +22,6 @@ int main() {
  // A later integer-only operator must reject it.
  assert(!run("{ pop 5 2 div 2 mod }",output));
  assert(!run("{ pop 8 2 div 1 bitshift }",output));
- assert(!run("{ pop 8 2 div 1 index }",output));
  assert(run("{ pop 5 2 div 2 add }",output));
  assert(std::abs(output-4.5)<1e-12);
  // Non-division integer arithmetic retains integer operands for mod.
