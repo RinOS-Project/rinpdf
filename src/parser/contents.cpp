@@ -1121,9 +1121,15 @@ struct Reader {
    if(!subtype||subtype->kind!=Value::Kind::Name||
       subtype->text!="Transparency"||
       (isolated&&isolated->kind!=Value::Kind::Boolean)||
-      (knockout&&knockout->kind!=Value::Kind::Boolean)||
-      get(group,"CS"))
+      (knockout&&knockout->kind!=Value::Kind::Boolean))
     return false;
+   if(const Value* cs=get(group,"CS")){
+    // The existing compositor uses RGB group colors and does not yet
+    // support ICCBased, CalRGB or custom group blend spaces.
+    if(cs->kind!=Value::Kind::Name||cs->text!="DeviceRGB")
+     return false;
+    form.group_color_space="DeviceRGB";
+   }
    form.transparency_group=true;
    form.isolated_transparency_group=isolated&&isolated->boolean;
    form.knockout_transparency_group=knockout&&knockout->boolean;
