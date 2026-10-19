@@ -397,7 +397,6 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
     const auto found=images.find(pending_image);
     if(found==images.end())return false;
     const auto& im=found->second;
-    if(transparent_target)return false;
     pending_image.clear();
     if((im.channels!=1&&im.channels!=3)||!im.width||!im.height||
        im.pixels.size()!=size_t(im.width)*im.height*im.channels||
@@ -437,6 +436,18 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
        (im.alpha.empty()?255:im.alpha[size_t(iy)*im.width+ix]);
      const unsigned opacity=(base_opacity*unsigned(std::lround(fill_alpha*255))+127)/255;
      if(!opacity)continue;
+     if(transparent_target){
+      if(blend_mode!="Normal")return false;
+      const auto component=[&](unsigned channel)->uint8_t{
+       return uint8_t(im.stencil?
+         unsigned(std::lround((channel==0?red:channel==1?green:blue)*255)):
+         im.pixels[source+(im.channels==3?channel:0)]);
+      };
+      if(!transparent_target->fill_pixel(
+            px,py,component(0),component(1),component(2),uint8_t(opacity)))
+       return false;
+      continue;
+     }
      // Source-over on the renderer's opaque page buffer.
      for(unsigned channel=0;channel<3;++channel){
       const unsigned src=im.stencil?
