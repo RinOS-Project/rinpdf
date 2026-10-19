@@ -25,7 +25,8 @@ static bool space(unsigned char c){return c==0||c==9||c==10||c==12||c==13||c==32
 struct Rect {double x,y,w,h;};
 bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsigned width,unsigned height,uint8_t *rgba,size_t stride,PageBox box,const FontResources& fonts,
  const MarkedProperties& properties,const ImageResources& images,
- const FormResources& forms,bool clear_background,unsigned form_depth){
+ const FormResources& forms,bool clear_background,unsigned form_depth,
+ const GraphicsStateResources& graphic_states){
  if(form_depth>8)return false;
  if(!std::isfinite(box.x0)||!std::isfinite(box.y0)||!std::isfinite(box.x1)||!std::isfinite(box.y1)||box.x1<=box.x0||box.y1<=box.y0)return false;
  const double sx=(double)width/(box.x1-box.x0),sy=(double)height/(box.y1-box.y0);
@@ -36,6 +37,8 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
  if(clear_background)for(unsigned y=0;y<height;++y)
   std::memset(rgba+(size_t)y*stride,255,(size_t)width*4);
  double red=0,green=0,blue=0;
+ double fill_alpha=1,stroke_alpha=1;
+ std::vector<std::pair<double,double>> saved_alpha;
  struct Color { double r,g,b,a,bx,cx,d,e,f,width,sr,sg,sb; int cap,join; double miter,flatness; std::vector<double> dash; double dash_phase; };
  double a=1,bx=0,cx=0,d=1,e=0,f=0;
  double line_width=1;
@@ -222,6 +225,14 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
     }
    }
    if(!in_text&&next.kind==parser::TokenKind::Keyword&&
+      next.value=="gs"&&stack.empty()){
+    const auto state=graphic_states.find(token.value);
+    if(state==graphic_states.end())return false;
+    fill_alpha=state->second.fill_alpha;
+    stroke_alpha=state->second.stroke_alpha;
+    lex=look;continue;
+   }
+   if(!in_text&&next.kind==parser::TokenKind::Keyword&&
       next.value=="Do"&&stack.empty()){
     pending_image=token.value;
     lex=look;
@@ -334,9 +345,10 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      const unsigned iy=std::min(im.height-1,unsigned((1-v)*im.height));
      const size_t source=(size_t(iy)*im.width+ix)*im.channels;
      const size_t target=size_t(py)*stride+size_t(px)*4;
-     const unsigned opacity=im.stencil?
+     const unsigned base_opacity=im.stencil?
        im.pixels[size_t(iy)*im.width+ix]:
        (im.alpha.empty()?255:im.alpha[size_t(iy)*im.width+ix]);
+     const unsigned opacity=(base_opacity*unsigned(std::lround(fill_alpha*255))+127)/255;
      if(!opacity)continue;
      // Source-over on the renderer's opaque page buffer.
      for(unsigned channel=0;channel<3;++channel){
@@ -400,12 +412,16 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
   if(word=="q"){
    if((pending_rect_clip||pending_path_clip)||!stack.empty()||saved.size()>=64)return false;
    saved.push_back({red,green,blue,a,bx,cx,d,e,f,line_width,stroke_red,stroke_green,stroke_blue,line_cap,line_join,miter_limit,flatness,dash_pattern,dash_phase});
+   saved_alpha.emplace_back(fill_alpha,stroke_alpha);
    clip_stack.push_back(clip);
    clip_mask_stack.push_back(clip_mask);
 
   }else if(word=="Q"){
    if((pending_rect_clip||pending_path_clip)||!stack.empty()||saved.empty())return false;
    auto color=saved.back();saved.pop_back();
+   fill_alpha=saved_alpha.back().first;
+   stroke_alpha=saved_alpha.back().second;
+   saved_alpha.pop_back();
    red=color.r;green=color.g;blue=color.b;a=color.a;bx=color.bx;cx=color.cx;d=color.d;e=color.e;f=color.f;line_width=color.width;stroke_red=color.sr;stroke_green=color.sg;stroke_blue=color.sb;line_cap=color.cap;line_join=color.join;miter_limit=color.miter;flatness=color.flatness;dash_pattern=color.dash;dash_phase=color.dash_phase;
    clip=clip_stack.back();clip_stack.pop_back();
    clip_mask=std::move(clip_mask_stack.back());clip_mask_stack.pop_back();
@@ -1434,6 +1450,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
     unsigned bits=stroke_samples[i],hits=(unsigned)((bits&1)!=0)+((bits&2)!=0)+((bits&4)!=0)+((bits&8)!=0);
     if(!hits)continue;
     unsigned alpha=(hits*255+2)/4;
+    alpha=(alpha*unsigned(std::lround(stroke_alpha*255))+127)/255;
     if(clip_mask!=nullptr)alpha=(alpha*(*clip_mask)[i]+127)/255;
     if(!alpha)continue;
     uint8_t* pixel=rgba+(size_t)y*stride+(size_t)x*4;
@@ -1464,6 +1481,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
     if(!coverage[i]||(clip_mask!=nullptr&&!(*clip_mask)[i])||x<clip.x0||x>=clip.x1||y<clip.y0||y>=clip.y1)continue;
     uint8_t* pixel=rgba+(size_t)y*stride+(size_t)x*4;
     unsigned alpha=antialias?coverage[i]:255;
+    alpha=(alpha*unsigned(std::lround(fill_alpha*255))+127)/255;
     if(clip_mask!=nullptr)alpha=(alpha*(*clip_mask)[i]+127)/255;
     if(!alpha)continue;
     pixel[0]=(uint8_t)((alpha*cr+(255-alpha)*pixel[0]+127)/255);
