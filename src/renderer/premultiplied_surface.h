@@ -20,6 +20,22 @@ struct PremultipliedSurface {
  static unsigned mul255(unsigned a,unsigned b){
   return (a*b+127)/255;
  }
+ // Source-over a solid fill at the specified 8-bit coverage.
+ // Color is supplied unassociated; storage remains premultiplied.
+ bool fill_pixel(unsigned x,unsigned y,uint8_t red,uint8_t green,
+                 uint8_t blue,uint8_t coverage){
+  if(x>=width||y>=height||
+     pixels.size()!=size_t(width)*height*4)return false;
+  const size_t index=(size_t(y)*width+x)*4;
+  const unsigned remain=255u-coverage;
+  const unsigned colors[3]={red,green,blue};
+  for(unsigned c=0;c<3;++c)
+   pixels[index+c]=uint8_t(std::min(255u,
+      mul255(colors[c],coverage)+mul255(pixels[index+c],remain)));
+  pixels[index+3]=uint8_t(std::min(255u,
+      unsigned(coverage)+mul255(pixels[index+3],remain)));
+  return true;
+ }
  bool set_reconstructed(unsigned x,unsigned y,
                         const uint8_t* black,const uint8_t* white){
   if(x>=width||y>=height||!black||!white)return false;
