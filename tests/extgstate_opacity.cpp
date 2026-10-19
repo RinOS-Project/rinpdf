@@ -19,10 +19,8 @@ int main(){
  const auto value=[&](unsigned x,unsigned y){
   return rgba[(size_t(y)*8+x)*4];
  };
- if(value(1,1)!=128 || value(6,6)!=128){
-  // A path coordinate origin is bottom-left; both sampled regions
-  // should be semi-transparent unless the opaque rectangle overlaps.
-  if(value(1,1)!=128 || value(6,6)!=128)return 2;
- }
+ // Opaque black should cover the bottom-left quarter after Q restores
+ // normal opacity. The other regions remain half black over white.
+ if(value(1,6)!=0||value(6,1)!=127||value(6,6)!=127)return 2;
  return 0;
 }
