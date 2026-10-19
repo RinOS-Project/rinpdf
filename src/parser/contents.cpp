@@ -1311,9 +1311,12 @@ struct Reader {
       // Explicit defaults are common in real ExtGState dictionaries.
       // Accept them without claiming support for non-Normal blending.
       if(const Value* blend=get(state,"BM")){
-       if(blend->kind!=Value::Kind::Name||blend->text!="Normal"){
+       if(blend->kind!=Value::Kind::Name||
+          (blend->text!="Normal"&&blend->text!="Multiply"&&blend->text!="Screen")){
         active.erase(id);return false;
        }
+       item.blend_mode=blend->text;
+       item.has_blend_mode=true;
       }
       if(const Value* soft=get(state,"SMask")){
        if(soft->kind!=Value::Kind::Name||soft->text!="None"){
