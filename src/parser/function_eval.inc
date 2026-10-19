@@ -3,8 +3,14 @@
  // Compile one-input PDF functions recursively for shared evaluation.
  bool compile_tint_tree(const Value& ref,unsigned outputs,PdfFunction& out,
                         unsigned depth=0,
-                        std::vector<std::pair<int64_t,int64_t>> ancestors={}) const {
-  if(depth>=8||outputs<1||outputs>4)return false;
+                        std::vector<std::pair<int64_t,int64_t>> ancestors={},
+                        size_t* shared_budget=nullptr) const {
+  // Depth alone does not bound a branching Type 3 tree. Bound the entire
+  // compilation to 256 function nodes, including all descendants.
+  size_t root_budget=256;
+  if(!shared_budget)shared_budget=&root_budget;
+  if(*shared_budget==0||depth>=8||outputs<1||outputs>4)return false;
+  --*shared_budget;
   // Reject cyclic indirect references before resolving streams or objects.
   if(ref.kind==Value::Kind::Reference){
    const auto id=std::make_pair(ref.integer,ref.generation);
@@ -131,8 +137,8 @@
    std::vector<PdfFunction> children;
    for(const Value& child:funcs->array){
     PdfFunction compiled;
-    if(!compile_tint_tree(child,outputs,compiled,depth+1,ancestors))
-     return false;
+    if(!compile_tint_tree(child,outputs,compiled,depth+1,ancestors,
+                          shared_budget))return false;
     children.push_back(std::move(compiled));
    }
    return compile_stitching_pdf_function(children,locations,mapped,
