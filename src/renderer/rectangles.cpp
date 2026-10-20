@@ -428,16 +428,26 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
        if(!draw_form(rgba,stride,nullptr,cmyk_target))return false;
        continue;
       }
-      // An isolated DeviceCMYK child is a separate ink surface; blend
-      // the complete child into the parent only after rendering it.
-      if(!fm.isolated_transparency_group||
-         fm.knockout_transparency_group||
-         fm.group_color_space!="DeviceCMYK")return false;
+      if(fm.group_color_space!="DeviceCMYK"||
+         fm.knockout_transparency_group)return false;
       PremultipliedCMYKSurface child;
       if(!child.resize(width,height))return false;
-      const unsigned mode=transparent_blend_mode();
-      if(!draw_form(rgba,stride,nullptr,&child)||
-         !cmyk_target->composite_group(child,mode))return false;
+      if(fm.isolated_transparency_group){
+       // An isolated child begins on transparent ink, then blends once.
+       const unsigned mode=transparent_blend_mode();
+       if(!draw_form(rgba,stride,nullptr,&child)||
+          !cmyk_target->composite_group(child,mode))return false;
+      }else{
+       // A non-isolated child inherits the actual CMYK backdrop.
+       // Commit only its painted pixels rather than recompositing it.
+       if(blend_mode!="Normal")return false;
+       PremultipliedCMYKSurface backdrop;
+       if(!backdrop.resize(width,height)||
+          !backdrop.inherit_backdrop(*cmyk_target)||
+          !child.inherit_backdrop(*cmyk_target)||
+          !draw_form(rgba,stride,nullptr,&child)||
+          !cmyk_target->commit_nonisolated(child,backdrop))return false;
+      }
       continue;
      }
 
