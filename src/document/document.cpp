@@ -16,6 +16,7 @@
 #include <set>
 #include <cmath>
 #include <cstdlib>
+#include <memory>
 struct rinpdf_document { std::vector<uint8_t> bytes; unsigned major,minor; };
 extern "C" rinpdf_status rinpdf_document_open_memory(const uint8_t *data,size_t size,rinpdf_document **out) {
  if(!out) return RINPDF_INVALID_ARGUMENT;
@@ -344,7 +345,8 @@ extern "C" rinpdf_status rinpdf_merge_files_lossless(
  const char* path,const char* const* source_paths,size_t count){
  if(!path||!source_paths||count==0||count>128)return RINPDF_INVALID_ARGUMENT;
  try {
-  std::vector<rinpdf_document*> documents;
+  using OwnedDocument=std::unique_ptr<rinpdf_document,decltype(&rinpdf_document_close)>;
+  std::vector<OwnedDocument> documents;
   documents.reserve(count);
   rinpdf_status status=RINPDF_OK;
   for(size_t i=0;i<count;++i){
@@ -352,13 +354,14 @@ extern "C" rinpdf_status rinpdf_merge_files_lossless(
    rinpdf_document* doc=nullptr;
    status=rinpdf_document_open_file(source_paths[i],&doc);
    if(status!=RINPDF_OK)break;
-   documents.push_back(doc);
+   documents.emplace_back(doc,rinpdf_document_close);
   }
   if(status==RINPDF_OK){
-   std::vector<const rinpdf_document*> refs(documents.begin(),documents.end());
+   std::vector<const rinpdf_document*> refs;
+   refs.reserve(documents.size());
+   for(const auto& doc:documents)refs.push_back(doc.get());
    status=rinpdf_merge_documents_lossless_file(path,refs.data(),refs.size());
   }
-  for(auto* doc:documents)rinpdf_document_close(doc);
   return status;
  }catch(const std::bad_alloc&){return RINPDF_OUT_OF_MEMORY;}
 }
