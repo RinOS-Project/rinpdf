@@ -1405,6 +1405,46 @@ struct Reader {
           if(!fn_type||fn_type->kind!=Value::Kind::Integer)return false;
           if(fn_type->integer==2){
            if(!type2(fn,branch))return false;
+          }else if(fn_type->integer==3){
+           // One further nested level with Type2 leaves. Limit fanout
+           // and reject deeper unresolved references.
+           const Value* functions3=get(fn,"Functions");
+           const Value* bounds3=get(fn,"Bounds");
+           const Value* encode3=get(fn,"Encode");
+           const Value* domain3=get(fn,"Domain");
+           if(!functions3||functions3->kind!=Value::Kind::Array||
+              functions3->array.empty()||functions3->array.size()>16||
+              !bounds3||bounds3->kind!=Value::Kind::Array||
+              bounds3->array.size()+1!=functions3->array.size()||
+              !encode3||encode3->kind!=Value::Kind::Array||
+              encode3->array.size()!=2*functions3->array.size()||
+              !domain3||domain3->kind!=Value::Kind::Array||
+              domain3->array.size()!=2)return false;
+           double dlo=0,dhi=0;
+           if(!numeric(domain3->array[0],dlo)||
+              !numeric(domain3->array[1],dhi)||
+              dlo!=0||dhi!=1)return false;
+           double previous=0;
+           for(const auto& bound:bounds3->array){
+            double value=0;
+            if(!numeric(bound,value)||value<=previous||value>=1)
+             return false;
+            branch.bounds.push_back(value);previous=value;
+           }
+           for(const auto& encoded:encode3->array){
+            double value=0;
+            if(!numeric(encoded,value)||value<0||value>1)return false;
+            branch.stitch_encode.push_back(value);
+           }
+           for(const auto& item:functions3->array){
+            Value leaf_function;
+            if(item.kind==Value::Kind::Reference){
+             if(!object(item,leaf_function))return false;
+            }else leaf_function=item;
+            SeparationColorSpace::Segment leaf_segment;
+            if(!type2(leaf_function,leaf_segment))return false;
+            branch.children.push_back(std::move(leaf_segment));
+           }
           }else if(fn_type->integer==0){
            const Value* sizes=get(fn,"Size");
            const Value* bits=get(fn,"BitsPerSample");
