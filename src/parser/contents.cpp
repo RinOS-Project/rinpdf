@@ -1453,6 +1453,101 @@ struct Reader {
   visiting.erase(id);
   return true;
  }
+ bool walk_color_spaces(const Value& ref,size_t depth,size_t& current,
+  size_t target,std::set<size_t>& active,const Value* inherited,
+  std::map<std::string,std::string>& aliases,
+  std::map<std::string,SeparationColorSpace>& separations) const {
+  if(depth>64||ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
+  const size_t id=size_t(ref.integer);
+  if(!active.insert(id).second)return false;
+  Value node,owned;
+  if(!object(ref,node)){active.erase(id);return false;}
+  if(const Value* resources=get(node,"Resources")){
+   if(resources->kind==Value::Kind::Reference){
+    if(!object(*resources,owned)){active.erase(id);return false;}
+   }else owned=*resources;
+   if(owned.kind!=Value::Kind::Dictionary){active.erase(id);return false;}
+   inherited=&owned;
+  }
+  const Value* type=get(node,"Type");
+  if(!type||type->kind!=Value::Kind::Name){active.erase(id);return false;}
+  if(type->text=="Page"){
+   if(current==target&&inherited){
+    if(const Value* spaces=get(*inherited,"ColorSpace")){
+     Value definitions;
+     if(spaces->kind==Value::Kind::Reference){
+      if(!object(*spaces,definitions)){active.erase(id);return false;}
+     }else definitions=*spaces;
+     if(definitions.kind!=Value::Kind::Dictionary||
+        definitions.dictionary.size()>128){active.erase(id);return false;}
+     for(const auto& [name,definition]:definitions.dictionary){
+      Value resolved;
+      if(definition.kind==Value::Kind::Reference){
+       if(!object(definition,resolved)){active.erase(id);return false;}
+      }else resolved=definition;
+      if(resolved.kind==Value::Kind::Name){
+       if(resolved.text=="DeviceGray"||resolved.text=="DeviceRGB"||
+          resolved.text=="DeviceCMYK")aliases.emplace(name,resolved.text);
+       continue;
+      }
+      if(resolved.kind!=Value::Kind::Array||resolved.array.size()!=4||
+         resolved.array[0].kind!=Value::Kind::Name||
+         resolved.array[0].text!="Separation"||
+         resolved.array[2].kind!=Value::Kind::Name)continue;
+      SeparationColorSpace sep;
+      sep.alternate=resolved.array[2].text;
+      sep.components=sep.alternate=="DeviceGray"?1u:
+         sep.alternate=="DeviceRGB"?3u:
+         sep.alternate=="DeviceCMYK"?4u:0u;
+      if(!sep.components)continue;
+      Value function;
+      if(resolved.array[3].kind==Value::Kind::Reference){
+       if(!object(resolved.array[3],function)){active.erase(id);return false;}
+      }else function=resolved.array[3];
+      const Value* ft=get(function,"FunctionType");
+      const Value* exponent=get(function,"N");
+      if(!ft||ft->kind!=Value::Kind::Integer||ft->integer!=2||
+         !exponent)continue;
+      double n=0;
+      if(exponent->kind==Value::Kind::Integer)n=double(exponent->integer);
+      else if(exponent->kind==Value::Kind::Real)n=exponent->real;
+      else continue;
+      if(!std::isfinite(n)||n<=0||n>100)continue;
+      sep.exponent=n;
+      for(unsigned c=0;c<sep.components;++c)sep.c1[c]=1;
+      bool valid=true;
+      for(const char* key:{"C0","C1"}){
+       const Value* values=get(function,key);
+       if(!values)continue;
+       if(values->kind!=Value::Kind::Array||
+          values->array.size()!=sep.components){valid=false;break;}
+       for(unsigned c=0;c<sep.components;++c){
+        const Value& v=values->array[c];
+        double d=0;
+        if(v.kind==Value::Kind::Integer)d=double(v.integer);
+        else if(v.kind==Value::Kind::Real)d=v.real;
+        else {valid=false;break;}
+        if(!std::isfinite(d)||d<0||d>1){valid=false;break;}
+        if(key[1]=='0')sep.c0[c]=d;else sep.c1[c]=d;
+       }
+       if(!valid)break;
+      }
+      if(valid)separations.emplace(name,std::move(sep));
+     }
+    }
+   }
+   ++current;active.erase(id);return true;
+  }
+  if(type->text!="Pages"){active.erase(id);return false;}
+  const Value* kids=get(node,"Kids");
+  if(!kids||kids->kind!=Value::Kind::Array){active.erase(id);return false;}
+  for(const Value& child:kids->array)
+   if(!walk_color_spaces(child,depth+1,current,target,active,inherited,
+                         aliases,separations)){
+    active.erase(id);return false;
+   }
+  active.erase(id);return true;
+ }
  bool walk_forms(const Value& ref,size_t depth,size_t& current,size_t target,
   std::set<size_t>& active,const Value* inherited,
   std::map<std::string,PageForm>& output) const {
@@ -1917,6 +2012,34 @@ bool read_page_images(const uint8_t* data,size_t size,size_t index,
  if(!reader.walk_images(*pages,0,current,index,active,nullptr,result)||
     index>=current)return false;
  images=std::move(result);return true;
+}
+
+bool read_page_color_spaces(const uint8_t* data,size_t size,size_t index,
+ std::map<std::string,std::string>& aliases,
+ std::map<std::string,SeparationColorSpace>& separations){
+ if(!data)return false;
+ std::vector<XrefEntry> xref;
+ std::vector<XrefStreamEntry> compressed;
+ Value trailer;
+ if(!read_object_xref(data,size,xref,compressed,trailer)||
+    get(trailer,"Encrypt"))return false;
+ const Value* root=get(trailer,"Root");
+ if(!root)return false;
+ Reader reader{data,size,xref,compressed,{}};
+ Value catalog;
+ if(!reader.object(*root,catalog))return false;
+ const Value* type=get(catalog,"Type"),*pages=get(catalog,"Pages");
+ if(!type||type->kind!=Value::Kind::Name||
+    type->text!="Catalog"||!pages)return false;
+ size_t current=0;
+ std::set<size_t> active;
+ std::map<std::string,std::string> named;
+ std::map<std::string,SeparationColorSpace> tint;
+ if(!reader.walk_color_spaces(*pages,0,current,index,active,nullptr,
+                               named,tint)||index>=current)return false;
+ aliases=std::move(named);
+ separations=std::move(tint);
+ return true;
 }
 
 bool read_page_forms(const uint8_t* data,size_t size,size_t index,
