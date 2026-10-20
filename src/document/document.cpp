@@ -1,4 +1,4 @@
-#include "rinpdf/document.h"
+#include "rinpdf/rinpdf.h"
 #include "../parser/pages.h"
 #include "../parser/xref_stream.h"
 #include "../parser/object_resolver.h"
