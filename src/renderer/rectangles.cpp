@@ -33,7 +33,8 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
  const GraphicsStateResources& graphic_states,
  PremultipliedSurface* transparent_target,
  PremultipliedCMYKSurface* cmyk_target,
- const std::map<std::string,std::string>& named_color_spaces){
+ const std::map<std::string,std::string>& named_color_spaces,
+ const std::map<std::string,parser::SeparationColorSpace>& separations){
  if(form_depth>8)return false;
  if(!std::isfinite(box.x0)||!std::isfinite(box.y0)||!std::isfinite(box.x1)||!std::isfinite(box.y1)||box.x1<=box.x0||box.y1<=box.y0)return false;
  const double sx=(double)width/(box.x1-box.x0),sy=(double)height/(box.y1-box.y0);
@@ -334,9 +335,12 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
     std::string selected=token.value;
     if(selected!="DeviceGray"&&selected!="DeviceRGB"&&
        selected!="DeviceCMYK"){
-     const auto alias=named_color_spaces.find(selected);
-     if(alias==named_color_spaces.end())return false;
-     selected=alias->second;
+     const auto separation=separations.find(selected);
+     if(separation==separations.end()){
+      const auto alias=named_color_spaces.find(selected);
+      if(alias==named_color_spaces.end())return false;
+      selected=alias->second;
+     }
     }
     if(next.value=="cs")fill_space=selected;
     else stroke_space=selected;
@@ -463,7 +467,8 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
          reinterpret_cast<const uint8_t*>(stream.data()),stream.size(),
          width,height,target,target_stride,box,scoped_fonts,properties,
          scoped_images,scoped_forms,false,form_depth+1,form_graphics,
-         surface,ink,fm.own_resources?fm.local_color_spaces:named_color_spaces);
+         surface,ink,fm.own_resources?fm.local_color_spaces:named_color_spaces,
+         fm.own_resources?fm.local_separations:separations);
      };
      if(fm.knockout_transparency_group&&!fm.transparency_group)
       return false;
@@ -1041,11 +1046,38 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
            word=="SC"||word=="SCN"){
    const bool stroking=word=="SC"||word=="SCN";
    const auto& space=stroking?stroke_space:fill_space;
-   const size_t channels=space=="DeviceCMYK"?4u:
+   const auto tint_space=separations.find(space);
+   const size_t channels=tint_space!=separations.end()?1u:
+                         space=="DeviceCMYK"?4u:
                          space=="DeviceRGB"?3u:1u;
    if(stack.size()!=channels)return false;
    for(double channel:stack)
     if(!std::isfinite(channel)||channel<0||channel>1)return false;
+   if(tint_space!=separations.end()){
+    const auto& transform=tint_space->second;
+    const double weight=std::pow(stack[0],transform.exponent);
+    double output[4]{};
+    for(unsigned c=0;c<transform.components;++c)
+     output[c]=transform.c0[c]+weight*(transform.c1[c]-transform.c0[c]);
+    const bool cmyk=transform.alternate=="DeviceCMYK";
+    const double rr=cmyk?(1-output[0])*(1-output[3]):output[0];
+    const double gg=cmyk?(1-output[1])*(1-output[3]):
+                    transform.components==1?rr:output[1];
+    const double bb=cmyk?(1-output[2])*(1-output[3]):
+                    transform.components==1?rr:output[2];
+    if(stroking){
+     stroke_red=rr;stroke_green=gg;stroke_blue=bb;
+     explicit_stroke_ink=cmyk;
+     if(cmyk)for(unsigned c=0;c<4;++c)
+      stroke_ink[c]=unsigned(std::lround(output[c]*255));
+    }else{
+     red=rr;green=gg;blue=bb;
+     explicit_fill_ink=cmyk;
+     if(cmyk)for(unsigned c=0;c<4;++c)
+      fill_ink[c]=unsigned(std::lround(output[c]*255));
+    }
+    stack.clear();continue;
+   }
    if(stroking){
     if(channels==4){
      for(unsigned c=0;c<4;++c)
