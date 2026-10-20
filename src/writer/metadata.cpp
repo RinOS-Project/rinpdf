@@ -2,6 +2,8 @@
 #include "../parser/xref.h"
 #include "../parser/lexer.h"
 #include "../parser/value.h"
+#include "../parser/xref_stream.h"
+#include "../parser/object_resolver.h"
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
@@ -133,4 +135,65 @@ extern "C" rinpdf_status rinpdf_metadata_update_file(
  if(std::fclose(f)!=0)ok=false;
  std::free(result);
  return ok?RINPDF_OK:RINPDF_IO_ERROR;
+}
+
+extern "C" rinpdf_status rinpdf_metadata_get_utf8(
+ const uint8_t* pdf,size_t length,const char* key,char** output){
+ if(!output)return RINPDF_INVALID_ARGUMENT;
+ *output=nullptr;
+ if(!pdf||length<8||!key)return RINPDF_INVALID_ARGUMENT;
+ const char* permitted[]={"Title","Author","Subject","Keywords","Creator","Producer"};
+ bool allowed=false;
+ for(const char* name:permitted)if(std::strcmp(name,key)==0)allowed=true;
+ if(!allowed)return RINPDF_INVALID_ARGUMENT;
+ try {
+  std::vector<rinpdf::parser::XrefEntry> ordinary;
+  std::vector<rinpdf::parser::XrefStreamEntry> compressed;
+  rinpdf::parser::Value trailer;
+  if(!rinpdf::parser::read_object_xref(pdf,length,ordinary,compressed,trailer))
+   return RINPDF_UNSUPPORTED;
+  const auto info=trailer.dictionary.find("Info");
+  if(info==trailer.dictionary.end())return RINPDF_UNSUPPORTED;
+  rinpdf::parser::Value dictionary;
+  if(!rinpdf::parser::resolve_reference_value(pdf,length,ordinary,compressed,
+                                               info->second,dictionary)||
+     dictionary.kind!=rinpdf::parser::Value::Kind::Dictionary)return RINPDF_UNSUPPORTED;
+  const auto field=dictionary.dictionary.find(key);
+  if(field==dictionary.dictionary.end()||
+     field->second.kind!=rinpdf::parser::Value::Kind::String)return RINPDF_UNSUPPORTED;
+  const std::string& input=field->second.text;
+  std::string decoded;
+  auto append=[&](uint32_t cp){
+   if(cp<0x80)decoded+=(char)cp;
+   else if(cp<0x800){decoded+=(char)(0xC0|(cp>>6));decoded+=(char)(0x80|(cp&63));}
+   else if(cp<0x10000){decoded+=(char)(0xE0|(cp>>12));decoded+=(char)(0x80|((cp>>6)&63));decoded+=(char)(0x80|(cp&63));}
+   else {decoded+=(char)(0xF0|(cp>>18));decoded+=(char)(0x80|((cp>>12)&63));
+     decoded+=(char)(0x80|((cp>>6)&63));decoded+=(char)(0x80|(cp&63));}
+  };
+  if(input.size()>=2&&(unsigned char)input[0]==0xFE&&(unsigned char)input[1]==0xFF){
+   if((input.size()-2)%2)return RINPDF_UNSUPPORTED;
+   for(size_t i=2;i<input.size();i+=2){
+    uint32_t cp=((unsigned char)input[i]<<8)|(unsigned char)input[i+1];
+    if(cp>=0xD800&&cp<=0xDBFF){
+     if(i+3>=input.size())return RINPDF_UNSUPPORTED;
+     uint32_t low=((unsigned char)input[i+2]<<8)|(unsigned char)input[i+3];
+     if(low<0xDC00||low>0xDFFF)return RINPDF_UNSUPPORTED;
+     cp=0x10000+((cp-0xD800)<<10)+(low-0xDC00);i+=2;
+    }else if(cp>=0xDC00&&cp<=0xDFFF)return RINPDF_UNSUPPORTED;
+    append(cp);
+   }
+  }else{
+   // ASCII subset of PDFDocEncoding; non-ASCII requires a full mapping.
+   for(unsigned char c:input){
+    if(c>=0x80)return RINPDF_UNSUPPORTED;
+    decoded+=(char)c;
+   }
+  }
+  char* result=(char*)std::malloc(decoded.size()+1);
+  if(!result)return RINPDF_OUT_OF_MEMORY;
+  std::memcpy(result,decoded.data(),decoded.size());
+  result[decoded.size()]=0;
+  *output=result;
+  return RINPDF_OK;
+ }catch(const std::bad_alloc&){return RINPDF_OUT_OF_MEMORY;}
 }
