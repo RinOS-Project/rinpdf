@@ -486,7 +486,8 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
          object.ink=cmyk_target->backdrop_ink;
         }
         if(!draw_form(rgba,stride,nullptr,&object)||
-           !cmyk_target->knockout_object(object,external_mode))return false;
+           !cmyk_target->knockout_object(object,external_mode,
+                 cmyk_target->nonisolated_knockout))return false;
        }else if(!draw_form(rgba,stride,nullptr,cmyk_target))return false;
        continue;
       }
@@ -505,7 +506,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
        if(cmyk_target->knockout){
         // A nested transparency group is one knockout object; its
         // internal paints have already been resolved in the child.
-        if(!cmyk_target->knockout_object(child,mode))return false;
+        if(!cmyk_target->knockout_object(child,mode,false))return false;
        }else if(!cmyk_target->composite_group(child,mode))return false;
       }else{
        // A non-isolated child inherits the immutable CMYK backdrop.
@@ -528,7 +529,8 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
         return false;
        if(!draw_form(rgba,stride,nullptr,&child))return false;
        if(cmyk_target->knockout){
-        if(!cmyk_target->knockout_object(child,external_mode))return false;
+        if(!cmyk_target->knockout_object(child,external_mode,
+                 cmyk_target->nonisolated_knockout))return false;
        }else{
         if(!backdrop.inherit_backdrop(*cmyk_target)||
            !cmyk_target->commit_nonisolated(child,backdrop))return false;
