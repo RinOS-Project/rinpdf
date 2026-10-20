@@ -1059,6 +1059,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
     const double* c0=transform.c0;
     const double* c1=transform.c1;
     double exponent=transform.exponent;
+    const parser::SeparationColorSpace::Segment* selected_segment=nullptr;
     if(!transform.segments.empty()){
      size_t segment=0;
      while(segment<transform.bounds.size()&&
@@ -1071,6 +1072,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      tint=encoded_lo+(tint-lo)/(hi-lo)*(encoded_hi-encoded_lo);
      tint=std::clamp(tint,0.0,1.0);
      const auto& selected=transform.segments[segment];
+     selected_segment=&selected;
      c0=selected.c0;c1=selected.c1;exponent=selected.exponent;
     }
     double output[4]{};
@@ -1094,6 +1096,28 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
       const double hi=double(transform.samples[last*transform.components+c])/255;
       output[c]=std::clamp(lo+fraction*(hi-lo),
           transform.sample_range[2*c],transform.sample_range[2*c+1]);
+     }
+    }else if(selected_segment&&!selected_segment->samples.empty()){
+     const auto& sampled=*selected_segment;
+     if(sampled.sample_count<2||
+        sampled.samples.size()!=size_t(sampled.sample_count)*
+                                transform.components||
+        sampled.domain[0]>=sampled.domain[1])return false;
+     const double clamped=std::clamp(tint,sampled.domain[0],
+                                         sampled.domain[1]);
+     const double normalized=(clamped-sampled.domain[0])/
+                             (sampled.domain[1]-sampled.domain[0]);
+     const double position=std::clamp(
+        sampled.encode[0]+normalized*(sampled.encode[1]-sampled.encode[0]),
+        0.0,double(sampled.sample_count-1));
+     const size_t first=size_t(position);
+     const size_t last=std::min<size_t>(sampled.sample_count-1,first+1);
+     const double fraction=position-double(first);
+     for(unsigned c=0;c<transform.components;++c){
+      const double lo=double(sampled.samples[first*transform.components+c])/255;
+      const double hi=double(sampled.samples[last*transform.components+c])/255;
+      output[c]=std::clamp(lo+fraction*(hi-lo),
+                           sampled.range[2*c],sampled.range[2*c+1]);
      }
     }else{
      const double weight=std::pow(tint,exponent);
