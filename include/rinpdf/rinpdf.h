@@ -84,6 +84,9 @@ typedef struct rinpdf_page_box_override {
 rinpdf_status rinpdf_export_pages_with_boxes_memory(const rinpdf_document *doc,
  const size_t *indices,const rinpdf_page_box_override *overrides,
  size_t count,uint8_t **data,size_t *size);
+rinpdf_status rinpdf_export_pages_with_boxes_file(const char *path,
+ const rinpdf_document *doc,const size_t *indices,
+ const rinpdf_page_box_override *overrides,size_t count);
 /* Merge pages from multiple opened PDF documents in the supplied order.
  * Pages are rasterized at DPI 36..600; original text/vectors are not retained.
  * Repeated pages and sources from the same document are supported.
