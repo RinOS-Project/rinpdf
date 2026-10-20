@@ -751,6 +751,12 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
        if(!cmyk_target->paint_ink(px,py,native_ink,uint8_t(opacity),
                                   transparent_blend_mode(),
                                   uint8_t(geometry)))return false;
+      }else if(im.stencil&&explicit_fill_ink){
+       // ImageMask uses the current nonstroking paint, including native
+       // k-specified CMYK, rather than round-tripping that ink through RGB.
+       if(!cmyk_target->paint_ink(px,py,fill_ink.data(),uint8_t(opacity),
+                                  transparent_blend_mode(),
+                                  uint8_t(geometry)))return false;
       }else if(!cmyk_target->paint_rgb(px,py,component(0),component(1),
                                  component(2),uint8_t(opacity),
                                  transparent_blend_mode(),uint8_t(geometry)))
