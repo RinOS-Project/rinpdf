@@ -1253,6 +1253,7 @@ struct Reader {
         const Value* range=get(fn,"Range");
         const Value* encode=get(fn,"Encode");
         const Value* order=get(fn,"Order");
+        const Value* decode=get(fn,"Decode");
         if(!sizes||sizes->kind!=Value::Kind::Array||
            sizes->array.size()!=1||
            sizes->array[0].kind!=Value::Kind::Integer||
@@ -1276,6 +1277,13 @@ struct Reader {
             !numeric(range->array[2*c+1],hi)||
             lo<0||lo>hi||hi>1)return false;
          node.range[2*c]=lo;node.range[2*c+1]=hi;
+         node.decode[2*c]=lo;node.decode[2*c+1]=hi;
+        }
+        if(decode){
+         if(decode->kind!=Value::Kind::Array||
+            decode->array.size()!=2*separation.components)return false;
+         for(unsigned c=0;c<2*separation.components;++c)
+          if(!numeric(decode->array[c],node.decode[c]))return false;
         }
         node.sample_count=unsigned(sizes->array[0].integer);
         node.encode[1]=double(node.sample_count-1);
@@ -1366,8 +1374,10 @@ struct Reader {
         separation.sample_domain[i]=root_function.domain[i];
         separation.sample_encode[i]=root_function.encode[i];
        }
-       for(unsigned i=0;i<2*separation.components;++i)
+       for(unsigned i=0;i<2*separation.components;++i){
         separation.sample_range[i]=root_function.range[i];
+        separation.sample_decode[i]=root_function.decode[i];
+       }
       }else{
        for(unsigned i=0;i<separation.components;++i){
         separation.c0[i]=root_function.c0[i];
