@@ -49,6 +49,36 @@ struct PremultipliedCMYKSurface {
   return true;
  }
  // Composite a child isolated CMYK group in native premultiplied ink.
+ // A non-isolated CMYK child starts with the parent's ink backdrop,
+ // but tracks its own painted shape independently.
+ bool inherit_backdrop(const PremultipliedCMYKSurface& parent){
+  if(width!=parent.width||height!=parent.height||
+     ink.size()!=parent.ink.size()||
+     shape.size()!=parent.shape.size())return false;
+  ink=parent.ink;
+  std::fill(shape.begin(),shape.end(),0);
+  return true;
+ }
+ // Commit an inherited-backdrop group without source-over compositing the
+ // inherited pixels twice. The parent's ink must match the saved snapshot.
+ bool commit_nonisolated(const PremultipliedCMYKSurface& child,
+                         const PremultipliedCMYKSurface& backdrop){
+  if(width!=child.width||height!=child.height||
+     width!=backdrop.width||height!=backdrop.height||
+     ink.size()!=child.ink.size()||
+     ink.size()!=backdrop.ink.size()||
+     shape.size()!=child.shape.size()||
+     shape.size()!=backdrop.shape.size()||
+     ink!=backdrop.ink)return false;
+  for(size_t p=0;p<shape.size();++p){
+   const unsigned cover=child.shape[p];
+   if(!cover)continue;
+   for(unsigned c=0;c<5;++c)ink[p*5+c]=child.ink[p*5+c];
+   shape[p]=uint8_t(std::min(255u,
+      cover+mul255(shape[p],255u-cover)));
+  }
+  return true;
+ }
  bool composite_group(const PremultipliedCMYKSurface& child,unsigned mode=0){
   if(mode>2||width!=child.width||height!=child.height||
      ink.size()!=child.ink.size()||shape.size()!=child.shape.size()||
