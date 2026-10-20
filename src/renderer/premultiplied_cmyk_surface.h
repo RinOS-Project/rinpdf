@@ -67,8 +67,8 @@ struct PremultipliedCMYKSurface {
  // Paint a complete nested Form as one knockout object. In an isolated
  // group the child starts transparent. In a non-isolated group the child
  // must have been rendered on the immutable inherited backdrop.
- bool knockout_object(const PremultipliedCMYKSurface& object){
-  if(!knockout||width!=object.width||height!=object.height||
+ bool knockout_object(const PremultipliedCMYKSurface& object,unsigned mode=0){
+  if(mode>2||!knockout||width!=object.width||height!=object.height||
      ink.size()!=object.ink.size()||shape.size()!=object.shape.size()||
      ink.size()!=size_t(width)*height*5||
      (nonisolated_knockout&&backdrop_ink.size()!=ink.size()))return false;
@@ -83,6 +83,25 @@ struct PremultipliedCMYKSurface {
     if(nonisolated_knockout){
      const unsigned inherited=mul255(backdrop_ink[i+c],keep);
      painted=painted>inherited?painted-inherited:0u;
+    }
+    if(mode!=0&&c<4){
+     // Blend the completed object against the immutable group backdrop,
+     // not against earlier knockout siblings.
+     const unsigned oa=object.ink[i+4];
+     const unsigned ba=nonisolated_knockout?backdrop_ink[i+4]:0u;
+     const unsigned src=oa?std::min(255u,
+       (painted*255u+oa/2u)/oa):0u;
+     const unsigned dst=ba?std::min(255u,
+       (unsigned(backdrop_ink[i+c])*255u+ba/2u)/ba):0u;
+     const unsigned blended=mode==1?mul255(src,dst):
+       255u-mul255(255u-src,255u-dst);
+     // An isolated knockout has no backdrop and therefore reduces to
+     // Normal; a non-isolated group uses the saved initial backdrop.
+     if(ba){
+      const unsigned blend_p=mul255(blended,mul255(oa,ba));
+      const unsigned source_only=mul255(src,mul255(oa,255u-ba));
+      painted=std::min(255u,blend_p+source_only);
+     }
     }
     ink[i+c]=uint8_t(std::min(255u,old_part+painted));
    }
