@@ -1270,20 +1270,31 @@ struct Reader {
         return false;
        double d0=0,d1=0;
        if(!numeric(domain->array[0],d0)||!numeric(domain->array[1],d1)||
-          d0!=0||d1!=1)return false;
-       for(unsigned c=0;c<2*separation.components;++c){
-        double v=0;
-        if(!numeric(range->array[c],v)||v!=(c%2?1.0:0.0))return false;
+          d0>=d1||d0<0||d1>1)return false;
+       separation.sample_domain[0]=d0;
+       separation.sample_domain[1]=d1;
+       for(unsigned c=0;c<separation.components;++c){
+        double lo=0,hi=0;
+        if(!numeric(range->array[2*c],lo)||
+           !numeric(range->array[2*c+1],hi)||
+           lo>hi||lo<0||hi>1)return false;
+        separation.sample_range[2*c]=lo;
+        separation.sample_range[2*c+1]=hi;
        }
+       separation.sample_count=unsigned(sizes->array[0].integer);
+       separation.sample_encode[0]=0;
+       separation.sample_encode[1]=double(separation.sample_count-1);
        if(encoding){
         if(encoding->kind!=Value::Kind::Array||
            encoding->array.size()!=2)return false;
         double e0=0,e1=0;
         if(!numeric(encoding->array[0],e0)||
            !numeric(encoding->array[1],e1)||
-           e0!=0||e1!=double(sizes->array[0].integer-1))return false;
+           e0<0||e1<0||e0>double(separation.sample_count-1)||
+           e1>double(separation.sample_count-1))return false;
+        separation.sample_encode[0]=e0;
+        separation.sample_encode[1]=e1;
        }
-       separation.sample_count=unsigned(sizes->array[0].integer);
        const unsigned bit_depth=unsigned(bits->integer);
        const size_t count=size_t(separation.sample_count)*
                             separation.components;
