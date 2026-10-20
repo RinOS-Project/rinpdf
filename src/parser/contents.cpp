@@ -1423,9 +1423,16 @@ struct Reader {
               range->array.size()!=2*separation.components)return false;
            for(unsigned j=0;j<2;++j)
             if(!numeric(domain->array[j],branch.domain[j]))return false;
-           if(branch.domain[0]>=branch.domain[1])return false;
-           for(unsigned j=0;j<2*separation.components;++j)
-            if(!numeric(range->array[j],branch.range[j]))return false;
+           if(branch.domain[0]>=branch.domain[1]||
+              branch.domain[0]<0||branch.domain[1]>1)return false;
+           for(unsigned j=0;j<separation.components;++j){
+            double lo=0,hi=0;
+            if(!numeric(range->array[2*j],lo)||
+               !numeric(range->array[2*j+1],hi)||
+               lo<0||hi>1||lo>hi)return false;
+            branch.range[2*j]=lo;
+            branch.range[2*j+1]=hi;
+           }
            branch.sample_count=unsigned(sizes->array[0].integer);
            branch.encode[1]=double(branch.sample_count-1);
            const Value* encoding=get(fn,"Encode");
@@ -1433,7 +1440,10 @@ struct Reader {
             if(encoding->kind!=Value::Kind::Array||
                encoding->array.size()!=2)return false;
             for(unsigned j=0;j<2;++j)
-             if(!numeric(encoding->array[j],branch.encode[j]))return false;
+             if(!numeric(encoding->array[j],branch.encode[j])||
+                branch.encode[j]<0||
+                branch.encode[j]>double(branch.sample_count-1))
+              return false;
            }
            const size_t count=size_t(branch.sample_count)*
                               separation.components;
