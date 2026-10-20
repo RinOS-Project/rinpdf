@@ -1073,10 +1073,26 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      const auto& selected=transform.segments[segment];
      c0=selected.c0;c1=selected.c1;exponent=selected.exponent;
     }
-    const double weight=std::pow(tint,exponent);
     double output[4]{};
-    for(unsigned c=0;c<transform.components;++c)
-     output[c]=c0[c]+weight*(c1[c]-c0[c]);
+    if(!transform.samples.empty()){
+     if(transform.sample_count<2||
+        transform.samples.size()!=size_t(transform.sample_count)*
+                                  transform.components)return false;
+     const double position=std::clamp(tint,0.0,1.0)*
+                           double(transform.sample_count-1);
+     const size_t first=size_t(position);
+     const size_t last=std::min<size_t>(transform.sample_count-1,first+1);
+     const double fraction=position-double(first);
+     for(unsigned c=0;c<transform.components;++c){
+      const double lo=double(transform.samples[first*transform.components+c])/255;
+      const double hi=double(transform.samples[last*transform.components+c])/255;
+      output[c]=lo+fraction*(hi-lo);
+     }
+    }else{
+     const double weight=std::pow(tint,exponent);
+     for(unsigned c=0;c<transform.components;++c)
+      output[c]=c0[c]+weight*(c1[c]-c0[c]);
+    }
     const bool cmyk=transform.alternate=="DeviceCMYK";
     const double rr=cmyk?(1-output[0])*(1-output[3]):output[0];
     const double gg=cmyk?(1-output[1])*(1-output[3]):
