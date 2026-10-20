@@ -461,11 +461,14 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
        if(blend_mode!="Normal")return false;
        PremultipliedCMYKSurface backdrop;
        if(!backdrop.resize(width,height))return false;
-       if(cmyk_target->knockout&&cmyk_target->nonisolated_knockout){
-        // The child's backdrop is the parent's immutable knockout
-        // backdrop, never earlier knockout objects.
-        if(cmyk_target->backdrop_ink.size()!=child.ink.size())return false;
-        child.ink=cmyk_target->backdrop_ink;
+       if(cmyk_target->knockout){
+        // Parent knockout objects never inherit the previously painted
+        // siblings. Isolated parent: transparent backdrop; non-isolated:
+        // the immutable backdrop saved before the first group object.
+        if(cmyk_target->nonisolated_knockout){
+         if(cmyk_target->backdrop_ink.size()!=child.ink.size())return false;
+         child.ink=cmyk_target->backdrop_ink;
+        }
        }else if(!child.inherit_backdrop(*cmyk_target))return false;
        if(fm.knockout_transparency_group&&!child.begin_knockout(false))
         return false;
