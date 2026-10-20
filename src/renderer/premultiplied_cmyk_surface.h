@@ -83,6 +83,8 @@ struct PremultipliedCMYKSurface {
     }
     ink[i+c]=uint8_t(std::min(255u,current+inherited+added));
    }
+   for(unsigned channel=0;channel<4;++channel)
+    ink[i+channel]=uint8_t(std::min<unsigned>(ink[i+channel],ink[i+4]));
    shape[p]=uint8_t(std::min(255u,geometry+mul255(shape[p],keep)));
    return true;
   }
@@ -144,6 +146,10 @@ struct PremultipliedCMYKSurface {
     }
     ink[i+c]=uint8_t(std::min(255u,old_part+painted));
    }
+   // The opacity channel bounds every premultiplied ink channel.
+   // Rounding and CMYK blend reconstruction must never violate this.
+   for(unsigned c=0;c<4;++c)
+    ink[i+c]=uint8_t(std::min<unsigned>(ink[i+c],ink[i+4]));
    shape[p]=uint8_t(std::min(255u,
       coverage+mul255(shape[p],keep)));
   }
