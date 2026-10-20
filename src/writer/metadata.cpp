@@ -42,6 +42,18 @@ rinpdf_status write_metadata(const uint8_t* bytes,size_t length,
   size_t max_id=0;
   for(const auto& entry:entries)max_id=std::max(max_id,entry.object);
   if(max_id>=999999)return RINPDF_UNSUPPORTED;
+  // /Size covers objects from earlier incremental revisions as well.
+  rinpdf::parser::Lexer trailer_reader(bytes+trailer_offset,length-trailer_offset);
+  rinpdf::parser::Value old_trailer;
+  if(!rinpdf::parser::parse_value(trailer_reader,old_trailer)||
+     old_trailer.kind!=rinpdf::parser::Value::Kind::Dictionary)
+   return RINPDF_UNSUPPORTED;
+  auto size_field=old_trailer.dictionary.find("Size");
+  if(size_field==old_trailer.dictionary.end()||
+     size_field->second.kind!=rinpdf::parser::Value::Kind::Integer||
+     size_field->second.integer<1||size_field->second.integer>999999)
+   return RINPDF_UNSUPPORTED;
+  max_id=std::max(max_id,(size_t)size_field->second.integer-1);
   const size_t info_id=max_id+1;
   std::string output((const char*)bytes,length);
   output+="\n";
@@ -56,16 +68,8 @@ rinpdf_status write_metadata(const uint8_t* bytes,size_t length,
   char buffer[64];
   std::snprintf(buffer,sizeof(buffer),"%010zu 00000 n \n",position);
   output+="xref\n"+std::to_string(info_id)+" 1\n"+buffer;
-  // Retain the latest catalog reference by copying the trailer dictionary
-  // excluding its closing >> and overriding /Info in a later update.
-  // We instead resolve the latest /Root directly from parsed trailer syntax.
-  rinpdf::parser::Lexer lexer(bytes+trailer_offset,length-trailer_offset);
-  rinpdf::parser::Value trailer;
-  if(!rinpdf::parser::parse_value(lexer,trailer)||
-     trailer.kind!=rinpdf::parser::Value::Kind::Dictionary)
-   return RINPDF_UNSUPPORTED;
-  auto root=trailer.dictionary.find("Root");
-  if(root==trailer.dictionary.end()||
+  auto root=old_trailer.dictionary.find("Root");
+  if(root==old_trailer.dictionary.end()||
      root->second.kind!=rinpdf::parser::Value::Kind::Reference)
    return RINPDF_UNSUPPORTED;
   size_t prev=0;
