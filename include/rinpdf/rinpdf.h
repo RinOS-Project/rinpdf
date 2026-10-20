@@ -23,6 +23,10 @@ typedef struct rinpdf_text_options {
 } rinpdf_text_options;
 rinpdf_status rinpdf_write_text_document(const char *path,const char *ascii_text,
  const rinpdf_text_options *options);
+/* Creates a malloc-backed PDF byte buffer; release it with rinpdf_free_buffer. */
+rinpdf_status rinpdf_write_text_memory(const char *ascii_text,
+ const rinpdf_text_options *options,uint8_t **data,size_t *size);
+void rinpdf_free_buffer(void *data);
 #ifdef __cplusplus
 }
 #endif
