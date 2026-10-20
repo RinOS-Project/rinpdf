@@ -55,6 +55,41 @@ struct IccMatrixProfile {
   for(bool v:found)if(!v)return false;
   return true;
  }
+ // Convert matrix/TRC device RGB to display sRGB through D50 XYZ.
+ // The fixed XYZ->linear-sRGB matrix incorporates D50->D65 adaptation.
+ static double encode_srgb(double linear){
+  linear=std::clamp(linear,0.0,1.0);
+  return linear<=0.0031308?12.92*linear:
+         1.055*std::pow(linear,1.0/2.4)-0.055;
+ }
+ std::array<uint8_t,3> to_srgb8(
+     const std::array<uint8_t,3>& device) const {
+  const auto pcs=to_xyz({device[0]/255.0,device[1]/255.0,
+                         device[2]/255.0});
+  const double linear[3]={
+   3.1338561*pcs[0]-1.6168667*pcs[1]-0.4906146*pcs[2],
+  -0.9787684*pcs[0]+1.9161415*pcs[1]+0.0334540*pcs[2],
+   0.0719453*pcs[0]-0.2289914*pcs[1]+1.4052427*pcs[2]};
+  std::array<uint8_t,3> out{};
+  for(unsigned c=0;c<3;++c)
+   out[c]=uint8_t(std::lround(encode_srgb(linear[c])*255.0));
+  return out;
+ }
+ bool convert_premultiplied_rgba(std::vector<uint8_t>& rgba) const {
+  if(rgba.size()%4)return false;
+  for(size_t i=0;i<rgba.size();i+=4){
+   const unsigned alpha=rgba[i+3];
+   if(!alpha)continue;
+   std::array<uint8_t,3> device{};
+   for(unsigned c=0;c<3;++c)
+    device[c]=uint8_t(std::min(255u,
+        (unsigned(rgba[i+c])*255u+alpha/2u)/alpha));
+   const auto rgb=to_srgb8(device);
+   for(unsigned c=0;c<3;++c)
+    rgba[i+c]=uint8_t((unsigned(rgb[c])*alpha+127u)/255u);
+  }
+  return true;
+ }
  std::array<double,3> to_xyz(const std::array<double,3>& rgb) const {
   std::array<double,3> out{};
   for(unsigned r=0;r<3;++r)
