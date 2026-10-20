@@ -385,6 +385,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      inherited.has_blend_mode=true;
      form_graphics.emplace(inherited_name,inherited);
      std::string stream="q /"+inherited_name+" gs ";
+     stream+="/"+fill_space+" cs /"+stroke_space+" CS ";
      // Form XObjects inherit the caller's graphics state. The recursive
      // renderer starts fresh, so serialize supported state explicitly.
      if(explicit_fill_ink){
@@ -1028,7 +1029,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
    stroke_green=(1-stack[1])*(1-stack[3]);
    stroke_blue=(1-stack[2])*(1-stack[3]);
    for(unsigned c=0;c<4;++c)stroke_ink[c]=unsigned(std::lround(stack[c]*255));
-   explicit_stroke_ink=true;stack.clear();
+   explicit_stroke_ink=true;stroke_space="DeviceCMYK";stack.clear();
   }else if(word=="sc"||word=="scn"||
            word=="SC"||word=="SCN"){
    const bool stroking=word=="SC"||word=="SCN";
@@ -1077,7 +1078,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
    green=(1-stack[1])*(1-stack[3]);
    blue=(1-stack[2])*(1-stack[3]);
    for(unsigned c=0;c<4;++c)fill_ink[c]=unsigned(std::lround(stack[c]*255));
-   explicit_fill_ink=true;stack.clear();
+   explicit_fill_ink=true;fill_space="DeviceCMYK";stack.clear();
   }else if(word=="g"){
    if(stack.size()!=1||stack[0]<0||stack[0]>1)return false;
    red=green=blue=stack[0];explicit_fill_ink=false;stack.clear();
