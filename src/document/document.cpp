@@ -304,3 +304,38 @@ extern "C" rinpdf_status rinpdf_export_pages_lossless_file(
  std::free(data);
  return ok?RINPDF_OK:RINPDF_IO_ERROR;
 }
+
+namespace rinpdf {
+rinpdf_status merge_original_pdf_bytes(const uint8_t* const* sources,const size_t* lengths,
+ size_t source_count,uint8_t** out,size_t* out_size);
+}
+extern "C" rinpdf_status rinpdf_merge_documents_lossless_memory(
+ const rinpdf_document* const* documents,size_t count,uint8_t** data,size_t* size){
+ if(!data||!size)return RINPDF_INVALID_ARGUMENT;
+ *data=nullptr;*size=0;
+ if(!documents||count==0||count>128)return RINPDF_INVALID_ARGUMENT;
+ try {
+  std::vector<const uint8_t*> buffers;
+  std::vector<size_t> lengths;
+  buffers.reserve(count);lengths.reserve(count);
+  for(size_t i=0;i<count;++i){
+   if(!documents[i])return RINPDF_INVALID_ARGUMENT;
+   buffers.push_back(documents[i]->bytes.data());
+   lengths.push_back(documents[i]->bytes.size());
+  }
+  return rinpdf::merge_original_pdf_bytes(buffers.data(),lengths.data(),count,data,size);
+ }catch(const std::bad_alloc&){return RINPDF_OUT_OF_MEMORY;}
+}
+extern "C" rinpdf_status rinpdf_merge_documents_lossless_file(
+ const char* path,const rinpdf_document* const* documents,size_t count){
+ if(!path)return RINPDF_INVALID_ARGUMENT;
+ uint8_t* data=nullptr;size_t size=0;
+ const auto status=rinpdf_merge_documents_lossless_memory(documents,count,&data,&size);
+ if(status!=RINPDF_OK)return status;
+ FILE* file=std::fopen(path,"wb");
+ if(!file){std::free(data);return RINPDF_IO_ERROR;}
+ bool ok=std::fwrite(data,1,size,file)==size;
+ if(std::fclose(file)!=0)ok=false;
+ std::free(data);
+ return ok?RINPDF_OK:RINPDF_IO_ERROR;
+}
