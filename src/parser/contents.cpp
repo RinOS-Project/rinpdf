@@ -461,49 +461,6 @@ struct Reader {
          return false;
         stitch_function=cs->array[3];
         recursive_stitch=true;
-       }else if(type->integer==0){
-       // Limited one-input, eight-bit sampled function. Reject malformed
-       // Domain, Size, Range and Encode rather than guessing color values.
-       if(!sampled_stream)return false;
-       const Value* sizes=get(function,"Size");
-       const Value* bits=get(function,"BitsPerSample");
-       const Value* domain=get(function,"Domain");
-       const Value* range=get(function,"Range");
-       const Value* order=get(function,"Order");
-       const Value* encoding=get(function,"Encode");
-       if(!sizes||sizes->kind!=Value::Kind::Array||
-          sizes->array.size()!=1||
-          sizes->array[0].kind!=Value::Kind::Integer||
-          sizes->array[0].integer<2||sizes->array[0].integer>4096||
-          !bits||bits->kind!=Value::Kind::Integer||bits->integer!=8||
-          !domain||domain->kind!=Value::Kind::Array||
-          domain->array.size()!=2||
-          !range||range->kind!=Value::Kind::Array||
-          range->array.size()!=2*separation.components||
-          (order&&(order->kind!=Value::Kind::Integer||order->integer!=1)))
-        return false;
-       double d0=0,d1=0;
-       if(!numeric(domain->array[0],d0)||!numeric(domain->array[1],d1)||
-          d0!=0||d1!=1)return false;
-       for(unsigned c=0;c<2*separation.components;++c){
-        double v=0;
-        if(!numeric(range->array[c],v)||v!=(c%2?1.0:0.0))
-         return false;
-       }
-       if(encoding){
-        if(encoding->kind!=Value::Kind::Array||
-           encoding->array.size()!=2)return false;
-        double e0=0,e1=0;
-        if(!numeric(encoding->array[0],e0)||
-           !numeric(encoding->array[1],e1)||
-           e0!=0||e1!=double(sizes->array[0].integer-1))
-         return false;
-       }
-       separation.sample_count=unsigned(sizes->array[0].integer);
-       const size_t expected=size_t(separation.sample_count)*
-                             separation.components;
-       if(!decode_stream(data,size,sample_range,separation.samples,expected)||
-          separation.samples.size()!=expected)return false;
       }else if(type->integer==3){
         if(device_inputs!=1)return false;
         double boundary[4]{};
@@ -1290,6 +1247,61 @@ struct Reader {
         separation.c1[c]=segment.c1[c];
        }
        separation.exponent=segment.exponent;
+      }else if(type->integer==0){
+       if(!sampled_stream)return false;
+       const Value* sizes=get(function,"Size");
+       const Value* bits=get(function,"BitsPerSample");
+       const Value* domain=get(function,"Domain");
+       const Value* range=get(function,"Range");
+       const Value* order=get(function,"Order");
+       const Value* encoding=get(function,"Encode");
+       if(!sizes||sizes->kind!=Value::Kind::Array||
+          sizes->array.size()!=1||
+          sizes->array[0].kind!=Value::Kind::Integer||
+          sizes->array[0].integer<2||sizes->array[0].integer>4096||
+          !bits||bits->kind!=Value::Kind::Integer||
+          (bits->integer!=1&&bits->integer!=2&&bits->integer!=4&&
+           bits->integer!=8&&bits->integer!=12&&bits->integer!=16)||
+          !domain||domain->kind!=Value::Kind::Array||
+          domain->array.size()!=2||
+          !range||range->kind!=Value::Kind::Array||
+          range->array.size()!=2*separation.components||
+          (order&&(order->kind!=Value::Kind::Integer||order->integer!=1)))
+        return false;
+       double d0=0,d1=0;
+       if(!numeric(domain->array[0],d0)||!numeric(domain->array[1],d1)||
+          d0!=0||d1!=1)return false;
+       for(unsigned c=0;c<2*separation.components;++c){
+        double v=0;
+        if(!numeric(range->array[c],v)||v!=(c%2?1.0:0.0))return false;
+       }
+       if(encoding){
+        if(encoding->kind!=Value::Kind::Array||
+           encoding->array.size()!=2)return false;
+        double e0=0,e1=0;
+        if(!numeric(encoding->array[0],e0)||
+           !numeric(encoding->array[1],e1)||
+           e0!=0||e1!=double(sizes->array[0].integer-1))return false;
+       }
+       separation.sample_count=unsigned(sizes->array[0].integer);
+       const unsigned bit_depth=unsigned(bits->integer);
+       const size_t count=size_t(separation.sample_count)*
+                            separation.components;
+       const size_t expected=(count*bit_depth+7u)/8u;
+       std::vector<uint8_t> packed;
+       if(!decode_stream(data,size,sample_range,packed,expected)||
+          packed.size()!=expected)return false;
+       separation.samples.reserve(count);
+       const unsigned maximum=(1u<<bit_depth)-1u;
+       for(size_t n=0;n<count;++n){
+        const size_t offset=n*bit_depth;
+        unsigned value=0;
+        for(unsigned b=0;b<bit_depth;++b)
+         value=(value<<1u)|((packed[(offset+b)/8u]>>
+                       (7u-unsigned((offset+b)%8u)))&1u);
+        separation.samples.push_back(uint8_t(
+                   (value*255u+maximum/2u)/maximum));
+       }
       }else if(type->integer==3){
        const Value* functions=get(function,"Functions");
        const Value* bounds=get(function,"Bounds");
