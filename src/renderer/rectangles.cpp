@@ -449,19 +449,33 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
        const unsigned mode=transparent_blend_mode();
        if(fm.knockout_transparency_group&&!child.begin_knockout(true))
         return false;
-       if(!draw_form(rgba,stride,nullptr,&child)||
-          !cmyk_target->composite_group(child,mode))return false;
+       if(!draw_form(rgba,stride,nullptr,&child))return false;
+       if(cmyk_target->knockout){
+        // A nested transparency group is one knockout object; its
+        // internal paints have already been resolved in the child.
+        if(mode!=0||!cmyk_target->knockout_object(child))return false;
+       }else if(!cmyk_target->composite_group(child,mode))return false;
       }else{
        // A non-isolated child inherits the actual CMYK backdrop.
        // Commit only its painted pixels rather than recompositing it.
        if(blend_mode!="Normal")return false;
        PremultipliedCMYKSurface backdrop;
-       if(!backdrop.resize(width,height)||
-          !backdrop.inherit_backdrop(*cmyk_target)||
-          !child.inherit_backdrop(*cmyk_target)||
-          (fm.knockout_transparency_group&&!child.begin_knockout(false))||
-          !draw_form(rgba,stride,nullptr,&child)||
-          !cmyk_target->commit_nonisolated(child,backdrop))return false;
+       if(!backdrop.resize(width,height))return false;
+       if(cmyk_target->knockout&&cmyk_target->nonisolated_knockout){
+        // The child's backdrop is the parent's immutable knockout
+        // backdrop, never earlier knockout objects.
+        if(cmyk_target->backdrop_ink.size()!=child.ink.size())return false;
+        child.ink=cmyk_target->backdrop_ink;
+       }else if(!child.inherit_backdrop(*cmyk_target))return false;
+       if(fm.knockout_transparency_group&&!child.begin_knockout(false))
+        return false;
+       if(!draw_form(rgba,stride,nullptr,&child))return false;
+       if(cmyk_target->knockout){
+        if(!cmyk_target->knockout_object(child))return false;
+       }else{
+        if(!backdrop.inherit_backdrop(*cmyk_target)||
+           !cmyk_target->commit_nonisolated(child,backdrop))return false;
+       }
       }
       continue;
      }
