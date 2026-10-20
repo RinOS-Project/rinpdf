@@ -10,6 +10,7 @@
 #include "../parser/lexer.h"
 #include "../parser/value.h"
 #include <algorithm>
+#include <array>
 #include <charconv>
 #include <cmath>
 #include <cstring>
@@ -49,6 +50,10 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
  if(clear_background)for(unsigned y=0;y<height;++y)
   std::memset(rgba+(size_t)y*stride,255,(size_t)width*4);
  double red=0,green=0,blue=0;
+ std::array<unsigned,4> fill_ink{},stroke_ink{};
+ bool explicit_fill_ink=false,explicit_stroke_ink=false;
+ struct InkState{std::array<unsigned,4> fill,stroke;bool has_fill,has_stroke;};
+ std::vector<InkState> saved_ink;
  double fill_alpha=1,stroke_alpha=1;
  std::string blend_mode="Normal";
  std::vector<std::string> saved_blend;
@@ -811,6 +816,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
    saved.push_back({red,green,blue,a,bx,cx,d,e,f,line_width,stroke_red,stroke_green,stroke_blue,line_cap,line_join,miter_limit,flatness,dash_pattern,dash_phase});
    saved_alpha.emplace_back(fill_alpha,stroke_alpha);
    saved_blend.push_back(blend_mode);
+   saved_ink.push_back({fill_ink,stroke_ink,explicit_fill_ink,explicit_stroke_ink});
    clip_stack.push_back(clip);
    clip_mask_stack.push_back(clip_mask);
 
@@ -821,6 +827,9 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
    stroke_alpha=saved_alpha.back().second;
    saved_alpha.pop_back();
    blend_mode=saved_blend.back();saved_blend.pop_back();
+   const auto ink_state=saved_ink.back();saved_ink.pop_back();
+   fill_ink=ink_state.fill;stroke_ink=ink_state.stroke;
+   explicit_fill_ink=ink_state.has_fill;explicit_stroke_ink=ink_state.has_stroke;
    red=color.r;green=color.g;blue=color.b;a=color.a;bx=color.bx;cx=color.cx;d=color.d;e=color.e;f=color.f;line_width=color.width;stroke_red=color.sr;stroke_green=color.sg;stroke_blue=color.sb;line_cap=color.cap;line_join=color.join;miter_limit=color.miter;flatness=color.flatness;dash_pattern=color.dash;dash_phase=color.dash_phase;
    clip=clip_stack.back();clip_stack.pop_back();
    clip_mask=std::move(clip_mask_stack.back());clip_mask_stack.pop_back();
@@ -961,30 +970,33 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
   }else if(word=="RG"){
    if(stack.size()!=3)return false;
    for(double channel:stack)if(channel<0||channel>1)return false;
-   stroke_red=stack[0];stroke_green=stack[1];stroke_blue=stack[2];stack.clear();
+   stroke_red=stack[0];stroke_green=stack[1];stroke_blue=stack[2];explicit_stroke_ink=false;stack.clear();
   }else if(word=="G"){
    if(stack.size()!=1||stack[0]<0||stack[0]>1)return false;
-   stroke_red=stroke_green=stroke_blue=stack[0];stack.clear();
+   stroke_red=stroke_green=stroke_blue=stack[0];explicit_stroke_ink=false;stack.clear();
   }else if(word=="K"){
    if(stack.size()!=4)return false;
    for(double channel:stack)if(channel<0||channel>1)return false;
    stroke_red=(1-stack[0])*(1-stack[3]);
    stroke_green=(1-stack[1])*(1-stack[3]);
-   stroke_blue=(1-stack[2])*(1-stack[3]);stack.clear();
+   stroke_blue=(1-stack[2])*(1-stack[3]);
+   for(unsigned c=0;c<4;++c)stroke_ink[c]=unsigned(std::lround(stack[c]*255));
+   explicit_stroke_ink=true;stack.clear();
   }else if(word=="rg"){
    if(stack.size()!=3)return false;
    for(double channel:stack)if(channel<0||channel>1)return false;
-   red=stack[0];green=stack[1];blue=stack[2];stack.clear();
+   red=stack[0];green=stack[1];blue=stack[2];explicit_fill_ink=false;stack.clear();
   }else if(word=="k"){
    if(stack.size()!=4)return false;
    for(double channel:stack)if(channel<0||channel>1)return false;
    red=(1-stack[0])*(1-stack[3]);
    green=(1-stack[1])*(1-stack[3]);
    blue=(1-stack[2])*(1-stack[3]);
-   stack.clear();
+   for(unsigned c=0;c<4;++c)fill_ink[c]=unsigned(std::lround(stack[c]*255));
+   explicit_fill_ink=true;stack.clear();
   }else if(word=="g"){
    if(stack.size()!=1||stack[0]<0||stack[0]>1)return false;
-   red=green=blue=stack[0];stack.clear();
+   red=green=blue=stack[0];explicit_fill_ink=false;stack.clear();
   }else if(word=="m"){
    if(pending_path_clip)return false;
    if(pending_rect_clip||pending_path_clip)return false;
