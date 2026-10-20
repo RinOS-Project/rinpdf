@@ -1,6 +1,7 @@
 #include "rinpdf/rinpdf.h"
 #include "../parser/xref_stream.h"
 #include "../parser/object_resolver.h"
+#include "../parser/object_stream.h"
 #include "../parser/pages.h"
 #include "../parser/value.h"
 #include "../parser/lexer.h"
@@ -74,6 +75,7 @@ bool encode(const V& v,std::string& s,unsigned depth=0){
 struct Input{
  const uint8_t* bytes=nullptr;size_t length=0,offset=0,max_id=0,root_pages=0,page_count=0;
  std::vector<rinpdf::parser::XrefEntry> xref;
+ std::vector<rinpdf::parser::XrefStreamEntry> compressed;
  std::vector<std::string> objects;
  std::vector<bool> present;
 };
@@ -81,9 +83,8 @@ bool resolve_length(const Input& doc,const V& length,size_t& out){
  V resolved=length;
  if(length.kind==K::Reference){
   if(length.generation!=0)return false;
-  std::vector<rinpdf::parser::XrefStreamEntry> compressed;
   if(!rinpdf::parser::resolve_reference_value(doc.bytes,doc.length,doc.xref,
-                                               compressed,length,resolved))return false;
+                                               doc.compressed,length,resolved))return false;
  }
  if(resolved.kind!=K::Integer||resolved.integer<0||
     (unsigned long long)resolved.integer>doc.length)return false;
@@ -91,20 +92,15 @@ bool resolve_length(const Input& doc,const V& length,size_t& out){
  return true;
 }
 bool prepare(Input& doc){
- std::vector<rinpdf::parser::XrefStreamEntry> compressed;
  V trailer;
- if(!rinpdf::parser::read_object_xref(doc.bytes,doc.length,doc.xref,compressed,trailer)||
+ if(!rinpdf::parser::read_object_xref(doc.bytes,doc.length,doc.xref,doc.compressed,trailer)||
     field(trailer,"Encrypt")||field(trailer,"Prev")||
     field(trailer,"XRefStm"))return false;
- // XRef streams using ordinary (type-1) entries can be normalized into
- // the classic xref table written by this exporter. Object streams (type-2)
- // still require materialization and are rejected rather than copied blindly.
- for(const auto& entry:compressed)
-  if(entry.type==2)return false;
+ // Type-2 entries are decoded and materialized into ordinary indirect objects.
  const V* root_ref=field(trailer,"Root");
  if(!root_ref||root_ref->kind!=K::Reference||root_ref->generation!=0)return false;
  V catalog;
- if(!rinpdf::parser::resolve_reference_value(doc.bytes,doc.length,doc.xref,compressed,
+ if(!rinpdf::parser::resolve_reference_value(doc.bytes,doc.length,doc.xref,doc.compressed,
                                               *root_ref,catalog))return false;
  if(!named(field(catalog,"Type"),"Catalog"))return false;
  const V* pages=field(catalog,"Pages");
@@ -114,6 +110,10 @@ bool prepare(Input& doc){
     doc.page_count==0)return false;
  for(const auto& item:doc.xref){
   if(item.object>100000||(item.generation!=0&&item.in_use))return false;
+  doc.max_id=std::max(doc.max_id,item.object);
+ }
+ for(const auto& item:doc.compressed){
+  if(item.object>100000)return false;
   doc.max_id=std::max(doc.max_id,item.object);
  }
  doc.objects.resize(doc.max_id+1);
@@ -183,6 +183,18 @@ bool prepare(Input& doc){
   std::string serialized;
   if(!encode(value,serialized))return false;
   doc.objects[entry.object]=std::move(serialized)+tail;
+ }
+ for(const auto& entry:doc.compressed){
+  if(entry.type!=2)continue;
+  if(entry.object==0||entry.object>doc.max_id||doc.present[entry.object])return false;
+  V value;
+  if(!rinpdf::parser::resolve_compressed_object(doc.bytes,doc.length,
+                                                 doc.compressed,entry.object,value))return false;
+  if(!rebase(value,doc.offset))return false;
+  std::string serialized;
+  if(!encode(value,serialized))return false;
+  doc.objects[entry.object]=std::move(serialized);
+  doc.present[entry.object]=true;
  }
  return doc.present[doc.root_pages];
 }
