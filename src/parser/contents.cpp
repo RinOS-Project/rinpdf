@@ -1134,11 +1134,40 @@ struct Reader {
     if(cs->kind==Value::Kind::Reference){
      if(!object(*cs,color_space))return false;
     }else color_space=*cs;
-    if(color_space.kind!=Value::Kind::Name||
-       (color_space.text!="DeviceRGB"&&
-        color_space.text!="DeviceGray"&&
-        color_space.text!="DeviceCMYK"))return false;
-    form.group_color_space=color_space.text;
+    if(color_space.kind==Value::Kind::Array){
+     // ICCBased spaces are an array [/ICCBased profile-stream-ref].
+     if(color_space.array.size()!=2||
+        color_space.array[0].kind!=Value::Kind::Name||
+        color_space.array[0].text!="ICCBased"||
+        color_space.array[1].kind!=Value::Kind::Reference)return false;
+     const XrefEntry* profile_entry=nullptr;
+     if(!entry(color_space.array[1],profile_entry))return false;
+     StreamRange profile_range;
+     if(!locate_indirect_stream(data,size,*profile_entry,xref,
+                                profile_range))return false;
+     const Value* channels=get(profile_range.dictionary,"N");
+     if(!channels||channels->kind!=Value::Kind::Integer||
+        (channels->integer!=1&&channels->integer!=3&&
+         channels->integer!=4))return false;
+     // Reject malformed ICC header; do not claim color conversion here.
+     if(!decode_stream(data,size,profile_range,form.group_icc_profile,
+                       4*1024*1024))return false;
+     const auto& bytes=form.group_icc_profile;
+     if(bytes.size()<128||
+        bytes[36]!='a'||bytes[37]!='c'||
+        bytes[38]!='s'||bytes[39]!='p')return false;
+     const uint32_t declared=(uint32_t(bytes[0])<<24)|
+         (uint32_t(bytes[1])<<16)|(uint32_t(bytes[2])<<8)|bytes[3];
+     if(declared!=bytes.size())return false;
+     form.group_icc_channels=unsigned(channels->integer);
+     form.group_color_space="ICCBased";
+    }else{
+     if(color_space.kind!=Value::Kind::Name||
+        (color_space.text!="DeviceRGB"&&
+         color_space.text!="DeviceGray"&&
+         color_space.text!="DeviceCMYK"))return false;
+     form.group_color_space=color_space.text;
+    }
    }
    form.transparency_group=true;
    form.isolated_transparency_group=isolated&&isolated->boolean;
