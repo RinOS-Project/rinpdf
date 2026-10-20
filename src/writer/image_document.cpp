@@ -48,12 +48,14 @@ rinpdf_status create_image_pdf(const uint8_t* pixels,unsigned width,unsigned hei
  if(!data||!size)return RINPDF_INVALID_ARGUMENT;
  *data=nullptr;*size=0;
  if(!pixels||width==0||height==0||width>16384||height>16384||
-    (components!=1 && components!=3)||width>SIZE_MAX/components||
+    (components!=1 && components!=3 && components!=4)||width>SIZE_MAX/components||
     stride<(size_t)width*components||(size_t)width*height>64000000)
   return RINPDF_INVALID_ARGUMENT;
  try {
   std::string compressed;
-  if(!encode(pixels,width,height,stride,components,compressed))return RINPDF_UNSUPPORTED;
+  std::string alpha;
+  if(components==4){if(!encode_rgba(pixels,width,height,stride,compressed,alpha))return RINPDF_UNSUPPORTED;}
+  else if(!encode(pixels,width,height,stride,components,compressed))return RINPDF_UNSUPPORTED;
   const unsigned pw=std::max(100u,width),ph=std::max(100u,height);
   const double scale=std::min({1.0,595.0/pw,842.0/ph});
   const unsigned page_w=std::max(1u,(unsigned)(pw*scale));
@@ -72,16 +74,20 @@ rinpdf_status create_image_pdf(const uint8_t* pixels,unsigned width,unsigned hei
   object(pdf,positions,"<< /Type /XObject /Subtype /Image /Width "+
       std::to_string(width)+" /Height "+std::to_string(height)+
       " /ColorSpace "+(components==1?"/DeviceGray":"/DeviceRGB")+
-      " /BitsPerComponent 8 /Filter /FlateDecode /Length "+
+      (components==4?" /SMask 6 0 R":"")+" /BitsPerComponent 8 /Filter /FlateDecode /Length "+
       std::to_string(compressed.size())+" >>\nstream\n"+compressed+"\nendstream");
+  if(components==4)object(pdf,positions,"<< /Type /XObject /Subtype /Image /Width "+
+      std::to_string(width)+" /Height "+std::to_string(height)+
+      " /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode /Length "+
+      std::to_string(alpha.size())+" >>\nstream\n"+alpha+"\nendstream");
   const size_t start=pdf.size();
-  pdf+="xref\n0 6\n0000000000 65535 f \n";
+  pdf+="xref\n0 "+std::to_string(positions.size())+"\n0000000000 65535 f \n";
   char line[32];
   for(size_t i=1;i<positions.size();++i) {
    std::snprintf(line,sizeof(line),"%010zu 00000 n \n",positions[i]);
    pdf+=line;
   }
-  pdf+="trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n"+
+  pdf+="trailer\n<< /Size "+std::to_string(positions.size())+" /Root 1 0 R >>\nstartxref\n"+
       std::to_string(start)+"\n%%EOF\n";
   auto* result=(uint8_t*)std::malloc(pdf.size());
   if(!result)return RINPDF_OUT_OF_MEMORY;
