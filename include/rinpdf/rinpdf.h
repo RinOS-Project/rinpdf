@@ -103,6 +103,27 @@ rinpdf_status rinpdf_merge_documents_lossless_file(
 /* Open, merge and close source documents from the specified file paths. */
 rinpdf_status rinpdf_merge_files_lossless(const char *path,
  const char *const *source_paths,size_t count);
+/* Page editing operations use zero-based indices. The editor stores an
+ * ordered page selection; deletion, insertion and movement mutate only this
+ * selection until export. Source PDF documents must remain open.
+ */
+typedef struct rinpdf_page_editor rinpdf_page_editor;
+rinpdf_status rinpdf_page_editor_create(const rinpdf_document *document,
+ rinpdf_page_editor **out);
+void rinpdf_page_editor_close(rinpdf_page_editor *editor);
+rinpdf_status rinpdf_page_editor_page_count(const rinpdf_page_editor *editor,
+ size_t *count);
+rinpdf_status rinpdf_page_editor_delete(rinpdf_page_editor *editor,size_t index);
+rinpdf_status rinpdf_page_editor_move(rinpdf_page_editor *editor,
+ size_t from,size_t to);
+rinpdf_status rinpdf_page_editor_insert(rinpdf_page_editor *editor,
+ size_t at,const rinpdf_document *source,size_t source_page);
+rinpdf_status rinpdf_page_editor_duplicate(rinpdf_page_editor *editor,
+ size_t index,size_t at);
+rinpdf_status rinpdf_page_editor_export_memory(const rinpdf_page_editor *editor,
+ uint8_t **data,size_t *size);
+rinpdf_status rinpdf_page_editor_export_file(const rinpdf_page_editor *editor,
+ const char *path);
 #ifdef __cplusplus
 }
 #endif
