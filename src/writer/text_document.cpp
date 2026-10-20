@@ -1,6 +1,7 @@
 #include "rinpdf/rinpdf.h"
 #include <algorithm>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <limits>
 #include <new>
@@ -75,9 +76,9 @@ bool append_object(std::string& pdf,std::vector<size_t>& offsets,const std::stri
  return true;
 }
 }
-extern "C" rinpdf_status rinpdf_write_text_document(const char* path,const char* ascii_text,
- const rinpdf_text_options* options) {
- if(!path||!ascii_text)return RINPDF_INVALID_ARGUMENT;
+static rinpdf_status build_text_pdf(const char* ascii_text,
+ const rinpdf_text_options* options,std::string& output) {
+ if(!ascii_text)return RINPDF_INVALID_ARGUMENT;
  if(!valid_ascii(ascii_text))return RINPDF_UNSUPPORTED;
  if(options && (!valid_ascii(options->title)||!valid_ascii(options->author)||
                  !valid_ascii(options->subject)))return RINPDF_UNSUPPORTED;
@@ -141,10 +142,36 @@ extern "C" rinpdf_status rinpdf_write_text_document(const char* path,const char*
   pdf+="trailer\n<< /Size "+std::to_string(object_count+1)+
     " /Root 1 0 R /Info "+std::to_string(info_id)+
     " 0 R >>\nstartxref\n"+std::to_string(xref)+"\n%%EOF\n";
-  FILE* f=std::fopen(path,"wb");
-  if(!f)return RINPDF_IO_ERROR;
-  bool ok=std::fwrite(pdf.data(),1,pdf.size(),f)==pdf.size();
-  if(std::fclose(f)!=0)ok=false;
-  return ok?RINPDF_OK:RINPDF_IO_ERROR;
+  output.swap(pdf);
+  return RINPDF_OK;
  }catch(const std::bad_alloc&){return RINPDF_OUT_OF_MEMORY;}
+}
+extern "C" rinpdf_status rinpdf_write_text_document(const char* path,const char* ascii_text,
+ const rinpdf_text_options* options) {
+ if(!path)return RINPDF_INVALID_ARGUMENT;
+ std::string pdf;
+ const rinpdf_status status=build_text_pdf(ascii_text,options,pdf);
+ if(status!=RINPDF_OK)return status;
+ FILE* f=std::fopen(path,"wb");
+ if(!f)return RINPDF_IO_ERROR;
+ bool ok=std::fwrite(pdf.data(),1,pdf.size(),f)==pdf.size();
+ if(std::fclose(f)!=0)ok=false;
+ return ok?RINPDF_OK:RINPDF_IO_ERROR;
+}
+extern "C" rinpdf_status rinpdf_write_text_memory(const char* ascii_text,
+ const rinpdf_text_options* options,uint8_t** data,size_t* size) {
+ if(!data||!size)return RINPDF_INVALID_ARGUMENT;
+ *data=nullptr;*size=0;
+ std::string pdf;
+ const rinpdf_status status=build_text_pdf(ascii_text,options,pdf);
+ if(status!=RINPDF_OK)return status;
+ void* buffer=std::malloc(pdf.size());
+ if(!buffer)return RINPDF_OUT_OF_MEMORY;
+ std::memcpy(buffer,pdf.data(),pdf.size());
+ *data=static_cast<uint8_t*>(buffer);
+ *size=pdf.size();
+ return RINPDF_OK;
+}
+extern "C" void rinpdf_free_buffer(void* data) {
+ std::free(data);
 }
