@@ -730,7 +730,9 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      const unsigned painted_opacity=(base_opacity*
          unsigned(std::lround(fill_alpha*255))+127)/255;
      const unsigned opacity=(painted_opacity*clip_coverage+127)/255;
-     if(!opacity&&!(transparent_target&&transparent_target->knockout))continue;
+     if(!opacity&&
+        !(transparent_target&&transparent_target->knockout)&&
+        !(cmyk_target&&cmyk_target->knockout))continue;
      if(cmyk_target){
       const auto component=[&](unsigned channel)->uint8_t{
        return uint8_t(im.stencil?
