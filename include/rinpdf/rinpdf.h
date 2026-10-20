@@ -38,6 +38,19 @@ rinpdf_status rinpdf_write_image_memory(const uint8_t *pixels,
  uint8_t **data,size_t *size);
 rinpdf_status rinpdf_write_image_file(const char *path,const uint8_t *pixels,
  unsigned width,unsigned height,size_t stride,unsigned components);
+/* Each image becomes one page; buffers must remain valid during the call.
+ * Supported components: 1 (gray), 3 (RGB), 4 (RGBA with soft mask).
+ */
+typedef struct rinpdf_image_page {
+ const uint8_t *pixels;
+ unsigned width,height;
+ size_t stride;
+ unsigned components;
+} rinpdf_image_page;
+rinpdf_status rinpdf_write_image_pages_memory(const rinpdf_image_page *pages,
+ size_t count,uint8_t **data,size_t *size);
+rinpdf_status rinpdf_write_image_pages_file(const char *path,
+ const rinpdf_image_page *pages,size_t count);
 #ifdef __cplusplus
 }
 #endif
