@@ -1078,15 +1078,22 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      if(transform.sample_count<2||
         transform.samples.size()!=size_t(transform.sample_count)*
                                   transform.components)return false;
-     const double position=std::clamp(tint,0.0,1.0)*
-                           double(transform.sample_count-1);
+     const double t=std::clamp(tint,transform.sample_domain[0],
+                                    transform.sample_domain[1]);
+     const double normalized=(t-transform.sample_domain[0])/
+                        (transform.sample_domain[1]-transform.sample_domain[0]);
+     const double position=std::clamp(
+       transform.sample_encode[0]+normalized*
+         (transform.sample_encode[1]-transform.sample_encode[0]),
+       0.0,double(transform.sample_count-1));
      const size_t first=size_t(position);
      const size_t last=std::min<size_t>(transform.sample_count-1,first+1);
      const double fraction=position-double(first);
      for(unsigned c=0;c<transform.components;++c){
       const double lo=double(transform.samples[first*transform.components+c])/255;
       const double hi=double(transform.samples[last*transform.components+c])/255;
-      output[c]=lo+fraction*(hi-lo);
+      output[c]=std::clamp(lo+fraction*(hi-lo),
+          transform.sample_range[2*c],transform.sample_range[2*c+1]);
      }
     }else{
      const double weight=std::pow(tint,exponent);
