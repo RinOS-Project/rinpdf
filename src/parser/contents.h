@@ -50,7 +50,7 @@ struct SeparationColorSpace {
  double sample_range[8]{0,1,0,1,0,1,0,1};
  double sample_decode[8]{0,1,0,1,0,1,0,1};
 };
-struct PageForm {std::vector<uint8_t> content; double bbox[4]{0,0,0,0}; double matrix[6]{1,0,0,1,0,0}; bool own_resources=false; bool transparency_group=false; bool isolated_transparency_group=false; bool knockout_transparency_group=false; std::string group_color_space; std::map<std::string,std::string> local_color_spaces; std::map<std::string,SeparationColorSpace> local_separations; std::map<std::string,std::string> xobject_aliases; std::map<std::string,PageForm> local_forms; std::map<std::string,PageImage> local_images; std::map<std::string,PageFont> local_fonts;};
+struct PageForm {std::vector<uint8_t> content; double bbox[4]{0,0,0,0}; double matrix[6]{1,0,0,1,0,0}; bool own_resources=false; bool transparency_group=false; bool isolated_transparency_group=false; bool knockout_transparency_group=false; std::string group_color_space; std::vector<uint8_t> group_icc_profile; unsigned group_icc_channels=0; std::map<std::string,std::string> local_color_spaces; std::map<std::string,SeparationColorSpace> local_separations; std::map<std::string,std::string> xobject_aliases; std::map<std::string,PageForm> local_forms; std::map<std::string,PageImage> local_images; std::map<std::string,PageFont> local_fonts;};
 bool read_page_color_spaces(const uint8_t* data,size_t size,size_t page_index,
  std::map<std::string,std::string>& aliases,
  std::map<std::string,SeparationColorSpace>& separations);
