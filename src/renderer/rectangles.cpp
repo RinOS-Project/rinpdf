@@ -1867,8 +1867,11 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
     if(cmyk_target){
      unsigned geometry=(hits*255+2)/4;
      if(clip_mask)geometry=(geometry*(*clip_mask)[i]+127)/255;
-     if(!cmyk_target->paint_rgb(x,y,cr,cg,cb,uint8_t(alpha),
-                                transparent_blend_mode(),uint8_t(geometry)))
+     if(!(explicit_stroke_ink?
+       cmyk_target->paint_ink(x,y,stroke_ink.data(),uint8_t(alpha),
+                              transparent_blend_mode(),uint8_t(geometry)):
+       cmyk_target->paint_rgb(x,y,cr,cg,cb,uint8_t(alpha),
+                              transparent_blend_mode(),uint8_t(geometry))))
       return false;
      continue;
     }
@@ -1915,8 +1918,11 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
     if(cmyk_target){
      unsigned geometry=antialias?coverage[i]:255;
      if(clip_mask)geometry=(geometry*(*clip_mask)[i]+127)/255;
-     if(!cmyk_target->paint_rgb(x,y,cr,cg,cb,uint8_t(alpha),
-                                transparent_blend_mode(),uint8_t(geometry)))
+     if(!(explicit_fill_ink?
+       cmyk_target->paint_ink(x,y,fill_ink.data(),uint8_t(alpha),
+                              transparent_blend_mode(),uint8_t(geometry)):
+       cmyk_target->paint_rgb(x,y,cr,cg,cb,uint8_t(alpha),
+                              transparent_blend_mode(),uint8_t(geometry))))
       return false;
      continue;
     }
