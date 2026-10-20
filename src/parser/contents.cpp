@@ -1376,9 +1376,14 @@ struct Reader {
             range->array.size()!=2*separation.components)return false;
          for(unsigned c=0;c<2;++c)
           if(!numeric(domain->array[c],segment.domain[c]))return false;
-         if(segment.domain[0]>=segment.domain[1])return false;
-         for(unsigned c=0;c<2*separation.components;++c){
-          if(!numeric(range->array[c],segment.range[c]))return false;
+         if(segment.domain[0]>=segment.domain[1]||
+            segment.domain[0]<0||segment.domain[1]>1)return false;
+         for(unsigned c=0;c<separation.components;++c){
+          double lo=0,hi=0;
+          if(!numeric(range->array[2*c],lo)||
+             !numeric(range->array[2*c+1],hi)||
+             lo>hi||lo<0||hi>1)return false;
+          segment.range[2*c]=lo;segment.range[2*c+1]=hi;
          }
          segment.sample_count=unsigned(sizes->array[0].integer);
          segment.encode[1]=double(segment.sample_count-1);
@@ -1386,7 +1391,10 @@ struct Reader {
           if(encoding->kind!=Value::Kind::Array||
              encoding->array.size()!=2)return false;
           for(unsigned c=0;c<2;++c)
-           if(!numeric(encoding->array[c],segment.encode[c]))return false;
+           if(!numeric(encoding->array[c],segment.encode[c])||
+              segment.encode[c]<0||
+              segment.encode[c]>double(segment.sample_count-1))
+            return false;
          }
          const size_t count=size_t(segment.sample_count)*
                             separation.components;
