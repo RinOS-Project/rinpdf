@@ -191,6 +191,11 @@ bool prepare(Input& doc){
   if(!rinpdf::parser::resolve_compressed_object(doc.bytes,doc.length,
                                                  doc.compressed,entry.object,value))return false;
   if(!rebase(value,doc.offset))return false;
+  if(entry.object==doc.root_pages){
+   if(value.kind!=K::Dictionary||!named(field(value,"Type"),"Pages"))return false;
+   V parent;parent.kind=K::Reference;parent.integer=2;
+   value.dictionary["Parent"]=parent;
+  }
   std::string serialized;
   if(!encode(value,serialized))return false;
   doc.objects[entry.object]=std::move(serialized);
