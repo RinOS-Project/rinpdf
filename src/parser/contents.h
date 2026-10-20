@@ -24,7 +24,12 @@ struct PageFont {
  std::string language;
 };
 struct PageImage {unsigned width=0,height=0,channels=0;bool stencil=false;std::vector<uint8_t> pixels;std::vector<uint8_t> alpha;std::vector<uint8_t> cmyk_pixels;};
-struct PageForm {std::vector<uint8_t> content; double bbox[4]{0,0,0,0}; double matrix[6]{1,0,0,1,0,0}; bool own_resources=false; bool transparency_group=false; bool isolated_transparency_group=false; bool knockout_transparency_group=false; std::string group_color_space; std::map<std::string,std::string> local_color_spaces; std::map<std::string,std::string> xobject_aliases; std::map<std::string,PageForm> local_forms; std::map<std::string,PageImage> local_images; std::map<std::string,PageFont> local_fonts;};
+struct SeparationColorSpace {
+ std::string alternate;
+ double c0[4]{0,0,0,0},c1[4]{1,1,1,1},exponent=1;
+ unsigned components=0;
+};
+struct PageForm {std::vector<uint8_t> content; double bbox[4]{0,0,0,0}; double matrix[6]{1,0,0,1,0,0}; bool own_resources=false; bool transparency_group=false; bool isolated_transparency_group=false; bool knockout_transparency_group=false; std::string group_color_space; std::map<std::string,std::string> local_color_spaces; std::map<std::string,SeparationColorSpace> local_separations; std::map<std::string,std::string> xobject_aliases; std::map<std::string,PageForm> local_forms; std::map<std::string,PageImage> local_images; std::map<std::string,PageFont> local_fonts;};
 bool read_page_forms(const uint8_t* data,size_t size,size_t page_index,
  std::map<std::string,PageForm>& forms);
 bool read_page_images(const uint8_t* data,size_t size,size_t page_index,
