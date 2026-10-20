@@ -1018,10 +1018,10 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
   }else if(word=="RG"){
    if(stack.size()!=3)return false;
    for(double channel:stack)if(channel<0||channel>1)return false;
-   stroke_red=stack[0];stroke_green=stack[1];stroke_blue=stack[2];explicit_stroke_ink=false;stack.clear();
+   stroke_red=stack[0];stroke_green=stack[1];stroke_blue=stack[2];explicit_stroke_ink=false;stroke_space="DeviceRGB";stack.clear();
   }else if(word=="G"){
    if(stack.size()!=1||stack[0]<0||stack[0]>1)return false;
-   stroke_red=stroke_green=stroke_blue=stack[0];explicit_stroke_ink=false;stack.clear();
+   stroke_red=stroke_green=stroke_blue=stack[0];explicit_stroke_ink=false;stroke_space="DeviceGray";stack.clear();
   }else if(word=="K"){
    if(stack.size()!=4)return false;
    for(double channel:stack)if(channel<0||channel>1)return false;
@@ -1070,7 +1070,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
   }else if(word=="rg"){
    if(stack.size()!=3)return false;
    for(double channel:stack)if(channel<0||channel>1)return false;
-   red=stack[0];green=stack[1];blue=stack[2];explicit_fill_ink=false;stack.clear();
+   red=stack[0];green=stack[1];blue=stack[2];explicit_fill_ink=false;fill_space="DeviceRGB";stack.clear();
   }else if(word=="k"){
    if(stack.size()!=4)return false;
    for(double channel:stack)if(channel<0||channel>1)return false;
@@ -1081,7 +1081,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
    explicit_fill_ink=true;fill_space="DeviceCMYK";stack.clear();
   }else if(word=="g"){
    if(stack.size()!=1||stack[0]<0||stack[0]>1)return false;
-   red=green=blue=stack[0];explicit_fill_ink=false;stack.clear();
+   red=green=blue=stack[0];explicit_fill_ink=false;fill_space="DeviceGray";stack.clear();
   }else if(word=="m"){
    if(pending_path_clip)return false;
    if(pending_rect_clip||pending_path_clip)return false;
