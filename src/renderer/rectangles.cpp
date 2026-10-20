@@ -425,7 +425,20 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
       return false;
      if(cmyk_target){
       if(!fm.transparency_group){
-       if(!draw_form(rgba,stride,nullptr,cmyk_target))return false;
+       if(cmyk_target->knockout){
+        // A regular Form is one knockout object, not a sequence of
+        // independent knockout operations for each internal paint.
+        if(blend_mode!="Normal")return false;
+        PremultipliedCMYKSurface object;
+        if(!object.resize(width,height))return false;
+        if(cmyk_target->nonisolated_knockout){
+         if(cmyk_target->backdrop_ink.size()!=object.ink.size())
+          return false;
+         object.ink=cmyk_target->backdrop_ink;
+        }
+        if(!draw_form(rgba,stride,nullptr,&object)||
+           !cmyk_target->knockout_object(object))return false;
+       }else if(!draw_form(rgba,stride,nullptr,cmyk_target))return false;
        continue;
       }
       if(fm.group_color_space!="DeviceCMYK")return false;
