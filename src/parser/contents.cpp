@@ -1367,7 +1367,9 @@ struct Reader {
             sizes->array.size()!=1||
             sizes->array[0].kind!=Value::Kind::Integer||
             sizes->array[0].integer<2||sizes->array[0].integer>4096||
-            !bits||bits->kind!=Value::Kind::Integer||bits->integer!=8||
+            !bits||bits->kind!=Value::Kind::Integer||
+            (bits->integer!=1&&bits->integer!=2&&bits->integer!=4&&
+             bits->integer!=8&&bits->integer!=12&&bits->integer!=16)||
             !domain||domain->kind!=Value::Kind::Array||
             domain->array.size()!=2||
             !range||range->kind!=Value::Kind::Array||
@@ -1386,10 +1388,24 @@ struct Reader {
           for(unsigned c=0;c<2;++c)
            if(!numeric(encoding->array[c],segment.encode[c]))return false;
          }
-         const size_t expected=size_t(segment.sample_count)*
-                                separation.components;
-         if(!decode_stream(data,size,child_stream,segment.samples,expected)||
-            segment.samples.size()!=expected)return false;
+         const size_t count=size_t(segment.sample_count)*
+                            separation.components;
+         const unsigned depth=unsigned(bits->integer);
+         const size_t expected=(count*depth+7u)/8u;
+         std::vector<uint8_t> packed;
+         if(!decode_stream(data,size,child_stream,packed,expected)||
+            packed.size()!=expected)return false;
+         segment.samples.reserve(count);
+         const unsigned maximum=(1u<<depth)-1u;
+         for(size_t n=0;n<count;++n){
+          const size_t offset=n*depth;
+          unsigned value=0;
+          for(unsigned b=0;b<depth;++b)
+           value=(value<<1u)|((packed[(offset+b)/8u]>>
+                                  (7u-unsigned((offset+b)%8u)))&1u);
+          segment.samples.push_back(uint8_t(
+                                   (value*255u+maximum/2u)/maximum));
+         }
         }else return false;
         separation.segments.push_back(std::move(segment));
        }
