@@ -456,9 +456,11 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
         if(!cmyk_target->knockout_object(child,mode))return false;
        }else if(!cmyk_target->composite_group(child,mode))return false;
       }else{
-       // A non-isolated child inherits the actual CMYK backdrop.
-       // Commit only its painted pixels rather than recompositing it.
-       if(blend_mode!="Normal")return false;
+       // A non-isolated child inherits the immutable CMYK backdrop.
+       // Parent knockout can blend the finished child as one object;
+       // ordinary non-isolated commits still require Normal.
+       const unsigned external_mode=transparent_blend_mode();
+       if(!cmyk_target->knockout&&external_mode!=0)return false;
        PremultipliedCMYKSurface backdrop;
        if(!backdrop.resize(width,height))return false;
        if(cmyk_target->knockout){
@@ -474,7 +476,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
         return false;
        if(!draw_form(rgba,stride,nullptr,&child))return false;
        if(cmyk_target->knockout){
-        if(!cmyk_target->knockout_object(child))return false;
+        if(!cmyk_target->knockout_object(child,external_mode))return false;
        }else{
         if(!backdrop.inherit_backdrop(*cmyk_target)||
            !cmyk_target->commit_nonisolated(child,backdrop))return false;
