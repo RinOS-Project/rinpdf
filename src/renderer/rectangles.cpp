@@ -490,7 +490,10 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
        }else if(!draw_form(rgba,stride,nullptr,cmyk_target))return false;
        continue;
       }
-      if(fm.group_color_space!="DeviceCMYK")return false;
+      // An omitted group /CS inherits the surrounding CMYK blending
+      // space. An explicitly different space needs a color conversion.
+      if(!fm.group_color_space.empty()&&
+         fm.group_color_space!="DeviceCMYK")return false;
       PremultipliedCMYKSurface child;
       if(!child.resize(width,height))return false;
       if(fm.isolated_transparency_group){
