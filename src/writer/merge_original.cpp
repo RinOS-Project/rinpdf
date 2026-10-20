@@ -34,15 +34,17 @@ std::string name(const std::string& s){
  }
  return out;
 }
-bool rebase(V& v,size_t offset,unsigned depth=0){
+bool rebase(V& v,size_t offset,const std::vector<int>& generations,unsigned depth=0){
  if(depth>64)return false;
  if(v.kind==K::Reference){
-  if(v.integer<=0||v.generation!=0||size_t(v.integer)>1000000-offset)return false;
-  v.integer+=(long long)offset;
+  if(v.integer<=0||size_t(v.integer)>=generations.size()||
+     size_t(v.integer)>1000000-offset||generations[size_t(v.integer)]<0||
+     v.generation!=(unsigned)generations[size_t(v.integer)])return false;
+  v.integer+=(long long)offset;v.generation=0;
  }
- if(v.kind==K::Array)for(auto& item:v.array)if(!rebase(item,offset,depth+1))return false;
+ if(v.kind==K::Array)for(auto& item:v.array)if(!rebase(item,offset,generations,depth+1))return false;
  if(v.kind==K::Dictionary)for(auto& entry:v.dictionary)
-  if(!rebase(entry.second,offset,depth+1))return false;
+  if(!rebase(entry.second,offset,generations,depth+1))return false;
  return true;
 }
 bool encode(const V& v,std::string& s,unsigned depth=0){
@@ -78,6 +80,7 @@ struct Input{
  std::vector<rinpdf::parser::XrefStreamEntry> compressed;
  std::vector<std::string> objects;
  std::vector<bool> present;
+ std::vector<int> generations;
 };
 bool resolve_length(const Input& doc,const V& length,size_t& out){
  V resolved=length;
@@ -99,18 +102,18 @@ bool prepare(Input& doc){
     field(trailer,"Encrypt"))return false;
  // Type-2 entries are decoded and materialized into ordinary indirect objects.
  const V* root_ref=field(trailer,"Root");
- if(!root_ref||root_ref->kind!=K::Reference||root_ref->generation!=0)return false;
+ if(!root_ref||root_ref->kind!=K::Reference||root_ref->integer<=0)return false;
  V catalog;
  if(!rinpdf::parser::resolve_reference_value(doc.bytes,doc.length,doc.xref,doc.compressed,
                                               *root_ref,catalog))return false;
  if(!named(field(catalog,"Type"),"Catalog"))return false;
  const V* pages=field(catalog,"Pages");
- if(!pages||pages->kind!=K::Reference||pages->generation!=0||pages->integer<=0)return false;
+ if(!pages||pages->kind!=K::Reference||pages->integer<=0)return false;
  doc.root_pages=(size_t)pages->integer;
  if(!rinpdf::parser::count_page_tree(doc.bytes,doc.length,doc.page_count)||
     doc.page_count==0)return false;
  for(const auto& item:doc.xref){
-  if(item.object>100000||(item.generation!=0&&item.in_use))return false;
+  if(item.object>100000)return false;
   doc.max_id=std::max(doc.max_id,item.object);
  }
  for(const auto& item:doc.compressed){
@@ -119,11 +122,18 @@ bool prepare(Input& doc){
  }
  doc.objects.resize(doc.max_id+1);
  doc.present.assign(doc.max_id+1,false);
+ doc.generations.assign(doc.max_id+1,-1);
  std::vector<rinpdf::parser::XrefEntry> valid;
  for(const auto& entry:doc.xref){
   if(!entry.in_use)continue;
   if(entry.object==0||entry.offset>=doc.length||doc.present[entry.object])return false;
-  doc.present[entry.object]=true;valid.push_back(entry);
+  doc.present[entry.object]=true;
+  doc.generations[entry.object]=(int)entry.generation;valid.push_back(entry);
+ }
+ for(const auto& entry:doc.compressed){
+  if(entry.type!=2)continue;
+  if(entry.object==0||entry.object>doc.max_id||doc.present[entry.object])return false;
+  doc.generations[entry.object]=0;
  }
  std::sort(valid.begin(),valid.end(),[](const auto& a,const auto& b){return a.offset<b.offset;});
  for(size_t i=0;i<valid.size();++i){
@@ -136,7 +146,7 @@ bool prepare(Input& doc){
   if(id.kind!=rinpdf::parser::TokenKind::Integer||
      gen.kind!=rinpdf::parser::TokenKind::Integer||
      obj.kind!=rinpdf::parser::TokenKind::Keyword||obj.value!="obj"||
-     id.value!=std::to_string(entry.object)||gen.value!="0")return false;
+     id.value!=std::to_string(entry.object)||gen.value!=std::to_string(entry.generation))return false;
   const size_t body=entry.offset+header.position();
   rinpdf::parser::Lexer parser(doc.bytes+body,limit-body);
   V value;
@@ -175,7 +185,7 @@ bool prepare(Input& doc){
   if(entry.object==doc.root_pages){
    if(value.kind!=K::Dictionary||!named(field(value,"Type"),"Pages"))return false;
   }
-  if(!rebase(value,doc.offset))return false;
+  if(!rebase(value,doc.offset,doc.generations))return false;
   // Parent of the source root points to the new merged Pages node.
   if(entry.object==doc.root_pages){
    V parent;parent.kind=K::Reference;parent.integer=2;
@@ -191,7 +201,7 @@ bool prepare(Input& doc){
   V value;
   if(!rinpdf::parser::resolve_compressed_object(doc.bytes,doc.length,
                                                  doc.compressed,entry.object,value))return false;
-  if(!rebase(value,doc.offset))return false;
+  if(!rebase(value,doc.offset,doc.generations))return false;
   if(entry.object==doc.root_pages){
    if(value.kind!=K::Dictionary||!named(field(value,"Type"),"Pages"))return false;
    V parent;parent.kind=K::Reference;parent.integer=2;
