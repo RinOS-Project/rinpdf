@@ -371,11 +371,21 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      std::string stream="q /"+inherited_name+" gs ";
      // Form XObjects inherit the caller's graphics state. The recursive
      // renderer starts fresh, so serialize supported state explicitly.
-     for(double v:{red,green,blue})stream+=number_text(v)+" ";
-     stream+="rg ";
-     for(double v:{stroke_red,stroke_green,stroke_blue})
-      stream+=number_text(v)+" ";
-     stream+="RG ";
+     if(explicit_fill_ink){
+      for(unsigned v:fill_ink)stream+=number_text(double(v)/255.0)+" ";
+      stream+="k ";
+     }else{
+      for(double v:{red,green,blue})stream+=number_text(v)+" ";
+      stream+="rg ";
+     }
+     if(explicit_stroke_ink){
+      for(unsigned v:stroke_ink)stream+=number_text(double(v)/255.0)+" ";
+      stream+="K ";
+     }else{
+      for(double v:{stroke_red,stroke_green,stroke_blue})
+       stream+=number_text(v)+" ";
+      stream+="RG ";
+     }
      stream+=number_text(line_width)+" w ";
      stream+=std::to_string(line_cap)+" J ";
      stream+=std::to_string(line_join)+" j ";
