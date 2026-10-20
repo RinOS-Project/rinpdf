@@ -477,7 +477,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
        if(cmyk_target->knockout){
         // A regular Form is one knockout object, not a sequence of
         // independent knockout operations for each internal paint.
-        if(blend_mode!="Normal")return false;
+        const unsigned external_mode=transparent_blend_mode();
         PremultipliedCMYKSurface object;
         if(!object.resize(width,height))return false;
         if(cmyk_target->nonisolated_knockout){
@@ -486,7 +486,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
          object.ink=cmyk_target->backdrop_ink;
         }
         if(!draw_form(rgba,stride,nullptr,&object)||
-           !cmyk_target->knockout_object(object))return false;
+           !cmyk_target->knockout_object(object,external_mode))return false;
        }else if(!draw_form(rgba,stride,nullptr,cmyk_target))return false;
        continue;
       }
