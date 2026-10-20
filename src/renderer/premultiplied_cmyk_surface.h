@@ -33,6 +33,9 @@ struct PremultipliedCMYKSurface {
   width=w;height=h;
   ink.assign(size_t(w)*h*5,0);
   shape.assign(size_t(w)*h,0);
+  knockout=false;
+  nonisolated_knockout=false;
+  backdrop_ink.clear();
   return true;
  }
  static void from_rgb(uint8_t r,uint8_t g,uint8_t b,unsigned out[4]){
@@ -147,12 +150,12 @@ struct PremultipliedCMYKSurface {
   return true;
  }
  bool begin_knockout(bool isolated){
+  if(ink.size()!=size_t(width)*height*5||
+     shape.size()!=size_t(width)*height)return false;
   knockout=true;
   nonisolated_knockout=!isolated;
-  if(!isolated){
-   if(ink.size()!=size_t(width)*height*5)return false;
-   backdrop_ink=ink;
-  }
+  if(!isolated)backdrop_ink=ink;
+  else backdrop_ink.clear();
   return true;
  }
  // Composite a child isolated CMYK group in native premultiplied ink.
