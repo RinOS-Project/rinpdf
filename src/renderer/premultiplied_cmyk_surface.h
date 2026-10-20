@@ -13,6 +13,9 @@ struct PremultipliedCMYKSurface {
  unsigned width=0,height=0;
  std::vector<uint8_t> ink; // C, M, Y, K, alpha (5 bytes per pixel)
  std::vector<uint8_t> shape;
+ bool knockout=false;
+ bool nonisolated_knockout=false;
+ std::vector<uint8_t> backdrop_ink;
  static unsigned mul255(unsigned a,unsigned b){return (a*b+127u)/255u;}
  bool resize(unsigned w,unsigned h){
   if(!w||!h||size_t(w)*h>1048576u)return false;
@@ -33,6 +36,19 @@ struct PremultipliedCMYKSurface {
   const size_t p=size_t(y)*width+x, i=p*5;
   unsigned src[4]{};
   from_rgb(r,g,b,src);
+  if(knockout){
+   if(mode!=0||alpha>geometry)return false;
+   const unsigned keep=255u-geometry;
+   for(unsigned c=0;c<5;++c){
+    const unsigned inherited=nonisolated_knockout?
+       mul255(backdrop_ink[i+c],geometry-alpha):0u;
+    const unsigned current=mul255(ink[i+c],keep);
+    const unsigned added=c==4?alpha:mul255(src[c],alpha);
+    ink[i+c]=uint8_t(std::min(255u,current+inherited+added));
+   }
+   shape[p]=uint8_t(std::min(255u,geometry+mul255(shape[p],keep)));
+   return true;
+  }
   const unsigned ad=ink[i+4];
   for(unsigned c=0;c<4;++c){
    const unsigned d=ad?std::min(255u,
@@ -46,6 +62,15 @@ struct PremultipliedCMYKSurface {
   }
   ink[i+4]=uint8_t(std::min(255u,alpha+mul255(ad,255u-alpha)));
   shape[p]=uint8_t(std::min(255u,geometry+mul255(shape[p],255u-geometry)));
+  return true;
+ }
+ bool begin_knockout(bool isolated){
+  knockout=true;
+  nonisolated_knockout=!isolated;
+  if(!isolated){
+   if(ink.size()!=size_t(width)*height*5)return false;
+   backdrop_ink=ink;
+  }
   return true;
  }
  // Composite a child isolated CMYK group in native premultiplied ink.
