@@ -47,6 +47,16 @@ struct PremultipliedCMYKSurface {
   const size_t p=size_t(y)*width+x, i=p*5;
   unsigned src[4]{};
   from_rgb(r,g,b,src);
+  return paint_ink(x,y,src,alpha,mode,geometry);
+ }
+ // Paint exact DeviceCMYK components without an RGB round-trip.
+ bool paint_ink(unsigned x,unsigned y,const unsigned src[4],
+                uint8_t alpha,unsigned mode=0,uint8_t geometry=255){
+  if(!src||mode>2||x>=width||y>=height||
+     ink.size()!=size_t(width)*height*5||
+     (nonisolated_knockout&&backdrop_ink.size()!=ink.size()))return false;
+  for(unsigned c=0;c<4;++c)if(src[c]>255)return false;
+  const size_t p=size_t(y)*width+x,i=p*5;
   if(knockout){
    if(mode!=0||alpha>geometry)return false;
    const unsigned keep=255u-geometry;
