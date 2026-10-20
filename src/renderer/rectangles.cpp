@@ -428,13 +428,14 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
        if(!draw_form(rgba,stride,nullptr,cmyk_target))return false;
        continue;
       }
-      if(fm.group_color_space!="DeviceCMYK"||
-         fm.knockout_transparency_group)return false;
+      if(fm.group_color_space!="DeviceCMYK")return false;
       PremultipliedCMYKSurface child;
       if(!child.resize(width,height))return false;
       if(fm.isolated_transparency_group){
        // An isolated child begins on transparent ink, then blends once.
        const unsigned mode=transparent_blend_mode();
+       if(fm.knockout_transparency_group&&!child.begin_knockout(true))
+        return false;
        if(!draw_form(rgba,stride,nullptr,&child)||
           !cmyk_target->composite_group(child,mode))return false;
       }else{
@@ -445,6 +446,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
        if(!backdrop.resize(width,height)||
           !backdrop.inherit_backdrop(*cmyk_target)||
           !child.inherit_backdrop(*cmyk_target)||
+          (fm.knockout_transparency_group&&!child.begin_knockout(false))||
           !draw_form(rgba,stride,nullptr,&child)||
           !cmyk_target->commit_nonisolated(child,backdrop))return false;
       }
