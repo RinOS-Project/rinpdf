@@ -885,6 +885,9 @@ struct Reader {
        }
        image.pixels=std::move(rgb);image.channels=3;
       }else if(channels==4){
+       // Keep decoded CMYK samples for native CMYK group rendering.
+       // The RGB fallback remains available to ordinary page rendering.
+       image.cmyk_pixels=image.pixels;
        std::vector<uint8_t> rgb(size_t(image.width)*image.height*3);
        for(size_t i=0;i<size_t(image.width)*image.height;++i){
         const unsigned k=image.pixels[4*i+3];
