@@ -35,6 +35,7 @@ struct SeparationColorSpace {
   unsigned sample_count=0;
   double domain[2]{0,1},encode[2]{0,1};
   double range[8]{0,1,0,1,0,1,0,1};
+  double decode[8]{0,1,0,1,0,1,0,1};
   std::vector<Segment> children;
   std::vector<double> bounds,stitch_encode;
  };
@@ -47,6 +48,7 @@ struct SeparationColorSpace {
  double sample_domain[2]{0,1};
  double sample_encode[2]{0,1};
  double sample_range[8]{0,1,0,1,0,1,0,1};
+ double sample_decode[8]{0,1,0,1,0,1,0,1};
 };
 struct PageForm {std::vector<uint8_t> content; double bbox[4]{0,0,0,0}; double matrix[6]{1,0,0,1,0,0}; bool own_resources=false; bool transparency_group=false; bool isolated_transparency_group=false; bool knockout_transparency_group=false; std::string group_color_space; std::map<std::string,std::string> local_color_spaces; std::map<std::string,SeparationColorSpace> local_separations; std::map<std::string,std::string> xobject_aliases; std::map<std::string,PageForm> local_forms; std::map<std::string,PageImage> local_images; std::map<std::string,PageFont> local_fonts;};
 bool read_page_forms(const uint8_t* data,size_t size,size_t page_index,
