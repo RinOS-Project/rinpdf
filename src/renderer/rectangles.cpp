@@ -1055,10 +1055,28 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
     if(!std::isfinite(channel)||channel<0||channel>1)return false;
    if(tint_space!=separations.end()){
     const auto& transform=tint_space->second;
-    const double weight=std::pow(stack[0],transform.exponent);
+    double tint=stack[0];
+    const double* c0=transform.c0;
+    const double* c1=transform.c1;
+    double exponent=transform.exponent;
+    if(!transform.segments.empty()){
+     size_t segment=0;
+     while(segment<transform.bounds.size()&&
+           tint>=transform.bounds[segment])++segment;
+     const double lo=segment?transform.bounds[segment-1]:0.0;
+     const double hi=segment<transform.bounds.size()?
+                          transform.bounds[segment]:1.0;
+     const double encoded_lo=transform.encode[2*segment];
+     const double encoded_hi=transform.encode[2*segment+1];
+     tint=encoded_lo+(tint-lo)/(hi-lo)*(encoded_hi-encoded_lo);
+     tint=std::clamp(tint,0.0,1.0);
+     const auto& selected=transform.segments[segment];
+     c0=selected.c0;c1=selected.c1;exponent=selected.exponent;
+    }
+    const double weight=std::pow(tint,exponent);
     double output[4]{};
     for(unsigned c=0;c<transform.components;++c)
-     output[c]=transform.c0[c]+weight*(transform.c1[c]-transform.c0[c]);
+     output[c]=c0[c]+weight*(c1[c]-c0[c]);
     const bool cmyk=transform.alternate=="DeviceCMYK";
     const double rr=cmyk?(1-output[0])*(1-output[3]):output[0];
     const double gg=cmyk?(1-output[1])*(1-output[3]):
