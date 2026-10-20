@@ -27,6 +27,15 @@ rinpdf_status rinpdf_write_text_document(const char *path,const char *ascii_text
 rinpdf_status rinpdf_write_text_memory(const char *ascii_text,
  const rinpdf_text_options *options,uint8_t **data,size_t *size);
 void rinpdf_free_buffer(void *data);
+/* Creates a single-page PDF containing an 8-bit grayscale (components=1)
+ * or RGB (components=3) image. Input rows may have padding via stride.
+ * The memory variant returns a buffer released using rinpdf_free_buffer.
+ */
+rinpdf_status rinpdf_write_image_memory(const uint8_t *pixels,
+ unsigned width,unsigned height,size_t stride,unsigned components,
+ uint8_t **data,size_t *size);
+rinpdf_status rinpdf_write_image_file(const char *path,const uint8_t *pixels,
+ unsigned width,unsigned height,size_t stride,unsigned components);
 #ifdef __cplusplus
 }
 #endif
