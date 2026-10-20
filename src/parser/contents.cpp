@@ -1357,6 +1357,47 @@ struct Reader {
         if(!child_type||child_type->kind!=Value::Kind::Integer)return false;
         if(child_type->integer==2){
          if(!type2(child,segment))return false;
+        }else if(child_type->integer==3){
+         // One additional nested stitching level, with Type2 leaves.
+         // Bounds and Encode are scoped to the nested function.
+         const Value* nested_f=get(child,"Functions");
+         const Value* nested_b=get(child,"Bounds");
+         const Value* nested_e=get(child,"Encode");
+         const Value* nested_d=get(child,"Domain");
+         if(!nested_f||nested_f->kind!=Value::Kind::Array||
+            nested_f->array.empty()||nested_f->array.size()>16||
+            !nested_b||nested_b->kind!=Value::Kind::Array||
+            nested_b->array.size()+1!=nested_f->array.size()||
+            !nested_e||nested_e->kind!=Value::Kind::Array||
+            nested_e->array.size()!=2*nested_f->array.size()||
+            !nested_d||nested_d->kind!=Value::Kind::Array||
+            nested_d->array.size()!=2)return false;
+         double nd0=0,nd1=0;
+         if(!numeric(nested_d->array[0],nd0)||
+            !numeric(nested_d->array[1],nd1)||
+            nd0!=0||nd1!=1)return false;
+         double previous=0;
+         for(const auto& bound:nested_b->array){
+          double value=0;
+          if(!numeric(bound,value)||value<=previous||value>=1)
+           return false;
+          segment.bounds.push_back(value);
+          previous=value;
+         }
+         for(const auto& encoded:nested_e->array){
+          double value=0;
+          if(!numeric(encoded,value)||value<0||value>1)return false;
+          segment.stitch_encode.push_back(value);
+         }
+         for(const auto& leaf:nested_f->array){
+          Value fn;
+          if(leaf.kind==Value::Kind::Reference){
+           if(!object(leaf,fn))return false;
+          }else fn=leaf;
+          SeparationColorSpace::Segment branch;
+          if(!type2(fn,branch))return false;
+          segment.children.push_back(std::move(branch));
+         }
         }else if(child_type->integer==0){
          const Value* sizes=get(child,"Size");
          const Value* bits=get(child,"BitsPerSample");
