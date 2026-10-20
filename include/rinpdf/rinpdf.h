@@ -81,6 +81,16 @@ rinpdf_status rinpdf_merge_pages_memory(const rinpdf_page_source *pages,
  size_t count,unsigned dpi,uint8_t **data,size_t *size);
 rinpdf_status rinpdf_merge_pages_file(const char *path,
  const rinpdf_page_source *pages,size_t count,unsigned dpi);
+/* Merge selected zero-based pages across documents without rasterizing.
+ * Selection order is preserved and duplicate pages are supported.
+ * Adjacent selections from the same document are grouped; up to 128
+ * source runs and 10000 selected pages are accepted.
+ * This path currently depends on the restricted lossless page extractor.
+ */
+rinpdf_status rinpdf_merge_selected_pages_lossless_memory(
+ const rinpdf_page_source *pages,size_t count,uint8_t **data,size_t *size);
+rinpdf_status rinpdf_merge_selected_pages_lossless_file(
+ const char *path,const rinpdf_page_source *pages,size_t count);
 /* Merge complete non-encrypted classic-xref PDF documents without rasterizing.
  * Reassigns indirect object IDs and preserves encoded stream bytes.
  * Unsupported document structures return RINPDF_UNSUPPORTED.
