@@ -11,30 +11,58 @@
 #include <vector>
 
 namespace {
-bool valid(const char* s){
- if(!s)return true;
- for(const unsigned char* p=(const unsigned char*)s;*p;++p)
-  if(*p<32 && *p!='\n' && *p!='\r' && *p!='\t')return false;
+bool utf8_to_utf16(const char* input,std::string& output){
+ if(!input)return true;
+ const auto* p=(const unsigned char*)input;
+ output.clear();output.push_back(char(0xFE));output.push_back(char(0xFF));
+ size_t length=0;
+ while(*p){
+  if(++length>1024*1024)return false;
+  uint32_t cp=0;
+  unsigned count=0;
+  if(*p<0x80){cp=*p++;count=0;}
+  else if(*p>=0xC2&&*p<=0xDF){cp=*p++&0x1F;count=1;}
+  else if(*p>=0xE0&&*p<=0xEF){cp=*p++&0x0F;count=2;}
+  else if(*p>=0xF0&&*p<=0xF4){cp=*p++&0x07;count=3;}
+  else return false;
+  for(unsigned j=0;j<count;++j){
+   if(*p<0x80||*p>0xBF)return false;
+   cp=(cp<<6)|(*p++&0x3F);
+  }
+  if((count==1&&cp<0x80)||(count==2&&cp<0x800)||
+     (count==3&&cp<0x10000)||cp>0x10FFFF||
+     (cp>=0xD800&&cp<=0xDFFF))return false;
+  auto unit=[&](uint16_t u){output.push_back(char(u>>8));output.push_back(char(u&255));};
+  if(cp<0x10000)unit((uint16_t)cp);
+  else {cp-=0x10000;unit((uint16_t)(0xD800+(cp>>10)));unit((uint16_t)(0xDC00+(cp&1023)));}
+ }
  return true;
 }
-std::string hex_string(const char* s){
- static const char* hex="0123456789ABCDEF";
- std::string result="<";
- for(const unsigned char* p=(const unsigned char*)s;*p;++p){
-  result+=hex[*p>>4];result+=hex[*p&15];
- }
- return result+">";
+std::string hex_bytes(const std::string& input){
+ static constexpr char hex[]="0123456789ABCDEF";
+ std::string output="<";
+ for(unsigned char c:input){output+=hex[c>>4];output+=hex[c&15];}
+ return output+">";
+}
+bool encoded_metadata(const char* input,std::string& output){
+ if(!input)return true;
+ std::string utf16;
+ if(!utf8_to_utf16(input,utf16))return false;
+ output=hex_bytes(utf16);
+ return true;
 }
 rinpdf_status write_metadata(const uint8_t* bytes,size_t length,
  const rinpdf_metadata* metadata,uint8_t** out,size_t* out_size){
  if(!out||!out_size)return RINPDF_INVALID_ARGUMENT;
  *out=nullptr;*out_size=0;
- if(!bytes||length<8||!metadata||!valid(metadata->title)||
-    !valid(metadata->author)||!valid(metadata->subject)||
-    !valid(metadata->keywords))return RINPDF_INVALID_ARGUMENT;
+ if(!bytes||length<8||!metadata)return RINPDF_INVALID_ARGUMENT;
  // This is a bounded incremental update of the Info dictionary.
  // A new revision preserves original page, image and font objects.
  try {
+  std::string title,author,subject,keywords;
+  if(!encoded_metadata(metadata->title,title)||!encoded_metadata(metadata->author,author)||
+     !encoded_metadata(metadata->subject,subject)||!encoded_metadata(metadata->keywords,keywords))
+   return RINPDF_INVALID_ARGUMENT;
   std::vector<rinpdf::parser::XrefEntry> entries;
   size_t trailer_offset=0;
   if(!rinpdf::parser::read_classic_xref(bytes,length,entries,&trailer_offset))
@@ -59,10 +87,10 @@ rinpdf_status write_metadata(const uint8_t* bytes,size_t length,
   output+="\n";
   const size_t position=output.size();
   output+=std::to_string(info_id)+" 0 obj\n<< /Producer (rinpdf)";
-  if(metadata->title)output+=" /Title "+hex_string(metadata->title);
-  if(metadata->author)output+=" /Author "+hex_string(metadata->author);
-  if(metadata->subject)output+=" /Subject "+hex_string(metadata->subject);
-  if(metadata->keywords)output+=" /Keywords "+hex_string(metadata->keywords);
+  if(metadata->title)output+=" /Title "+title;
+  if(metadata->author)output+=" /Author "+author;
+  if(metadata->subject)output+=" /Subject "+subject;
+  if(metadata->keywords)output+=" /Keywords "+keywords;
   output+=" >>\nendobj\n";
   const size_t xref=output.size();
   char buffer[64];
