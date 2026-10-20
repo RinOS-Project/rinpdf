@@ -1343,12 +1343,55 @@ struct Reader {
        }
        for(const Value& entry: functions->array){
         Value child;
+        StreamRange child_stream;
+        bool has_stream=false;
         if(entry.kind==Value::Kind::Reference){
-         if(!object(entry,child))return false;
+         const XrefEntry* child_entry=nullptr;
+         if(!this->entry(entry,child_entry))return false;
+         if(locate_indirect_stream(data,size,*child_entry,xref,child_stream)){
+          child=child_stream.dictionary;has_stream=true;
+         }else if(!object(entry,child))return false;
         }else child=entry;
         SeparationColorSpace::Segment segment;
-        if(!type2(child,segment))return false;
-        separation.segments.push_back(segment);
+        const Value* child_type=get(child,"FunctionType");
+        if(!child_type||child_type->kind!=Value::Kind::Integer)return false;
+        if(child_type->integer==2){
+         if(!type2(child,segment))return false;
+        }else if(child_type->integer==0){
+         const Value* sizes=get(child,"Size");
+         const Value* bits=get(child,"BitsPerSample");
+         const Value* domain=get(child,"Domain");
+         const Value* range=get(child,"Range");
+         const Value* encoding=get(child,"Encode");
+         if(!has_stream||!sizes||sizes->kind!=Value::Kind::Array||
+            sizes->array.size()!=1||
+            sizes->array[0].kind!=Value::Kind::Integer||
+            sizes->array[0].integer<2||sizes->array[0].integer>4096||
+            !bits||bits->kind!=Value::Kind::Integer||bits->integer!=8||
+            !domain||domain->kind!=Value::Kind::Array||
+            domain->array.size()!=2||
+            !range||range->kind!=Value::Kind::Array||
+            range->array.size()!=2*separation.components)return false;
+         for(unsigned c=0;c<2;++c)
+          if(!numeric(domain->array[c],segment.domain[c]))return false;
+         if(segment.domain[0]>=segment.domain[1])return false;
+         for(unsigned c=0;c<2*separation.components;++c){
+          if(!numeric(range->array[c],segment.range[c]))return false;
+         }
+         segment.sample_count=unsigned(sizes->array[0].integer);
+         segment.encode[1]=double(segment.sample_count-1);
+         if(encoding){
+          if(encoding->kind!=Value::Kind::Array||
+             encoding->array.size()!=2)return false;
+          for(unsigned c=0;c<2;++c)
+           if(!numeric(encoding->array[c],segment.encode[c]))return false;
+         }
+         const size_t expected=size_t(segment.sample_count)*
+                                separation.components;
+         if(!decode_stream(data,size,child_stream,segment.samples,expected)||
+            segment.samples.size()!=expected)return false;
+        }else return false;
+        separation.segments.push_back(std::move(segment));
        }
       }else return false;
       form.local_separations.emplace(alias,separation);
