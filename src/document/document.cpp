@@ -205,8 +205,9 @@ struct ExportWalker{
  }
 };
 }
-extern "C" rinpdf_status rinpdf_export_pages_lossless_memory(
- const rinpdf_document* doc,const size_t* indices,size_t count,uint8_t** output,size_t* output_size){
+extern "C" rinpdf_status rinpdf_export_pages_with_boxes_memory(
+ const rinpdf_document* doc,const size_t* indices,const rinpdf_page_box_override* overrides,
+ size_t count,uint8_t** output,size_t* output_size){
  if(!output||!output_size)return RINPDF_INVALID_ARGUMENT;
  *output=nullptr;*output_size=0;
  if(!doc||!indices||count==0||count>10000)return RINPDF_INVALID_ARGUMENT;
@@ -268,6 +269,27 @@ extern "C" rinpdf_status rinpdf_export_pages_lossless_memory(
    parent.kind=PDFKind::Reference;
    parent.integer=(long long)pages_id;
    page.dictionary["Parent"]=parent;
+   if(overrides){
+    const auto& edit=overrides[i];
+    if(edit.set_rotation){
+     if(edit.rotation!=0&&edit.rotation!=90&&edit.rotation!=180&&edit.rotation!=270)
+      return RINPDF_INVALID_ARGUMENT;
+     PDFValue r; r.kind=PDFKind::Integer;r.integer=edit.rotation;
+     page.dictionary["Rotate"]=r;
+    }
+    auto set_box=[&](const char* name,const double* values)->bool{
+     for(unsigned k=0;k<4;++k)if(!std::isfinite(values[k]))return false;
+     if(values[2]<=values[0]||values[3]<=values[1])return false;
+     PDFValue v;v.kind=PDFKind::Array;
+     for(unsigned k=0;k<4;++k){
+      PDFValue n;n.kind=PDFKind::Real;n.real=values[k];
+      v.array.push_back(n);
+     }
+     page.dictionary[name]=std::move(v);return true;
+    };
+    if(edit.set_media_box&&!set_box("MediaBox",edit.media_box))return RINPDF_INVALID_ARGUMENT;
+    if(edit.set_crop_box&&!set_box("CropBox",edit.crop_box))return RINPDF_INVALID_ARGUMENT;
+   }
    serialized.clear();
    if(!pdf_serialize(page,serialized))return RINPDF_UNSUPPORTED;
    append(first_page_id+i,serialized);
@@ -291,6 +313,10 @@ extern "C" rinpdf_status rinpdf_export_pages_lossless_memory(
   *output=memory;*output_size=result.size();
   return RINPDF_OK;
  }catch(const std::bad_alloc&){return RINPDF_OUT_OF_MEMORY;}
+}
+extern "C" rinpdf_status rinpdf_export_pages_lossless_memory(
+ const rinpdf_document* doc,const size_t* indices,size_t count,uint8_t** output,size_t* output_size){
+ return rinpdf_export_pages_with_boxes_memory(doc,indices,nullptr,count,output,output_size);
 }
 extern "C" rinpdf_status rinpdf_export_pages_lossless_file(
  const char* path,const rinpdf_document* doc,const size_t* indices,size_t count){
