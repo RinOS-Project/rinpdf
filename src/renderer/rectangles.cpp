@@ -355,7 +355,12 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      inherited.has_stroke_alpha=true;
      // Isolated groups blend against transparent black internally.
      // Their external blend mode applies only when composited to parent.
-     inherited.blend_mode=fm.isolated_transparency_group?"Normal":blend_mode;
+     // A nested transparency group inside a CMYK knockout parent is
+     // composited as one object. Its external blend belongs to that
+     // composition, not to each internal paint operation.
+     inherited.blend_mode=(fm.isolated_transparency_group||
+       (fm.transparency_group&&cmyk_target&&cmyk_target->knockout))?
+       "Normal":blend_mode;
      inherited.has_blend_mode=true;
      form_graphics.emplace(inherited_name,inherited);
      std::string stream="q /"+inherited_name+" gs ";
