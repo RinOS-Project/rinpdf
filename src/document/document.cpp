@@ -229,7 +229,7 @@ extern "C" rinpdf_status rinpdf_export_pages_lossless_memory(
   for(size_t i=0;i<count;++i)if(indices[i]>=walker.pages.size())return RINPDF_INVALID_ARGUMENT;
   size_t max_id=0;
   for(const auto& entry:entries)max_id=std::max(max_id,entry.object);
-  if(max_id>1000000||count>1000000-max_id-2)return RINPDF_UNSUPPORTED;
+  if(max_id>999997||count>1000000-max_id-2)return RINPDF_UNSUPPORTED;
   const size_t pages_id=max_id+1;
   const size_t catalog_id=max_id+2;
   const size_t first_page_id=max_id+3;
