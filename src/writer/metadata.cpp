@@ -1,5 +1,8 @@
 #include "rinpdf/rinpdf.h"
 #include "../parser/xref.h"
+#include "../parser/lexer.h"
+#include "../parser/value.h"
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
