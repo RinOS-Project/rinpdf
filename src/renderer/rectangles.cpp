@@ -1071,9 +1071,26 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      const double encoded_hi=transform.encode[2*segment+1];
      tint=encoded_lo+(tint-lo)/(hi-lo)*(encoded_hi-encoded_lo);
      tint=std::clamp(tint,0.0,1.0);
-     const auto& selected=transform.segments[segment];
-     selected_segment=&selected;
-     c0=selected.c0;c1=selected.c1;exponent=selected.exponent;
+     const auto* selected=&transform.segments[segment];
+     if(!selected->children.empty()){
+      if(selected->children.size()!=selected->bounds.size()+1||
+         selected->stitch_encode.size()!=2*selected->children.size())
+       return false;
+      size_t nested=0;
+      while(nested<selected->bounds.size()&&
+            tint>=selected->bounds[nested])++nested;
+      const double nlo=nested?selected->bounds[nested-1]:0.0;
+      const double nhi=nested<selected->bounds.size()?
+                                  selected->bounds[nested]:1.0;
+      tint=std::clamp(
+        selected->stitch_encode[2*nested]+
+        (tint-nlo)/(nhi-nlo)*
+        (selected->stitch_encode[2*nested+1]-
+         selected->stitch_encode[2*nested]),0.0,1.0);
+      selected=&selected->children[nested];
+     }
+     selected_segment=selected;
+     c0=selected->c0;c1=selected->c1;exponent=selected->exponent;
     }
     double output[4]{};
     if(!transform.samples.empty()){
