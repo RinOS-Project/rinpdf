@@ -54,6 +54,8 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
  bool explicit_fill_ink=false,explicit_stroke_ink=false;
  struct InkState{std::array<unsigned,4> fill,stroke;bool has_fill,has_stroke;};
  std::vector<InkState> saved_ink;
+ std::string fill_space="DeviceGray",stroke_space="DeviceGray";
+ std::vector<std::pair<std::string,std::string>> saved_spaces;
  double fill_alpha=1,stroke_alpha=1;
  std::string blend_mode="Normal";
  std::vector<std::string> saved_blend;
@@ -325,6 +327,14 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      if(!lang.empty())active_marked_language=lang;
      lex=properties_lexer;continue;
     }
+   }
+   if(!in_text&&next.kind==parser::TokenKind::Keyword&&
+      (next.value=="cs"||next.value=="CS")&&stack.empty()){
+    if(token.value!="DeviceGray"&&token.value!="DeviceRGB"&&
+       token.value!="DeviceCMYK")return false;
+    if(next.value=="cs")fill_space=token.value;
+    else stroke_space=token.value;
+    lex=look;continue;
    }
    if(!in_text&&next.kind==parser::TokenKind::Keyword&&
       next.value=="gs"&&stack.empty()){
@@ -851,6 +861,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
    saved_alpha.emplace_back(fill_alpha,stroke_alpha);
    saved_blend.push_back(blend_mode);
    saved_ink.push_back({fill_ink,stroke_ink,explicit_fill_ink,explicit_stroke_ink});
+   saved_spaces.emplace_back(fill_space,stroke_space);
    clip_stack.push_back(clip);
    clip_mask_stack.push_back(clip_mask);
 
@@ -864,6 +875,8 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
    const auto ink_state=saved_ink.back();saved_ink.pop_back();
    fill_ink=ink_state.fill;stroke_ink=ink_state.stroke;
    explicit_fill_ink=ink_state.has_fill;explicit_stroke_ink=ink_state.has_stroke;
+   fill_space=saved_spaces.back().first;stroke_space=saved_spaces.back().second;
+   saved_spaces.pop_back();
    red=color.r;green=color.g;blue=color.b;a=color.a;bx=color.bx;cx=color.cx;d=color.d;e=color.e;f=color.f;line_width=color.width;stroke_red=color.sr;stroke_green=color.sg;stroke_blue=color.sb;line_cap=color.cap;line_join=color.join;miter_limit=color.miter;flatness=color.flatness;dash_pattern=color.dash;dash_phase=color.dash_phase;
    clip=clip_stack.back();clip_stack.pop_back();
    clip_mask=std::move(clip_mask_stack.back());clip_mask_stack.pop_back();
@@ -1016,6 +1029,43 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
    stroke_blue=(1-stack[2])*(1-stack[3]);
    for(unsigned c=0;c<4;++c)stroke_ink[c]=unsigned(std::lround(stack[c]*255));
    explicit_stroke_ink=true;stack.clear();
+  }else if(word=="sc"||word=="scn"||
+           word=="SC"||word=="SCN"){
+   const bool stroking=word=="SC"||word=="SCN";
+   const auto& space=stroking?stroke_space:fill_space;
+   const size_t channels=space=="DeviceCMYK"?4u:
+                         space=="DeviceRGB"?3u:1u;
+   if(stack.size()!=channels)return false;
+   for(double channel:stack)
+    if(!std::isfinite(channel)||channel<0||channel>1)return false;
+   if(stroking){
+    if(channels==4){
+     for(unsigned c=0;c<4;++c)
+      stroke_ink[c]=unsigned(std::lround(stack[c]*255));
+     stroke_red=(1-stack[0])*(1-stack[3]);
+     stroke_green=(1-stack[1])*(1-stack[3]);
+     stroke_blue=(1-stack[2])*(1-stack[3]);
+     explicit_stroke_ink=true;
+    }else{
+     stroke_red=stack[0];stroke_green=channels==1?stack[0]:stack[1];
+     stroke_blue=channels==1?stack[0]:stack[2];
+     explicit_stroke_ink=false;
+    }
+   }else{
+    if(channels==4){
+     for(unsigned c=0;c<4;++c)
+      fill_ink[c]=unsigned(std::lround(stack[c]*255));
+     red=(1-stack[0])*(1-stack[3]);
+     green=(1-stack[1])*(1-stack[3]);
+     blue=(1-stack[2])*(1-stack[3]);
+     explicit_fill_ink=true;
+    }else{
+     red=stack[0];green=channels==1?stack[0]:stack[1];
+     blue=channels==1?stack[0]:stack[2];
+     explicit_fill_ink=false;
+    }
+   }
+   stack.clear();
   }else if(word=="rg"){
    if(stack.size()!=3)return false;
    for(double channel:stack)if(channel<0||channel>1)return false;
