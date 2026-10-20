@@ -35,6 +35,8 @@ struct SeparationColorSpace {
   unsigned sample_count=0;
   double domain[2]{0,1},encode[2]{0,1};
   double range[8]{0,1,0,1,0,1,0,1};
+  std::vector<Segment> children;
+  std::vector<double> bounds,stitch_encode;
  };
  std::vector<Segment> segments;
  std::vector<double> bounds;
