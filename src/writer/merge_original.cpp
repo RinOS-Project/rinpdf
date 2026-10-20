@@ -94,8 +94,13 @@ bool prepare(Input& doc){
  std::vector<rinpdf::parser::XrefStreamEntry> compressed;
  V trailer;
  if(!rinpdf::parser::read_object_xref(doc.bytes,doc.length,doc.xref,compressed,trailer)||
-    !compressed.empty()||field(trailer,"Encrypt")||field(trailer,"Prev")||
+    field(trailer,"Encrypt")||field(trailer,"Prev")||
     field(trailer,"XRefStm"))return false;
+ // XRef streams using ordinary (type-1) entries can be normalized into
+ // the classic xref table written by this exporter. Object streams (type-2)
+ // still require materialization and are rejected rather than copied blindly.
+ for(const auto& entry:compressed)
+  if(entry.type==2)return false;
  const V* root_ref=field(trailer,"Root");
  if(!root_ref||root_ref->kind!=K::Reference||root_ref->generation!=0)return false;
  V catalog;
@@ -108,7 +113,7 @@ bool prepare(Input& doc){
  if(!rinpdf::parser::count_page_tree(doc.bytes,doc.length,doc.page_count)||
     doc.page_count==0)return false;
  for(const auto& item:doc.xref){
-  if(item.object>100000||item.generation!=0&&item.in_use)return false;
+  if(item.object>100000||(item.generation!=0&&item.in_use))return false;
   doc.max_id=std::max(doc.max_id,item.object);
  }
  doc.objects.resize(doc.max_id+1);
@@ -196,7 +201,7 @@ rinpdf_status merge_original_pdf_bytes(const uint8_t* const* sources,const size_
    auto& input=inputs[i];input.bytes=sources[i];input.length=lengths[i];
    input.offset=next_id-1;
    if(!prepare(input))return RINPDF_UNSUPPORTED;
-   if(input.max_id>1000000-next_id)return RINPDF_UNSUPPORTED;
+   if(input.max_id>=1000000-next_id)return RINPDF_UNSUPPORTED;
    next_id+=input.max_id;
    total_pages+=input.page_count;
   }
