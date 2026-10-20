@@ -81,7 +81,20 @@ struct Input{
  std::vector<std::string> objects;
  std::vector<bool> present;
  std::vector<int> generations;
+ std::vector<std::vector<size_t>> dependencies;
+ std::vector<bool> reachable;
 };
+void gather_refs(const V& value,size_t offset,std::vector<size_t>& refs,unsigned depth=0){
+ if(depth>64)return;
+ if(value.kind==K::Reference){
+  if(value.integer>0&&(size_t)value.integer>offset)
+   refs.push_back((size_t)value.integer-offset);
+ }else if(value.kind==K::Array){
+  for(const auto& item:value.array)gather_refs(item,offset,refs,depth+1);
+ }else if(value.kind==K::Dictionary){
+  for(const auto& item:value.dictionary)gather_refs(item.second,offset,refs,depth+1);
+ }
+}
 bool resolve_length(const Input& doc,const V& length,size_t& out){
  V resolved=length;
  if(length.kind==K::Reference){
@@ -123,6 +136,8 @@ bool prepare(Input& doc){
  doc.objects.resize(doc.max_id+1);
  doc.present.assign(doc.max_id+1,false);
  doc.generations.assign(doc.max_id+1,-1);
+ doc.dependencies.resize(doc.max_id+1);
+ doc.reachable.assign(doc.max_id+1,false);
  std::vector<rinpdf::parser::XrefEntry> valid;
  for(const auto& entry:doc.xref){
   if(!entry.in_use)continue;
@@ -191,6 +206,7 @@ bool prepare(Input& doc){
    V parent;parent.kind=K::Reference;parent.integer=2;
    value.dictionary["Parent"]=parent;
   }
+  gather_refs(value,doc.offset,doc.dependencies[entry.object]);
   std::string serialized;
   if(!encode(value,serialized))return false;
   doc.objects[entry.object]=std::move(serialized)+tail;
@@ -207,12 +223,29 @@ bool prepare(Input& doc){
    V parent;parent.kind=K::Reference;parent.integer=2;
    value.dictionary["Parent"]=parent;
   }
+  gather_refs(value,doc.offset,doc.dependencies[entry.object]);
   std::string serialized;
   if(!encode(value,serialized))return false;
   doc.objects[entry.object]=std::move(serialized);
   doc.present[entry.object]=true;
  }
- return doc.present[doc.root_pages];
+ if(!doc.present[doc.root_pages])return false;
+ // Reachability starts at the imported Pages root, not the source Catalog.
+ // Each reference must point to a live object in the current xref revision.
+ std::vector<size_t> pending{doc.root_pages};
+ size_t visited=0;
+ while(!pending.empty()){
+  const size_t id=pending.back();pending.pop_back();
+  if(id==0||id>doc.max_id||!doc.present[id])return false;
+  if(doc.reachable[id])continue;
+  if(++visited>100000)return false;
+  doc.reachable[id]=true;
+  for(size_t target:doc.dependencies[id]){
+   if(target==0||target>doc.max_id||!doc.present[target])return false;
+   if(!doc.reachable[target])pending.push_back(target);
+  }
+ }
+ return true;
 }
 }
 namespace rinpdf {
@@ -247,7 +280,7 @@ rinpdf_status merge_original_pdf_bytes(const uint8_t* const* sources,const size_
   add(2,"<< /Type /Pages /Kids "+kids+" /Count "+std::to_string(total_pages)+" >>");
   for(const auto& input:inputs)
    for(size_t id=1;id<input.objects.size();++id)
-    if(input.present[id])add(id+input.offset,input.objects[id]);
+    if(input.reachable[id])add(id+input.offset,input.objects[id]);
   const size_t xref=pdf.size();
   pdf+="xref\n0 "+std::to_string(positions.size())+"\n0000000000 65535 f \n";
   char buf[40];
