@@ -81,6 +81,15 @@ rinpdf_status rinpdf_merge_pages_memory(const rinpdf_page_source *pages,
  size_t count,unsigned dpi,uint8_t **data,size_t *size);
 rinpdf_status rinpdf_merge_pages_file(const char *path,
  const rinpdf_page_source *pages,size_t count,unsigned dpi);
+/* Merge complete non-encrypted classic-xref PDF documents without rasterizing.
+ * Reassigns indirect object IDs and preserves encoded stream bytes.
+ * Unsupported document structures return RINPDF_UNSUPPORTED.
+ * The input documents must stay open for the duration of the call.
+ */
+rinpdf_status rinpdf_merge_documents_lossless_memory(
+ const rinpdf_document *const *documents,size_t count,uint8_t **data,size_t *size);
+rinpdf_status rinpdf_merge_documents_lossless_file(
+ const char *path,const rinpdf_document *const *documents,size_t count);
 #ifdef __cplusplus
 }
 #endif
