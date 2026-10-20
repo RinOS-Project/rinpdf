@@ -236,9 +236,15 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      const unsigned coverage=std::min(255u,(delta*255u+contrast/2)/contrast);
      const unsigned alpha=(coverage*opacity+127)/255;
      if(cmyk_target){
-      if(coverage&&!cmyk_target->paint_rgb(
-           x,y,uint8_t(color[0]),uint8_t(color[1]),uint8_t(color[2]),
-           uint8_t(alpha),0,uint8_t(coverage)))return false;
+      if(coverage){
+       const bool painted=explicit_fill_ink?
+        cmyk_target->paint_ink(x,y,fill_ink.data(),uint8_t(alpha),0,
+                               uint8_t(coverage)):
+        cmyk_target->paint_rgb(
+         x,y,uint8_t(color[0]),uint8_t(color[1]),uint8_t(color[2]),
+         uint8_t(alpha),0,uint8_t(coverage));
+       if(!painted)return false;
+      }
      }else{
       if(coverage&&!transparent_target->mark_shape(x,y,uint8_t(coverage)))return false;
       // Even zero-opacity glyphs knock out earlier objects by shape.
