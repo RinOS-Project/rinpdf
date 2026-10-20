@@ -51,6 +51,15 @@ rinpdf_status rinpdf_write_image_pages_memory(const rinpdf_image_page *pages,
  size_t count,uint8_t **data,size_t *size);
 rinpdf_status rinpdf_write_image_pages_file(const char *path,
  const rinpdf_image_page *pages,size_t count);
+/* Rasterize selected pages at the requested DPI and export to a new PDF.
+ * Indices are zero-based and their order is preserved; duplicate indices
+ * are allowed. Text and vector objects become pixels (not lossless editing).
+ * Output memory must be released with rinpdf_free_buffer.
+ */
+rinpdf_status rinpdf_export_pages_memory(const rinpdf_document *doc,
+ const size_t *indices,size_t count,unsigned dpi,uint8_t **data,size_t *size);
+rinpdf_status rinpdf_export_pages_file(const char *path,
+ const rinpdf_document *doc,const size_t *indices,size_t count,unsigned dpi);
 #ifdef __cplusplus
 }
 #endif
