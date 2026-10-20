@@ -592,8 +592,8 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
       group.knockout=fm.knockout_transparency_group;
       group.grayscale_group=fm.group_color_space=="DeviceGray";
       group.cmyk_group=fm.group_color_space=="DeviceCMYK";
-      // Knockout object reconstruction currently assumes RGB components.
-      if(group.cmyk_group&&group.knockout)return false;
+      // Native CMYK group knockout is applied in its five-channel
+      // workspace. Avoid applying the RGB knockout approximation too.
       const size_t rowbytes=size_t(width)*4;
       std::vector<uint8_t> scratch(rowbytes*height,0);
       if(group.cmyk_group){
@@ -602,6 +602,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
        PremultipliedCMYKSurface ink_group;
        std::vector<uint8_t> converted;
        if(!ink_group.resize(width,height)||
+          (fm.knockout_transparency_group&&!ink_group.begin_knockout(true))||
           !draw_form(scratch.data(),rowbytes,nullptr,&ink_group)||
           !ink_group.to_rgba(converted))return false;
        group.pixels=std::move(converted);
