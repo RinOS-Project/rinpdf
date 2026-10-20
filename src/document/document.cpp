@@ -365,3 +365,54 @@ extern "C" rinpdf_status rinpdf_merge_files_lossless(
   return status;
  }catch(const std::bad_alloc&){return RINPDF_OUT_OF_MEMORY;}
 }
+
+extern "C" rinpdf_status rinpdf_merge_selected_pages_lossless_memory(
+ const rinpdf_page_source* sources,size_t count,uint8_t** data,size_t* size){
+ if(!data||!size)return RINPDF_INVALID_ARGUMENT;
+ *data=nullptr;*size=0;
+ if(!sources||count==0||count>10000)return RINPDF_INVALID_ARGUMENT;
+ try{
+  // Coalesce adjacent selections from one document to avoid producing
+  // a separate intermediate PDF for every page.
+  struct PdfDeleter{void operator()(uint8_t* p)const{rinpdf_free_buffer(p);}};
+  std::vector<std::unique_ptr<uint8_t,PdfDeleter>> owned;
+  std::vector<const uint8_t*> buffers;
+  std::vector<size_t> lengths;
+  owned.reserve(128);buffers.reserve(128);lengths.reserve(128);
+  size_t first=0;
+  while(first<count){
+   const rinpdf_document* doc=sources[first].document;
+   if(!doc)return RINPDF_INVALID_ARGUMENT;
+   size_t end=first+1;
+   while(end<count&&sources[end].document==doc)++end;
+   if(owned.size()>=128)return RINPDF_UNSUPPORTED;
+   std::vector<size_t> indices;
+   indices.reserve(end-first);
+   for(size_t i=first;i<end;++i)indices.push_back(sources[i].page_index);
+   uint8_t* output=nullptr;size_t length=0;
+   const rinpdf_status status=rinpdf_export_pages_lossless_memory(
+       doc,indices.data(),indices.size(),&output,&length);
+   if(status!=RINPDF_OK)return status;
+   owned.emplace_back(output);
+   buffers.push_back(output);
+   lengths.push_back(length);
+   first=end;
+  }
+  return rinpdf::merge_original_pdf_bytes(
+      buffers.data(),lengths.data(),buffers.size(),data,size);
+ }catch(const std::bad_alloc&){return RINPDF_OUT_OF_MEMORY;}
+}
+extern "C" rinpdf_status rinpdf_merge_selected_pages_lossless_file(
+ const char* path,const rinpdf_page_source* pages,size_t count){
+ if(!path)return RINPDF_INVALID_ARGUMENT;
+ uint8_t* buffer=nullptr;size_t length=0;
+ const rinpdf_status status=rinpdf_merge_selected_pages_lossless_memory(
+    pages,count,&buffer,&length);
+ if(status!=RINPDF_OK)return status;
+ FILE* file=std::fopen(path,"wb");
+ if(!file){rinpdf_free_buffer(buffer);return RINPDF_IO_ERROR;}
+ bool ok=std::fwrite(buffer,1,length,file)==length;
+ if(std::fclose(file)!=0)ok=false;
+ rinpdf_free_buffer(buffer);
+ return ok?RINPDF_OK:RINPDF_IO_ERROR;
+}
