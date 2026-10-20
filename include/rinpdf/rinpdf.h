@@ -90,6 +90,9 @@ rinpdf_status rinpdf_merge_documents_lossless_memory(
  const rinpdf_document *const *documents,size_t count,uint8_t **data,size_t *size);
 rinpdf_status rinpdf_merge_documents_lossless_file(
  const char *path,const rinpdf_document *const *documents,size_t count);
+/* Open, merge and close source documents from the specified file paths. */
+rinpdf_status rinpdf_merge_files_lossless(const char *path,
+ const char *const *source_paths,size_t count);
 #ifdef __cplusplus
 }
 #endif
