@@ -739,7 +739,17 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
       };
       const unsigned geometry=(im.stencil?base_opacity:255u)*
                               clip_coverage/255u;
-      if(!cmyk_target->paint_rgb(px,py,component(0),component(1),
+      if(!im.cmyk_pixels.empty()){
+       const size_t native_index=(size_t(iy)*im.width+ix)*4;
+       if(im.cmyk_pixels.size()!=size_t(im.width)*im.height*4)
+        return false;
+       const unsigned native_ink[4]={
+        im.cmyk_pixels[native_index],im.cmyk_pixels[native_index+1],
+        im.cmyk_pixels[native_index+2],im.cmyk_pixels[native_index+3]};
+       if(!cmyk_target->paint_ink(px,py,native_ink,uint8_t(opacity),
+                                  transparent_blend_mode(),
+                                  uint8_t(geometry)))return false;
+      }else if(!cmyk_target->paint_rgb(px,py,component(0),component(1),
                                  component(2),uint8_t(opacity),
                                  transparent_blend_mode(),uint8_t(geometry)))
        return false;
