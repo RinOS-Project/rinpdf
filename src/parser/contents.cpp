@@ -461,7 +461,50 @@ struct Reader {
          return false;
         stitch_function=cs->array[3];
         recursive_stitch=true;
-       }else if(type->integer==3){
+       }else if(type->integer==0){
+       // Limited one-input, eight-bit sampled function. Reject malformed
+       // Domain, Size, Range and Encode rather than guessing color values.
+       if(!sampled_stream)return false;
+       const Value* sizes=get(function,"Size");
+       const Value* bits=get(function,"BitsPerSample");
+       const Value* domain=get(function,"Domain");
+       const Value* range=get(function,"Range");
+       const Value* order=get(function,"Order");
+       const Value* encoding=get(function,"Encode");
+       if(!sizes||sizes->kind!=Value::Kind::Array||
+          sizes->array.size()!=1||
+          sizes->array[0].kind!=Value::Kind::Integer||
+          sizes->array[0].integer<2||sizes->array[0].integer>4096||
+          !bits||bits->kind!=Value::Kind::Integer||bits->integer!=8||
+          !domain||domain->kind!=Value::Kind::Array||
+          domain->array.size()!=2||
+          !range||range->kind!=Value::Kind::Array||
+          range->array.size()!=2*separation.components||
+          (order&&(order->kind!=Value::Kind::Integer||order->integer!=1)))
+        return false;
+       double d0=0,d1=0;
+       if(!numeric(domain->array[0],d0)||!numeric(domain->array[1],d1)||
+          d0!=0||d1!=1)return false;
+       for(unsigned c=0;c<2*separation.components;++c){
+        double v=0;
+        if(!numeric(range->array[c],v)||v!=(c%2?1.0:0.0))
+         return false;
+       }
+       if(encoding){
+        if(encoding->kind!=Value::Kind::Array||
+           encoding->array.size()!=2)return false;
+        double e0=0,e1=0;
+        if(!numeric(encoding->array[0],e0)||
+           !numeric(encoding->array[1],e1)||
+           e0!=0||e1!=double(sizes->array[0].integer-1))
+         return false;
+       }
+       separation.sample_count=unsigned(sizes->array[0].integer);
+       const size_t expected=size_t(separation.sample_count)*
+                             separation.components;
+       if(!decode_stream(data,size,sample_range,separation.samples,expected)||
+          separation.samples.size()!=expected)return false;
+      }else if(type->integer==3){
         if(device_inputs!=1)return false;
         double boundary[4]{};
         // Probe all four tint endpoints to validate the function hierarchy.
@@ -1194,8 +1237,16 @@ struct Reader {
         separation.alternate=="DeviceCMYK"?4u:0u;
       if(!separation.components)return false;
       Value function;
+      StreamRange sample_range;
+      bool sampled_stream=false;
       if(resolved.array[3].kind==Value::Kind::Reference){
-       if(!object(resolved.array[3],function))return false;
+       const XrefEntry* function_entry=nullptr;
+       if(!entry(resolved.array[3],function_entry))return false;
+       if(locate_indirect_stream(data,size,*function_entry,xref,
+                                 sample_range)){
+        function=sample_range.dictionary;
+        sampled_stream=true;
+       }else if(!object(resolved.array[3],function))return false;
       }else function=resolved.array[3];
       if(function.kind!=Value::Kind::Dictionary)return false;
       auto numeric=[](const Value& v,double& out)->bool{
