@@ -424,10 +424,20 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      if(fm.knockout_transparency_group&&!fm.transparency_group)
       return false;
      if(cmyk_target){
-      // An ordinary Form shares the CMYK group's paint destination.
-      // Nested transparency groups require separate CMYK compositing.
-      if(fm.transparency_group)return false;
-      if(!draw_form(rgba,stride,nullptr,cmyk_target))return false;
+      if(!fm.transparency_group){
+       if(!draw_form(rgba,stride,nullptr,cmyk_target))return false;
+       continue;
+      }
+      // An isolated DeviceCMYK child is a separate ink surface; blend
+      // the complete child into the parent only after rendering it.
+      if(!fm.isolated_transparency_group||
+         fm.knockout_transparency_group||
+         fm.group_color_space!="DeviceCMYK")return false;
+      PremultipliedCMYKSurface child;
+      if(!child.resize(width,height))return false;
+      const unsigned mode=transparent_blend_mode();
+      if(!draw_form(rgba,stride,nullptr,&child)||
+         !cmyk_target->composite_group(child,mode))return false;
       continue;
      }
 
