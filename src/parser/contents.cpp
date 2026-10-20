@@ -13,6 +13,7 @@
 #include "tounicode.h"
 #include "../renderer/sfnt.h"
 #include <algorithm>
+#include <functional>
 #include <map>
 #include <set>
 #include <cmath>
@@ -1212,112 +1213,105 @@ struct Reader {
        else return false;
        return std::isfinite(out);
       };
-      auto type2=[&](const Value& fn,
-                     SeparationColorSpace::Segment& segment)->bool{
-       if(fn.kind!=Value::Kind::Dictionary)return false;
-       const Value* type=get(fn,"FunctionType");
-       const Value* exponent=get(fn,"N");
-       if(!type||type->kind!=Value::Kind::Integer||type->integer!=2||
-          !exponent||!numeric(*exponent,segment.exponent)||
-          segment.exponent<=0||segment.exponent>100)return false;
-       for(unsigned c=0;c<separation.components;++c)
-        segment.c1[c]=1;
-       for(const auto& field:{"C0","C1"}){
-        const Value* values=get(fn,field);
-        if(!values)continue;
-        if(values->kind!=Value::Kind::Array||
-           values->array.size()!=separation.components)return false;
-        for(unsigned c=0;c<separation.components;++c){
-         double component=0;
-         if(!numeric(values->array[c],component)||
-            component<0||component>1)return false;
-         if(field[1]=='0')segment.c0[c]=component;
-         else segment.c1[c]=component;
-        }
-       }
-       return true;
-      };
-      const Value* type=get(function,"FunctionType");
-      if(!type||type->kind!=Value::Kind::Integer)return false;
-      if(type->integer==2){
-       SeparationColorSpace::Segment segment;
-       if(!type2(function,segment))return false;
-       for(unsigned c=0;c<separation.components;++c){
-        separation.c0[c]=segment.c0[c];
-        separation.c1[c]=segment.c1[c];
-       }
-       separation.exponent=segment.exponent;
-      }else if(type->integer==0){
-       if(!sampled_stream)return false;
-       const Value* sizes=get(function,"Size");
-       const Value* bits=get(function,"BitsPerSample");
-       const Value* domain=get(function,"Domain");
-       const Value* range=get(function,"Range");
-       const Value* order=get(function,"Order");
-       const Value* encoding=get(function,"Encode");
-       if(!sizes||sizes->kind!=Value::Kind::Array||
-          sizes->array.size()!=1||
-          sizes->array[0].kind!=Value::Kind::Integer||
-          sizes->array[0].integer<2||sizes->array[0].integer>4096||
-          !bits||bits->kind!=Value::Kind::Integer||
-          (bits->integer!=1&&bits->integer!=2&&bits->integer!=4&&
-           bits->integer!=8&&bits->integer!=12&&bits->integer!=16)||
-          !domain||domain->kind!=Value::Kind::Array||
-          domain->array.size()!=2||
-          !range||range->kind!=Value::Kind::Array||
-          range->array.size()!=2*separation.components||
-          (order&&(order->kind!=Value::Kind::Integer||order->integer!=1)))
+      // Compile a single-input PDF function tree with bounded recursion.
+      // Type 0 samples are normalized to eight-bit values for painting.
+      using Segment=SeparationColorSpace::Segment;
+      unsigned node_count=0;
+      std::function<bool(const Value&,const StreamRange*,unsigned,Segment&)>
+       parse_function;
+      parse_function=[&](const Value& fn,const StreamRange* stream,
+                         unsigned depth,Segment& node)->bool{
+       if(depth>8||++node_count>128||fn.kind!=Value::Kind::Dictionary)
         return false;
-       double d0=0,d1=0;
-       if(!numeric(domain->array[0],d0)||!numeric(domain->array[1],d1)||
-          d0>=d1||d0<0||d1>1)return false;
-       separation.sample_domain[0]=d0;
-       separation.sample_domain[1]=d1;
-       for(unsigned c=0;c<separation.components;++c){
-        double lo=0,hi=0;
-        if(!numeric(range->array[2*c],lo)||
-           !numeric(range->array[2*c+1],hi)||
-           lo>hi||lo<0||hi>1)return false;
-        separation.sample_range[2*c]=lo;
-        separation.sample_range[2*c+1]=hi;
+       const Value* type=get(fn,"FunctionType");
+       if(!type||type->kind!=Value::Kind::Integer)return false;
+       if(type->integer==2){
+        const Value* exponent=get(fn,"N");
+        if(!exponent||!numeric(*exponent,node.exponent)||
+           node.exponent<=0||node.exponent>100)return false;
+        for(unsigned c=0;c<separation.components;++c)node.c1[c]=1;
+        for(const char* key:{"C0","C1"}){
+         const Value* values=get(fn,key);
+         if(!values)continue;
+         if(values->kind!=Value::Kind::Array||
+            values->array.size()!=separation.components)return false;
+         for(unsigned c=0;c<separation.components;++c){
+          double value=0;
+          if(!numeric(values->array[c],value)||value<0||value>1)
+           return false;
+          if(key[1]=='0')node.c0[c]=value;
+          else node.c1[c]=value;
+         }
+        }
+        return true;
        }
-       separation.sample_count=unsigned(sizes->array[0].integer);
-       separation.sample_encode[0]=0;
-       separation.sample_encode[1]=double(separation.sample_count-1);
-       if(encoding){
-        if(encoding->kind!=Value::Kind::Array||
-           encoding->array.size()!=2)return false;
-        double e0=0,e1=0;
-        if(!numeric(encoding->array[0],e0)||
-           !numeric(encoding->array[1],e1)||
-           e0<0||e1<0||e0>double(separation.sample_count-1)||
-           e1>double(separation.sample_count-1))return false;
-        separation.sample_encode[0]=e0;
-        separation.sample_encode[1]=e1;
+       if(type->integer==0){
+        if(!stream)return false;
+        const Value* sizes=get(fn,"Size");
+        const Value* bits=get(fn,"BitsPerSample");
+        const Value* domain=get(fn,"Domain");
+        const Value* range=get(fn,"Range");
+        const Value* encode=get(fn,"Encode");
+        const Value* order=get(fn,"Order");
+        if(!sizes||sizes->kind!=Value::Kind::Array||
+           sizes->array.size()!=1||
+           sizes->array[0].kind!=Value::Kind::Integer||
+           sizes->array[0].integer<2||sizes->array[0].integer>4096||
+           !bits||bits->kind!=Value::Kind::Integer||
+           (bits->integer!=1&&bits->integer!=2&&bits->integer!=4&&
+            bits->integer!=8&&bits->integer!=12&&bits->integer!=16)||
+           !domain||domain->kind!=Value::Kind::Array||
+           domain->array.size()!=2||
+           !range||range->kind!=Value::Kind::Array||
+           range->array.size()!=2*separation.components||
+           (order&&(order->kind!=Value::Kind::Integer||order->integer!=1)))
+         return false;
+        if(!numeric(domain->array[0],node.domain[0])||
+           !numeric(domain->array[1],node.domain[1])||
+           node.domain[0]<0||node.domain[0]>=node.domain[1]||
+           node.domain[1]>1)return false;
+        for(unsigned c=0;c<separation.components;++c){
+         double lo=0,hi=0;
+         if(!numeric(range->array[2*c],lo)||
+            !numeric(range->array[2*c+1],hi)||
+            lo<0||lo>hi||hi>1)return false;
+         node.range[2*c]=lo;node.range[2*c+1]=hi;
+        }
+        node.sample_count=unsigned(sizes->array[0].integer);
+        node.encode[1]=double(node.sample_count-1);
+        if(encode){
+         if(encode->kind!=Value::Kind::Array||encode->array.size()!=2)
+          return false;
+         for(unsigned c=0;c<2;++c)
+          if(!numeric(encode->array[c],node.encode[c])||
+             node.encode[c]<0||
+             node.encode[c]>double(node.sample_count-1))return false;
+        }
+        const unsigned bit_depth=unsigned(bits->integer);
+        const size_t count=size_t(node.sample_count)*separation.components;
+        const size_t expected=(count*bit_depth+7u)/8u;
+        std::vector<uint8_t> packed;
+        if(!decode_stream(data,size,*stream,packed,expected)||
+           packed.size()!=expected)return false;
+        node.samples.reserve(count);
+        const unsigned maximum=(1u<<bit_depth)-1u;
+        for(size_t n=0;n<count;++n){
+         const size_t offset=n*bit_depth;
+         unsigned value=0;
+         for(unsigned bit=0;bit<bit_depth;++bit)
+          value=(value<<1u)|
+            ((packed[(offset+bit)/8u]>>
+               (7u-unsigned((offset+bit)%8u)))&1u);
+         node.samples.push_back(uint8_t(
+                                  (value*255u+maximum/2u)/maximum));
+        }
+        return true;
        }
-       const unsigned bit_depth=unsigned(bits->integer);
-       const size_t count=size_t(separation.sample_count)*
-                            separation.components;
-       const size_t expected=(count*bit_depth+7u)/8u;
-       std::vector<uint8_t> packed;
-       if(!decode_stream(data,size,sample_range,packed,expected)||
-          packed.size()!=expected)return false;
-       separation.samples.reserve(count);
-       const unsigned maximum=(1u<<bit_depth)-1u;
-       for(size_t n=0;n<count;++n){
-        const size_t offset=n*bit_depth;
-        unsigned value=0;
-        for(unsigned b=0;b<bit_depth;++b)
-         value=(value<<1u)|((packed[(offset+b)/8u]>>
-                       (7u-unsigned((offset+b)%8u)))&1u);
-        separation.samples.push_back(uint8_t(
-                   (value*255u+maximum/2u)/maximum));
-       }
-      }else if(type->integer==3){
-       const Value* functions=get(function,"Functions");
-       const Value* bounds=get(function,"Bounds");
-       const Value* encode=get(function,"Encode");
-       const Value* domain=get(function,"Domain");
+       if(type->integer!=3)return false;
+       const Value* functions=get(fn,"Functions");
+       const Value* bounds=get(fn,"Bounds");
+       const Value* encode=get(fn,"Encode");
+       const Value* domain=get(fn,"Domain");
        if(!functions||functions->kind!=Value::Kind::Array||
           functions->array.empty()||functions->array.size()>16||
           !bounds||bounds->kind!=Value::Kind::Array||
@@ -1326,247 +1320,61 @@ struct Reader {
           encode->array.size()!=2*functions->array.size()||
           !domain||domain->kind!=Value::Kind::Array||
           domain->array.size()!=2)return false;
-       double d0=0,d1=0;
-       if(!numeric(domain->array[0],d0)||!numeric(domain->array[1],d1)||
-          d0!=0||d1!=1)return false;
-       double prior=0;
+       double lo=0,hi=0;
+       if(!numeric(domain->array[0],lo)||
+          !numeric(domain->array[1],hi)||lo!=0||hi!=1)return false;
+       double previous=0;
        for(const Value& bound:bounds->array){
         double value=0;
-        if(!numeric(bound,value)||value<=prior||value>=1)return false;
-        separation.bounds.push_back(value);
-        prior=value;
+        if(!numeric(bound,value)||value<=previous||value>=1)
+         return false;
+        node.bounds.push_back(value);previous=value;
        }
-       for(const Value& value:encode->array){
-        double n=0;
-        if(!numeric(value,n)||n<0||n>1)return false;
-        separation.encode.push_back(n);
+       for(const Value& encoded:encode->array){
+        double value=0;
+        if(!numeric(encoded,value)||value<0||value>1)return false;
+        node.stitch_encode.push_back(value);
        }
-       for(const Value& entry: functions->array){
+       for(const Value& ref:functions->array){
         Value child;
         StreamRange child_stream;
-        bool has_stream=false;
-        if(entry.kind==Value::Kind::Reference){
+        const StreamRange* child_ptr=nullptr;
+        if(ref.kind==Value::Kind::Reference){
          const XrefEntry* child_entry=nullptr;
-         if(!this->entry(entry,child_entry))return false;
+         if(!this->entry(ref,child_entry))return false;
          if(locate_indirect_stream(data,size,*child_entry,xref,child_stream)){
-          child=child_stream.dictionary;has_stream=true;
-         }else if(!object(entry,child))return false;
-        }else child=entry;
-        SeparationColorSpace::Segment segment;
-        const Value* child_type=get(child,"FunctionType");
-        if(!child_type||child_type->kind!=Value::Kind::Integer)return false;
-        if(child_type->integer==2){
-         if(!type2(child,segment))return false;
-        }else if(child_type->integer==3){
-         // One additional nested stitching level, with Type2 leaves.
-         // Bounds and Encode are scoped to the nested function.
-         const Value* nested_f=get(child,"Functions");
-         const Value* nested_b=get(child,"Bounds");
-         const Value* nested_e=get(child,"Encode");
-         const Value* nested_d=get(child,"Domain");
-         if(!nested_f||nested_f->kind!=Value::Kind::Array||
-            nested_f->array.empty()||nested_f->array.size()>16||
-            !nested_b||nested_b->kind!=Value::Kind::Array||
-            nested_b->array.size()+1!=nested_f->array.size()||
-            !nested_e||nested_e->kind!=Value::Kind::Array||
-            nested_e->array.size()!=2*nested_f->array.size()||
-            !nested_d||nested_d->kind!=Value::Kind::Array||
-            nested_d->array.size()!=2)return false;
-         double nd0=0,nd1=0;
-         if(!numeric(nested_d->array[0],nd0)||
-            !numeric(nested_d->array[1],nd1)||
-            nd0!=0||nd1!=1)return false;
-         double previous=0;
-         for(const auto& bound:nested_b->array){
-          double value=0;
-          if(!numeric(bound,value)||value<=previous||value>=1)
-           return false;
-          segment.bounds.push_back(value);
-          previous=value;
-         }
-         for(const auto& encoded:nested_e->array){
-          double value=0;
-          if(!numeric(encoded,value)||value<0||value>1)return false;
-          segment.stitch_encode.push_back(value);
-         }
-         for(const auto& leaf:nested_f->array){
-          Value fn;
-          StreamRange leaf_stream;
-          bool streamed=false;
-          if(leaf.kind==Value::Kind::Reference){
-           const XrefEntry* ent=nullptr;
-           if(!this->entry(leaf,ent))return false;
-           if(locate_indirect_stream(data,size,*ent,xref,leaf_stream)){
-            fn=leaf_stream.dictionary;streamed=true;
-           }else if(!object(leaf,fn))return false;
-          }else fn=leaf;
-          SeparationColorSpace::Segment branch;
-          const Value* fn_type=get(fn,"FunctionType");
-          if(!fn_type||fn_type->kind!=Value::Kind::Integer)return false;
-          if(fn_type->integer==2){
-           if(!type2(fn,branch))return false;
-          }else if(fn_type->integer==3){
-           // One further nested level with Type2 leaves. Limit fanout
-           // and reject deeper unresolved references.
-           const Value* functions3=get(fn,"Functions");
-           const Value* bounds3=get(fn,"Bounds");
-           const Value* encode3=get(fn,"Encode");
-           const Value* domain3=get(fn,"Domain");
-           if(!functions3||functions3->kind!=Value::Kind::Array||
-              functions3->array.empty()||functions3->array.size()>16||
-              !bounds3||bounds3->kind!=Value::Kind::Array||
-              bounds3->array.size()+1!=functions3->array.size()||
-              !encode3||encode3->kind!=Value::Kind::Array||
-              encode3->array.size()!=2*functions3->array.size()||
-              !domain3||domain3->kind!=Value::Kind::Array||
-              domain3->array.size()!=2)return false;
-           double dlo=0,dhi=0;
-           if(!numeric(domain3->array[0],dlo)||
-              !numeric(domain3->array[1],dhi)||
-              dlo!=0||dhi!=1)return false;
-           double previous=0;
-           for(const auto& bound:bounds3->array){
-            double value=0;
-            if(!numeric(bound,value)||value<=previous||value>=1)
-             return false;
-            branch.bounds.push_back(value);previous=value;
-           }
-           for(const auto& encoded:encode3->array){
-            double value=0;
-            if(!numeric(encoded,value)||value<0||value>1)return false;
-            branch.stitch_encode.push_back(value);
-           }
-           for(const auto& item:functions3->array){
-            Value leaf_function;
-            if(item.kind==Value::Kind::Reference){
-             if(!object(item,leaf_function))return false;
-            }else leaf_function=item;
-            SeparationColorSpace::Segment leaf_segment;
-            if(!type2(leaf_function,leaf_segment))return false;
-            branch.children.push_back(std::move(leaf_segment));
-           }
-          }else if(fn_type->integer==0){
-           const Value* sizes=get(fn,"Size");
-           const Value* bits=get(fn,"BitsPerSample");
-           const Value* domain=get(fn,"Domain");
-           const Value* range=get(fn,"Range");
-           if(!streamed||!sizes||sizes->kind!=Value::Kind::Array||
-              sizes->array.size()!=1||
-              sizes->array[0].kind!=Value::Kind::Integer||
-              sizes->array[0].integer<2||sizes->array[0].integer>4096||
-              !bits||bits->kind!=Value::Kind::Integer||
-              (bits->integer!=1&&bits->integer!=2&&bits->integer!=4&&
-               bits->integer!=8&&bits->integer!=12&&bits->integer!=16)||
-              !domain||domain->kind!=Value::Kind::Array||
-              domain->array.size()!=2||
-              !range||range->kind!=Value::Kind::Array||
-              range->array.size()!=2*separation.components)return false;
-           for(unsigned j=0;j<2;++j)
-            if(!numeric(domain->array[j],branch.domain[j]))return false;
-           if(branch.domain[0]>=branch.domain[1]||
-              branch.domain[0]<0||branch.domain[1]>1)return false;
-           for(unsigned j=0;j<separation.components;++j){
-            double lo=0,hi=0;
-            if(!numeric(range->array[2*j],lo)||
-               !numeric(range->array[2*j+1],hi)||
-               lo<0||hi>1||lo>hi)return false;
-            branch.range[2*j]=lo;
-            branch.range[2*j+1]=hi;
-           }
-           branch.sample_count=unsigned(sizes->array[0].integer);
-           branch.encode[1]=double(branch.sample_count-1);
-           const Value* encoding=get(fn,"Encode");
-           if(encoding){
-            if(encoding->kind!=Value::Kind::Array||
-               encoding->array.size()!=2)return false;
-            for(unsigned j=0;j<2;++j)
-             if(!numeric(encoding->array[j],branch.encode[j])||
-                branch.encode[j]<0||
-                branch.encode[j]>double(branch.sample_count-1))
-              return false;
-           }
-           const size_t count=size_t(branch.sample_count)*
-                              separation.components;
-           const unsigned depth=unsigned(bits->integer);
-           const size_t expected=(count*depth+7u)/8u;
-           std::vector<uint8_t> packed;
-           if(!decode_stream(data,size,leaf_stream,packed,expected)||
-              packed.size()!=expected)return false;
-           branch.samples.reserve(count);
-           const unsigned maximum=(1u<<depth)-1u;
-           for(size_t n=0;n<count;++n){
-            const size_t offset=n*depth;
-            unsigned value=0;
-            for(unsigned bit=0;bit<depth;++bit)
-             value=(value<<1u)|((packed[(offset+bit)/8u]>>
-                      (7u-unsigned((offset+bit)%8u)))&1u);
-            branch.samples.push_back(uint8_t(
-                        (value*255u+maximum/2u)/maximum));
-           }
-          }else return false;
-          segment.children.push_back(std::move(branch));
-         }
-        }else if(child_type->integer==0){
-         const Value* sizes=get(child,"Size");
-         const Value* bits=get(child,"BitsPerSample");
-         const Value* domain=get(child,"Domain");
-         const Value* range=get(child,"Range");
-         const Value* encoding=get(child,"Encode");
-         if(!has_stream||!sizes||sizes->kind!=Value::Kind::Array||
-            sizes->array.size()!=1||
-            sizes->array[0].kind!=Value::Kind::Integer||
-            sizes->array[0].integer<2||sizes->array[0].integer>4096||
-            !bits||bits->kind!=Value::Kind::Integer||
-            (bits->integer!=1&&bits->integer!=2&&bits->integer!=4&&
-             bits->integer!=8&&bits->integer!=12&&bits->integer!=16)||
-            !domain||domain->kind!=Value::Kind::Array||
-            domain->array.size()!=2||
-            !range||range->kind!=Value::Kind::Array||
-            range->array.size()!=2*separation.components)return false;
-         for(unsigned c=0;c<2;++c)
-          if(!numeric(domain->array[c],segment.domain[c]))return false;
-         if(segment.domain[0]>=segment.domain[1]||
-            segment.domain[0]<0||segment.domain[1]>1)return false;
-         for(unsigned c=0;c<separation.components;++c){
-          double lo=0,hi=0;
-          if(!numeric(range->array[2*c],lo)||
-             !numeric(range->array[2*c+1],hi)||
-             lo>hi||lo<0||hi>1)return false;
-          segment.range[2*c]=lo;segment.range[2*c+1]=hi;
-         }
-         segment.sample_count=unsigned(sizes->array[0].integer);
-         segment.encode[1]=double(segment.sample_count-1);
-         if(encoding){
-          if(encoding->kind!=Value::Kind::Array||
-             encoding->array.size()!=2)return false;
-          for(unsigned c=0;c<2;++c)
-           if(!numeric(encoding->array[c],segment.encode[c])||
-              segment.encode[c]<0||
-              segment.encode[c]>double(segment.sample_count-1))
-            return false;
-         }
-         const size_t count=size_t(segment.sample_count)*
-                            separation.components;
-         const unsigned depth=unsigned(bits->integer);
-         const size_t expected=(count*depth+7u)/8u;
-         std::vector<uint8_t> packed;
-         if(!decode_stream(data,size,child_stream,packed,expected)||
-            packed.size()!=expected)return false;
-         segment.samples.reserve(count);
-         const unsigned maximum=(1u<<depth)-1u;
-         for(size_t n=0;n<count;++n){
-          const size_t offset=n*depth;
-          unsigned value=0;
-          for(unsigned b=0;b<depth;++b)
-           value=(value<<1u)|((packed[(offset+b)/8u]>>
-                                  (7u-unsigned((offset+b)%8u)))&1u);
-          segment.samples.push_back(uint8_t(
-                                   (value*255u+maximum/2u)/maximum));
-         }
-        }else return false;
-        separation.segments.push_back(std::move(segment));
+          child=child_stream.dictionary;child_ptr=&child_stream;
+         }else if(!object(ref,child))return false;
+        }else child=ref;
+        Segment sub;
+        if(!parse_function(child,child_ptr,depth+1,sub))return false;
+        node.children.push_back(std::move(sub));
        }
-      }else return false;
+       return true;
+      };
+      Segment root_function;
+      if(!parse_function(function,sampled_stream?&sample_range:nullptr,
+                         0,root_function))return false;
+      if(!root_function.children.empty()){
+       separation.segments=std::move(root_function.children);
+       separation.bounds=std::move(root_function.bounds);
+       separation.encode=std::move(root_function.stitch_encode);
+      }else if(!root_function.samples.empty()){
+       separation.samples=std::move(root_function.samples);
+       separation.sample_count=root_function.sample_count;
+       for(unsigned i=0;i<2;++i){
+        separation.sample_domain[i]=root_function.domain[i];
+        separation.sample_encode[i]=root_function.encode[i];
+       }
+       for(unsigned i=0;i<2*separation.components;++i)
+        separation.sample_range[i]=root_function.range[i];
+      }else{
+       for(unsigned i=0;i<separation.components;++i){
+        separation.c0[i]=root_function.c0[i];
+        separation.c1[i]=root_function.c1[i];
+       }
+       separation.exponent=root_function.exponent;
+      }
       form.local_separations.emplace(alias,separation);
       continue;
      }
