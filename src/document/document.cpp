@@ -1,5 +1,8 @@
 #include "rinpdf/document.h"
 #include "../parser/pages.h"
+#include "../parser/xref_stream.h"
+#include "../parser/object_resolver.h"
+#include "../parser/value.h"
 #include "../parser/contents.h"
 #include "../renderer/rectangles.h"
 #include "rinpdf/render.h"
@@ -8,6 +11,11 @@
 #include <new>
 #include <map>
 #include <vector>
+#include <string>
+#include <algorithm>
+#include <set>
+#include <cmath>
+#include <cstdlib>
 struct rinpdf_document { std::vector<uint8_t> bytes; unsigned major,minor; };
 extern "C" rinpdf_status rinpdf_document_open_memory(const uint8_t *data,size_t size,rinpdf_document **out) {
  if(!out) return RINPDF_INVALID_ARGUMENT;
@@ -98,4 +106,201 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
   }
   return RINPDF_OK;
  }catch(const std::bad_alloc&){return RINPDF_OUT_OF_MEMORY;}
+}
+
+namespace {
+using PDFValue=rinpdf::parser::Value;
+using PDFKind=PDFValue::Kind;
+const PDFValue* pdf_field(const PDFValue& node,const char* key){
+ if(node.kind!=PDFKind::Dictionary)return nullptr;
+ auto it=node.dictionary.find(key);
+ return it==node.dictionary.end()?nullptr:&it->second;
+}
+bool pdf_named(const PDFValue* v,const char* name){
+ return v&&v->kind==PDFKind::Name&&v->text==name;
+}
+std::string pdf_name(const std::string& name){
+ static const char hex[]="0123456789ABCDEF";
+ std::string r="/";
+ for(unsigned char c:name){
+  if(c<=32||c>=127||c=='#'||c=='/'||c=='%'||c=='<'||c=='>'||
+     c=='('||c==')'||c=='['||c==']'||c=='{'||c=='}'){
+   r+='#';r+=hex[c>>4];r+=hex[c&15];
+  }else r+=(char)c;
+ }
+ return r;
+}
+bool pdf_serialize(const PDFValue& v,std::string& result,unsigned depth=0){
+ if(depth>64)return false;
+ switch(v.kind){
+ case PDFKind::Null:result+="null";break;
+ case PDFKind::Boolean:result+=v.boolean?"true":"false";break;
+ case PDFKind::Integer:result+=std::to_string(v.integer);break;
+ case PDFKind::Real:{
+  if(!std::isfinite(v.real))return false;
+  char buf[64];std::snprintf(buf,sizeof(buf),"%.12g",v.real);
+  result+=buf;break;
+ }
+ case PDFKind::Name:result+=pdf_name(v.text);break;
+ case PDFKind::String:{
+  static const char hex[]="0123456789ABCDEF";
+  result+='<';
+  for(unsigned char c:v.text){result+=hex[c>>4];result+=hex[c&15];}
+  result+='>';break;
+ }
+ case PDFKind::Reference:
+  if(v.integer<=0)return false;
+  result+=std::to_string(v.integer)+" "+std::to_string(v.generation)+" R";break;
+ case PDFKind::Array:
+  result+="[ ";
+  for(const auto& item:v.array){
+   if(!pdf_serialize(item,result,depth+1))return false;
+   result+=' ';
+  }
+  result+=']';break;
+ case PDFKind::Dictionary:
+  result+="<< ";
+  for(const auto& [key,item]:v.dictionary){
+   result+=pdf_name(key);result+=' ';
+   if(!pdf_serialize(item,result,depth+1))return false;
+   result+=' ';
+  }
+  result+=">>";break;
+ default:return false;
+ }
+ return true;
+}
+struct ExportWalker{
+ const uint8_t* data;
+ size_t size;
+ const std::vector<rinpdf::parser::XrefEntry>& entries;
+ const std::vector<rinpdf::parser::XrefStreamEntry>& compressed;
+ std::set<size_t> active;
+ std::vector<PDFValue> pages;
+ size_t visited=0;
+ bool load(const PDFValue& ref,PDFValue& value){
+  return rinpdf::parser::resolve_reference_value(data,size,entries,compressed,ref,value);
+ }
+ bool walk(const PDFValue& ref,const std::map<std::string,PDFValue>& inherited,unsigned depth){
+  if(depth>64||++visited>100000||ref.kind!=PDFKind::Reference||ref.integer<=0)return false;
+  if(!active.insert((size_t)ref.integer).second)return false;
+  PDFValue node;
+  if(!load(ref,node)||node.kind!=PDFKind::Dictionary)return false;
+  auto next=inherited;
+  for(const char* key:{"Resources","MediaBox","CropBox","Rotate"}){
+   if(const auto* value=pdf_field(node,key))next[key]=*value;
+  }
+  if(pdf_named(pdf_field(node,"Type"),"Page")){
+   for(const auto& [key,value]:next)
+    if(!pdf_field(node,key))node.dictionary[key]=value;
+   pages.push_back(std::move(node));
+  }else if(pdf_named(pdf_field(node,"Type"),"Pages")){
+   const auto* kids=pdf_field(node,"Kids");
+   if(!kids||kids->kind!=PDFKind::Array||kids->array.size()>100000)return false;
+   for(const auto& child:kids->array)if(!walk(child,next,depth+1))return false;
+  }else return false;
+  active.erase((size_t)ref.integer);
+  return true;
+ }
+};
+}
+extern "C" rinpdf_status rinpdf_export_pages_lossless_memory(
+ const rinpdf_document* doc,const size_t* indices,size_t count,uint8_t** output,size_t* output_size){
+ if(!output||!output_size)return RINPDF_INVALID_ARGUMENT;
+ *output=nullptr;*output_size=0;
+ if(!doc||!indices||count==0||count>10000)return RINPDF_INVALID_ARGUMENT;
+ try {
+  const auto& bytes=doc->bytes;
+  std::vector<rinpdf::parser::XrefEntry> entries;
+  std::vector<rinpdf::parser::XrefStreamEntry> compressed;
+  PDFValue trailer;
+  if(!rinpdf::parser::read_object_xref(bytes.data(),bytes.size(),entries,compressed,trailer)||
+     !compressed.empty()||pdf_field(trailer,"Encrypt")||
+     pdf_field(trailer,"Prev")||pdf_field(trailer,"XRefStm"))
+   return RINPDF_UNSUPPORTED;
+  const PDFValue* root_ref=pdf_field(trailer,"Root");
+  if(!root_ref||root_ref->kind!=PDFKind::Reference)return RINPDF_UNSUPPORTED;
+  ExportWalker walker{bytes.data(),bytes.size(),entries,compressed};
+  PDFValue root;
+  if(!walker.load(*root_ref,root)||!pdf_named(pdf_field(root,"Type"),"Catalog"))
+   return RINPDF_UNSUPPORTED;
+  const PDFValue* page_root=pdf_field(root,"Pages");
+  if(!page_root||!walker.walk(*page_root,{},0))return RINPDF_UNSUPPORTED;
+  for(size_t i=0;i<count;++i)if(indices[i]>=walker.pages.size())return RINPDF_INVALID_ARGUMENT;
+  size_t max_id=0;
+  for(const auto& entry:entries)max_id=std::max(max_id,entry.object);
+  if(max_id>1000000||count>1000000-max_id-2)return RINPDF_UNSUPPORTED;
+  const size_t pages_id=max_id+1;
+  const size_t catalog_id=max_id+2;
+  const size_t first_page_id=max_id+3;
+  if(count>1000000-first_page_id)return RINPDF_UNSUPPORTED;
+  const size_t last_id=first_page_id+count-1;
+  std::vector<size_t> offsets(last_id+1,0);
+  std::vector<unsigned> generations(last_id+1,0);
+  for(const auto& entry:entries){
+   if(entry.object>max_id)continue;
+   if(entry.in_use){
+    if(entry.offset>=bytes.size())return RINPDF_UNSUPPORTED;
+    offsets[entry.object]=entry.offset;
+    generations[entry.object]=entry.generation;
+   }
+  }
+  std::string result(reinterpret_cast<const char*>(bytes.data()),bytes.size());
+  result+="\n";
+  auto append=[&](size_t id,const std::string& payload){
+   offsets[id]=result.size();
+   result+=std::to_string(id)+" 0 obj\n"+payload+"\nendobj\n";
+  };
+  std::string kids="[ ";
+  for(size_t i=0;i<count;++i)kids+=std::to_string(first_page_id+i)+" 0 R ";
+  kids+="]";
+  append(pages_id,"<< /Type /Pages /Count "+std::to_string(count)+" /Kids "+kids+" >>");
+  root.dictionary["Pages"].kind=PDFKind::Reference;
+  root.dictionary["Pages"].integer=(long long)pages_id;
+  root.dictionary["Pages"].generation=0;
+  std::string serialized;
+  if(!pdf_serialize(root,serialized))return RINPDF_UNSUPPORTED;
+  append(catalog_id,serialized);
+  for(size_t i=0;i<count;++i){
+   PDFValue page=walker.pages[indices[i]];
+   PDFValue parent;
+   parent.kind=PDFKind::Reference;
+   parent.integer=(long long)pages_id;
+   page.dictionary["Parent"]=parent;
+   serialized.clear();
+   if(!pdf_serialize(page,serialized))return RINPDF_UNSUPPORTED;
+   append(first_page_id+i,serialized);
+  }
+  const size_t xref=result.size();
+  result+="xref\n0 "+std::to_string(last_id+1)+"\n";
+  result+="0000000000 65535 f \n";
+  char line[40];
+  for(size_t i=1;i<=last_id;++i){
+   if(offsets[i]>9999999999ULL)return RINPDF_UNSUPPORTED;
+   std::snprintf(line,sizeof(line),"%010zu %05u %c \n",offsets[i],
+                 offsets[i]?generations[i]:0,offsets[i]?'n':'f');
+   result+=line;
+  }
+  result+="trailer\n<< /Size "+std::to_string(last_id+1)+
+          " /Root "+std::to_string(catalog_id)+" 0 R >>\nstartxref\n"+
+          std::to_string(xref)+"\n%%EOF\n";
+  uint8_t* memory=(uint8_t*)std::malloc(result.size());
+  if(!memory)return RINPDF_OUT_OF_MEMORY;
+  std::memcpy(memory,result.data(),result.size());
+  *output=memory;*output_size=result.size();
+  return RINPDF_OK;
+ }catch(const std::bad_alloc&){return RINPDF_OUT_OF_MEMORY;}
+}
+extern "C" rinpdf_status rinpdf_export_pages_lossless_file(
+ const char* path,const rinpdf_document* doc,const size_t* indices,size_t count){
+ if(!path)return RINPDF_INVALID_ARGUMENT;
+ uint8_t* data=nullptr;size_t size=0;
+ const auto status=rinpdf_export_pages_lossless_memory(doc,indices,count,&data,&size);
+ if(status!=RINPDF_OK)return status;
+ FILE* file=std::fopen(path,"wb");
+ if(!file){std::free(data);return RINPDF_IO_ERROR;}
+ bool ok=std::fwrite(data,1,size,file)==size;
+ if(std::fclose(file)!=0)ok=false;
+ std::free(data);
+ return ok?RINPDF_OK:RINPDF_IO_ERROR;
 }
