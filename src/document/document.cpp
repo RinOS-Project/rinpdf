@@ -339,3 +339,26 @@ extern "C" rinpdf_status rinpdf_merge_documents_lossless_file(
  std::free(data);
  return ok?RINPDF_OK:RINPDF_IO_ERROR;
 }
+
+extern "C" rinpdf_status rinpdf_merge_files_lossless(
+ const char* path,const char* const* source_paths,size_t count){
+ if(!path||!source_paths||count==0||count>128)return RINPDF_INVALID_ARGUMENT;
+ try {
+  std::vector<rinpdf_document*> documents;
+  documents.reserve(count);
+  rinpdf_status status=RINPDF_OK;
+  for(size_t i=0;i<count;++i){
+   if(!source_paths[i]){status=RINPDF_INVALID_ARGUMENT;break;}
+   rinpdf_document* doc=nullptr;
+   status=rinpdf_document_open_file(source_paths[i],&doc);
+   if(status!=RINPDF_OK)break;
+   documents.push_back(doc);
+  }
+  if(status==RINPDF_OK){
+   std::vector<const rinpdf_document*> refs(documents.begin(),documents.end());
+   status=rinpdf_merge_documents_lossless_file(path,refs.data(),refs.size());
+  }
+  for(auto* doc:documents)rinpdf_document_close(doc);
+  return status;
+ }catch(const std::bad_alloc&){return RINPDF_OUT_OF_MEMORY;}
+}
