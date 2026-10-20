@@ -453,7 +453,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
        if(cmyk_target->knockout){
         // A nested transparency group is one knockout object; its
         // internal paints have already been resolved in the child.
-        if(mode!=0||!cmyk_target->knockout_object(child))return false;
+        if(!cmyk_target->knockout_object(child,mode))return false;
        }else if(!cmyk_target->composite_group(child,mode))return false;
       }else{
        // A non-isolated child inherits the actual CMYK backdrop.
