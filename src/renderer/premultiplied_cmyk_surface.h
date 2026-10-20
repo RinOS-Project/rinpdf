@@ -117,43 +117,40 @@ struct PremultipliedCMYKSurface {
    if(!coverage)continue;
    const size_t i=p*5;
    const unsigned keep=255u-coverage;
-   for(unsigned c=0;c<5;++c){
-    const unsigned old_part=mul255(ink[i+c],keep);
+   const unsigned ba=nonisolated_knockout?backdrop_ink[i+4]:0u;
+   const unsigned inherited_alpha=object_inherits_backdrop?
+      mul255(ba,keep):0u;
+   const unsigned object_alpha=object.ink[i+4]>inherited_alpha?
+      unsigned(object.ink[i+4])-inherited_alpha:0u;
+   const unsigned remaining_alpha=mul255(ink[i+4],keep);
+   const unsigned combined_alpha=std::min(255u,
+      remaining_alpha+object_alpha);
+   for(unsigned c=0;c<4;++c){
     unsigned painted=object.ink[i+c];
-    if(nonisolated_knockout&&object_inherits_backdrop){
+    if(object_inherits_backdrop){
      const unsigned inherited=mul255(backdrop_ink[i+c],keep);
      painted=painted>inherited?painted-inherited:0u;
     }
-    if(mode!=0&&c<4){
-     // Blend the completed object against the immutable group backdrop,
-     // not against earlier knockout siblings.
-     const unsigned ba=nonisolated_knockout?backdrop_ink[i+4]:0u;
-     const unsigned inherited_alpha=object_inherits_backdrop?
-       mul255(ba,keep):0u;
-     const unsigned oa=object.ink[i+4]>inherited_alpha?
-       unsigned(object.ink[i+4])-inherited_alpha:0u;
-     const unsigned src=oa?std::min(255u,
-       (painted*255u+oa/2u)/oa):0u;
-     const unsigned dst=ba?std::min(255u,
-       (unsigned(backdrop_ink[i+c])*255u+ba/2u)/ba):0u;
+    if(mode!=0&&object_alpha&&ba){
+     // Reblend only the actual Form contribution, excluding inherited ink.
+     // The immutable parent backdrop supplies Cd, never prior siblings.
+     const unsigned src=std::min(255u,
+         (painted*255u+object_alpha/2u)/object_alpha);
+     const unsigned dst=std::min(255u,
+         (unsigned(backdrop_ink[i+c])*255u+ba/2u)/ba);
      const unsigned blended=mode==1?mul255(src,dst):
-       255u-mul255(255u-src,255u-dst);
-     // An isolated knockout has no backdrop and therefore reduces to
-     // Normal; a non-isolated group uses the saved initial backdrop.
-     if(ba){
-      const unsigned blend_p=mul255(blended,mul255(oa,ba));
-      const unsigned source_only=mul255(src,mul255(oa,255u-ba));
-      painted=std::min(255u,blend_p+source_only);
-     }
+         255u-mul255(255u-src,255u-dst);
+     const unsigned with_backdrop=mul255(blended,mul255(object_alpha,ba));
+     const unsigned without_backdrop=mul255(src,
+         mul255(object_alpha,255u-ba));
+     painted=std::min(255u,with_backdrop+without_backdrop);
     }
-    ink[i+c]=uint8_t(std::min(255u,old_part+painted));
+    ink[i+c]=uint8_t(std::min(combined_alpha,
+        std::min(255u,mul255(ink[i+c],keep)+painted)));
    }
-   // The opacity channel bounds every premultiplied ink channel.
-   // Rounding and CMYK blend reconstruction must never violate this.
-   for(unsigned c=0;c<4;++c)
-    ink[i+c]=uint8_t(std::min<unsigned>(ink[i+c],ink[i+4]));
+   ink[i+4]=uint8_t(combined_alpha);
    shape[p]=uint8_t(std::min(255u,
-      coverage+mul255(shape[p],keep)));
+       coverage+mul255(shape[p],keep)));
   }
   return true;
  }
