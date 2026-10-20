@@ -43,6 +43,31 @@ bool encode(const uint8_t* rgb,unsigned width,unsigned height,size_t stride,
  deflateEnd(&z);
  return good;
 }
+bool encode_rgba(const uint8_t* pixels,unsigned width,unsigned height,size_t stride,
+                 std::string& rgb,std::string& alpha) {
+ try {
+  std::vector<uint8_t> color((size_t)width*height*3);
+  std::vector<uint8_t> mask((size_t)width*height);
+  for(unsigned y=0;y<height;++y){
+   const uint8_t* row=pixels+(size_t)y*stride;
+   for(unsigned x=0;x<width;++x){
+    const size_t pos=(size_t)y*width+x;
+    for(unsigned c=0;c<3;++c)color[pos*3+c]=row[x*4+c];
+    mask[pos]=row[x*4+3];
+   }
+  }
+  auto compress=[](const std::vector<uint8_t>& input,std::string& result)->bool {
+   if(input.size()>ULONG_MAX)return false;
+   uLongf length=compressBound((uLong)input.size());
+   result.resize((size_t)length);
+   int rc=compress2((Bytef*)result.data(),&length,input.data(),(uLong)input.size(),Z_DEFAULT_COMPRESSION);
+   if(rc!=Z_OK)return false;
+   result.resize((size_t)length);
+   return true;
+  };
+  return compress(color,rgb)&&compress(mask,alpha);
+ }catch(const std::bad_alloc&){return false;}
+}
 rinpdf_status create_image_pdf(const uint8_t* pixels,unsigned width,unsigned height,
  size_t stride,unsigned components,uint8_t** data,size_t* size){
  if(!data||!size)return RINPDF_INVALID_ARGUMENT;
