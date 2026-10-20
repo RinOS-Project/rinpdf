@@ -21,7 +21,8 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
  bool clear_background=true,unsigned form_depth=0,
  const GraphicsStateResources& graphic_states={},
  PremultipliedSurface* transparent_target=nullptr,
- PremultipliedCMYKSurface* cmyk_target=nullptr);
+ PremultipliedCMYKSurface* cmyk_target=nullptr,
+ const std::map<std::string,std::string>& named_color_spaces={});
 bool render_rectangles_box(const uint8_t *contents,size_t size,unsigned width,unsigned height,uint8_t *rgba,size_t stride,PageBox box);
 // Legacy API uses an implicit 0,0,width,height box.
 bool render_rectangles(const uint8_t *contents,size_t size,unsigned width,unsigned height,uint8_t *rgba,size_t stride);
