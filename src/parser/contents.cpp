@@ -1167,8 +1167,28 @@ struct Reader {
    }else scope=*resource;
    if(scope.kind!=Value::Kind::Dictionary||
       get(scope,"Properties")||
-      get(scope,"ColorSpace")||get(scope,"ExtGState")||
+      get(scope,"ExtGState")||
       get(scope,"Pattern")||get(scope,"Shading"))return false;
+   if(const Value* spaces=get(scope,"ColorSpace")){
+    Value entries;
+    if(spaces->kind==Value::Kind::Reference){
+     if(!object(*spaces,entries))return false;
+    }else entries=*spaces;
+    if(entries.kind!=Value::Kind::Dictionary||
+       entries.dictionary.size()>64)return false;
+    for(const auto& [alias,definition]:entries.dictionary){
+     Value resolved;
+     if(definition.kind==Value::Kind::Reference){
+      if(!object(definition,resolved))return false;
+     }else resolved=definition;
+     // Device aliases can be used immediately by the renderer. Named
+     // Separation/DeviceN definitions still need tint-transform support.
+     if(resolved.kind!=Value::Kind::Name||
+        (resolved.text!="DeviceGray"&&resolved.text!="DeviceRGB"&&
+         resolved.text!="DeviceCMYK"))return false;
+     form.local_color_spaces.emplace(alias,resolved.text);
+    }
+   }
    if(const Value* fonts=get(scope,"Font")){
     Value dictionary;
     if(fonts->kind==Value::Kind::Reference){
