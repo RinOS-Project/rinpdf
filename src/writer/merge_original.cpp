@@ -155,7 +155,7 @@ bool prepare(Input& doc){
    return false;
   if(entry.object==doc.root_pages){
    if(value.kind!=K::Dictionary||!named(field(value,"Type"),"Pages"))return false;
-   V parent;parent.kind=K::Reference;parent.integer=1;
+   V parent;parent.kind=K::Reference;parent.integer=2;
    value.dictionary["Parent"]=parent;
   }
   if(!rebase(value,doc.offset))return false;
