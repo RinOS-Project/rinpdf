@@ -64,6 +64,33 @@ struct PremultipliedCMYKSurface {
   shape[p]=uint8_t(std::min(255u,geometry+mul255(shape[p],255u-geometry)));
   return true;
  }
+ // Paint a complete nested Form as one knockout object. In an isolated
+ // group the child starts transparent. In a non-isolated group the child
+ // must have been rendered on the immutable inherited backdrop.
+ bool knockout_object(const PremultipliedCMYKSurface& object){
+  if(!knockout||width!=object.width||height!=object.height||
+     ink.size()!=object.ink.size()||shape.size()!=object.shape.size()||
+     ink.size()!=size_t(width)*height*5||
+     (nonisolated_knockout&&backdrop_ink.size()!=ink.size()))return false;
+  for(size_t p=0;p<shape.size();++p){
+   const unsigned coverage=object.shape[p];
+   if(!coverage)continue;
+   const size_t i=p*5;
+   const unsigned keep=255u-coverage;
+   for(unsigned c=0;c<5;++c){
+    const unsigned old_part=mul255(ink[i+c],keep);
+    unsigned painted=object.ink[i+c];
+    if(nonisolated_knockout){
+     const unsigned inherited=mul255(backdrop_ink[i+c],keep);
+     painted=painted>inherited?painted-inherited:0u;
+    }
+    ink[i+c]=uint8_t(std::min(255u,old_part+painted));
+   }
+   shape[p]=uint8_t(std::min(255u,
+      coverage+mul255(shape[p],keep)));
+  }
+  return true;
+ }
  bool begin_knockout(bool isolated){
   knockout=true;
   nonisolated_knockout=!isolated;
