@@ -1072,8 +1072,12 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      tint=encoded_lo+(tint-lo)/(hi-lo)*(encoded_hi-encoded_lo);
      tint=std::clamp(tint,0.0,1.0);
      const auto* selected=&transform.segments[segment];
-     if(!selected->children.empty()){
-      if(selected->children.size()!=selected->bounds.size()+1||
+     // Walk a bounded stitching tree; each level maps to the next
+     // subfunction's input domain before its sampled/exponential evaluation.
+     unsigned nesting=0;
+     while(!selected->children.empty()){
+      if(++nesting>8||
+         selected->children.size()!=selected->bounds.size()+1||
          selected->stitch_encode.size()!=2*selected->children.size())
        return false;
       size_t nested=0;
@@ -1082,6 +1086,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
       const double nlo=nested?selected->bounds[nested-1]:0.0;
       const double nhi=nested<selected->bounds.size()?
                                   selected->bounds[nested]:1.0;
+      if(nhi<=nlo)return false;
       tint=std::clamp(
         selected->stitch_encode[2*nested]+
         (tint-nlo)/(nhi-nlo)*
