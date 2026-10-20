@@ -1181,6 +1181,51 @@ struct Reader {
      if(definition.kind==Value::Kind::Reference){
       if(!object(definition,resolved))return false;
      }else resolved=definition;
+     if(resolved.kind==Value::Kind::Array&&
+        resolved.array.size()==4&&
+        resolved.array[0].kind==Value::Kind::Name&&
+        resolved.array[0].text=="Separation"){
+      const auto& alternative=resolved.array[2];
+      if(alternative.kind!=Value::Kind::Name)return false;
+      SeparationColorSpace separation;
+      separation.alternate=alternative.text;
+      separation.components=separation.alternate=="DeviceGray"?1u:
+        separation.alternate=="DeviceRGB"?3u:
+        separation.alternate=="DeviceCMYK"?4u:0u;
+      if(!separation.components)return false;
+      Value function;
+      if(resolved.array[3].kind==Value::Kind::Reference){
+       if(!object(resolved.array[3],function))return false;
+      }else function=resolved.array[3];
+      if(function.kind!=Value::Kind::Dictionary)return false;
+      const Value* type=get(function,"FunctionType");
+      const Value* exponent=get(function,"N");
+      if(!type||type->kind!=Value::Kind::Integer||type->integer!=2||
+         !exponent)return false;
+      auto numeric=[](const Value& v,double& out)->bool{
+       if(v.kind==Value::Kind::Integer)out=double(v.integer);
+       else if(v.kind==Value::Kind::Real)out=v.real;
+       else return false;
+       return std::isfinite(out);
+      };
+      if(!numeric(*exponent,separation.exponent)||
+         separation.exponent<=0||separation.exponent>100)return false;
+      for(const auto& field:{"C0","C1"}){
+       const Value* values=get(function,field);
+       if(!values)continue;
+       if(values->kind!=Value::Kind::Array||
+          values->array.size()!=separation.components)return false;
+       for(unsigned c=0;c<separation.components;++c){
+        double component=0;
+        if(!numeric(values->array[c],component)||
+           component<0||component>1)return false;
+        if(field[1]=='0')separation.c0[c]=component;
+        else separation.c1[c]=component;
+       }
+      }
+      form.local_separations.emplace(alias,separation);
+      continue;
+     }
      // Device aliases can be used immediately by the renderer. Named
      // Separation/DeviceN definitions still need tint-transform support.
      if(resolved.kind!=Value::Kind::Name||
