@@ -77,6 +77,19 @@ struct Input{
  std::vector<std::string> objects;
  std::vector<bool> present;
 };
+bool resolve_length(const Input& doc,const V& length,size_t& out){
+ V resolved=length;
+ if(length.kind==K::Reference){
+  if(length.generation!=0)return false;
+  std::vector<rinpdf::parser::XrefStreamEntry> compressed;
+  if(!rinpdf::parser::resolve_reference_value(doc.bytes,doc.length,doc.xref,
+                                               compressed,length,resolved))return false;
+ }
+ if(resolved.kind!=K::Integer||resolved.integer<0||
+    (unsigned long long)resolved.integer>doc.length)return false;
+ out=(size_t)resolved.integer;
+ return true;
+}
 bool prepare(Input& doc){
  std::vector<rinpdf::parser::XrefStreamEntry> compressed;
  V trailer;
@@ -131,14 +144,14 @@ bool prepare(Input& doc){
   if(token.kind==rinpdf::parser::TokenKind::Keyword&&token.value=="stream"){
    if(value.kind!=K::Dictionary)return false;
    const V* length=field(value,"Length");
-   // Stream boundaries must be direct and bounded.
-   if(!length||length->kind!=K::Integer||length->integer<0)return false;
+   // Resolve indirect /Length without modifying encoded stream bytes.
+   size_t n=0;
+   if(!length||!resolve_length(doc,*length,n))return false;
    size_t start=parsed_end+remainder.position();
    if(start>=limit)return false;
    if(doc.bytes[start]=='\r'&&start+1<limit&&doc.bytes[start+1]=='\n')start+=2;
    else if(doc.bytes[start]=='\n')++start;
    else return false;
-   size_t n=(size_t)length->integer;
    if(n>limit-start)return false;
    size_t end=start+n;
    size_t p=end;
@@ -155,13 +168,11 @@ bool prepare(Input& doc){
    return false;
   if(entry.object==doc.root_pages){
    if(value.kind!=K::Dictionary||!named(field(value,"Type"),"Pages"))return false;
-   V parent;parent.kind=K::Reference;parent.integer=2;
-   value.dictionary["Parent"]=parent;
   }
   if(!rebase(value,doc.offset))return false;
   // Parent of the source root points to the new merged Pages node.
   if(entry.object==doc.root_pages){
-   V parent;parent.kind=K::Reference;parent.integer=1;
+   V parent;parent.kind=K::Reference;parent.integer=2;
    value.dictionary["Parent"]=parent;
   }
   std::string serialized;
