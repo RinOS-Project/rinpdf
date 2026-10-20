@@ -1116,7 +1116,10 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      for(unsigned c=0;c<transform.components;++c){
       const double lo=double(transform.samples[first*transform.components+c])/255;
       const double hi=double(transform.samples[last*transform.components+c])/255;
-      output[c]=std::clamp(lo+fraction*(hi-lo),
+      const double raw=lo+fraction*(hi-lo);
+      const double decoded=transform.sample_decode[2*c]+raw*
+        (transform.sample_decode[2*c+1]-transform.sample_decode[2*c]);
+      output[c]=std::clamp(decoded,
           transform.sample_range[2*c],transform.sample_range[2*c+1]);
      }
     }else if(selected_segment&&!selected_segment->samples.empty()){
@@ -1138,7 +1141,10 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      for(unsigned c=0;c<transform.components;++c){
       const double lo=double(sampled.samples[first*transform.components+c])/255;
       const double hi=double(sampled.samples[last*transform.components+c])/255;
-      output[c]=std::clamp(lo+fraction*(hi-lo),
+      const double raw=lo+fraction*(hi-lo);
+      const double decoded=sampled.decode[2*c]+raw*
+            (sampled.decode[2*c+1]-sampled.decode[2*c]);
+      output[c]=std::clamp(decoded,
                            sampled.range[2*c],sampled.range[2*c+1]);
      }
     }else{
