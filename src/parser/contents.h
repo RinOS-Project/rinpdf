@@ -31,6 +31,10 @@ struct SeparationColorSpace {
  // FunctionType 3: bounded stitching of FunctionType 2 subfunctions.
  struct Segment {
   double c0[4]{},c1[4]{},exponent=1;
+  std::vector<uint8_t> samples;
+  unsigned sample_count=0;
+  double domain[2]{0,1},encode[2]{0,1};
+  double range[8]{0,1,0,1,0,1,0,1};
  };
  std::vector<Segment> segments;
  std::vector<double> bounds;
