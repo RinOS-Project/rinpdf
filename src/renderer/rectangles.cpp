@@ -691,7 +691,9 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
     pending_image.clear();
     if((im.channels!=1&&im.channels!=3)||!im.width||!im.height||
        im.pixels.size()!=size_t(im.width)*im.height*im.channels||
-       (!im.alpha.empty()&&im.alpha.size()!=size_t(im.width)*im.height))
+       (!im.alpha.empty()&&im.alpha.size()!=size_t(im.width)*im.height)||
+       (!im.cmyk_pixels.empty()&&
+        im.cmyk_pixels.size()!=size_t(im.width)*im.height*4))
      return false;
     const double det=a*d-bx*cx;
     if(!std::isfinite(det)||std::abs(det)<1e-12)return false;
@@ -743,8 +745,6 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
                               clip_coverage/255u;
       if(!im.cmyk_pixels.empty()){
        const size_t native_index=(size_t(iy)*im.width+ix)*4;
-       if(im.cmyk_pixels.size()!=size_t(im.width)*im.height*4)
-        return false;
        const unsigned native_ink[4]={
         im.cmyk_pixels[native_index],im.cmyk_pixels[native_index+1],
         im.cmyk_pixels[native_index+2],im.cmyk_pixels[native_index+3]};
