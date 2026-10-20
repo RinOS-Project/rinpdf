@@ -314,6 +314,21 @@ extern "C" rinpdf_status rinpdf_export_pages_with_boxes_memory(
   return RINPDF_OK;
  }catch(const std::bad_alloc&){return RINPDF_OUT_OF_MEMORY;}
 }
+extern "C" rinpdf_status rinpdf_export_pages_with_boxes_file(
+ const char* path,const rinpdf_document* doc,const size_t* indices,
+ const rinpdf_page_box_override* overrides,size_t count){
+ if(!path)return RINPDF_INVALID_ARGUMENT;
+ uint8_t* buffer=nullptr;size_t size=0;
+ const auto status=rinpdf_export_pages_with_boxes_memory(
+    doc,indices,overrides,count,&buffer,&size);
+ if(status!=RINPDF_OK)return status;
+ FILE* file=std::fopen(path,"wb");
+ if(!file){rinpdf_free_buffer(buffer);return RINPDF_IO_ERROR;}
+ bool ok=std::fwrite(buffer,1,size,file)==size;
+ if(std::fclose(file)!=0)ok=false;
+ rinpdf_free_buffer(buffer);
+ return ok?RINPDF_OK:RINPDF_IO_ERROR;
+}
 extern "C" rinpdf_status rinpdf_export_pages_lossless_memory(
  const rinpdf_document* doc,const size_t* indices,size_t count,uint8_t** output,size_t* output_size){
  return rinpdf_export_pages_with_boxes_memory(doc,indices,nullptr,count,output,output_size);
