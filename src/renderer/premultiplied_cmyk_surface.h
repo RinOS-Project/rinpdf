@@ -58,13 +58,26 @@ struct PremultipliedCMYKSurface {
   for(unsigned c=0;c<4;++c)if(src[c]>255)return false;
   const size_t p=size_t(y)*width+x,i=p*5;
   if(knockout){
-   if(mode!=0||alpha>geometry)return false;
+   if(alpha>geometry)return false;
    const unsigned keep=255u-geometry;
+   const unsigned backdrop_alpha=nonisolated_knockout?
+       backdrop_ink[i+4]:0u;
    for(unsigned c=0;c<5;++c){
     const unsigned inherited=nonisolated_knockout?
        mul255(backdrop_ink[i+c],geometry-alpha):0u;
     const unsigned current=mul255(ink[i+c],keep);
-    const unsigned added=c==4?alpha:mul255(src[c],alpha);
+    unsigned added=alpha;
+    if(c<4){
+     const unsigned backdrop=backdrop_alpha?
+         std::min(255u,(unsigned(backdrop_ink[i+c])*255u+
+                        backdrop_alpha/2u)/backdrop_alpha):0u;
+     const unsigned blended=mode==1?mul255(src[c],backdrop):
+        mode==2?255u-mul255(255u-src[c],255u-backdrop):src[c];
+     // Use the immutable group backdrop for blending, never a preceding
+     // knockout sibling. On an isolated backdrop this reduces to source.
+     added=blend_premultiplied(0,src[c],blended,
+                              alpha,backdrop_alpha);
+    }
     ink[i+c]=uint8_t(std::min(255u,current+inherited+added));
    }
    shape[p]=uint8_t(std::min(255u,geometry+mul255(shape[p],keep)));
