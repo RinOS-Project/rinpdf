@@ -69,6 +69,21 @@ rinpdf_status rinpdf_export_pages_lossless_memory(const rinpdf_document *doc,
  const size_t *indices,size_t count,uint8_t **data,size_t *size);
 rinpdf_status rinpdf_export_pages_lossless_file(const char *path,
  const rinpdf_document *doc,const size_t *indices,size_t count);
+/* Optional page dictionary overrides for non-raster extraction.
+ * Coordinates are PDF user-space points. Flags set to zero leave inherited
+ * values unchanged. Rotation must be 0, 90, 180 or 270 degrees.
+ */
+typedef struct rinpdf_page_box_override {
+ int set_rotation;
+ unsigned rotation;
+ int set_media_box;
+ double media_box[4];
+ int set_crop_box;
+ double crop_box[4];
+} rinpdf_page_box_override;
+rinpdf_status rinpdf_export_pages_with_boxes_memory(const rinpdf_document *doc,
+ const size_t *indices,const rinpdf_page_box_override *overrides,
+ size_t count,uint8_t **data,size_t *size);
 /* Merge pages from multiple opened PDF documents in the supplied order.
  * Pages are rasterized at DPI 36..600; original text/vectors are not retained.
  * Repeated pages and sources from the same document are supported.
