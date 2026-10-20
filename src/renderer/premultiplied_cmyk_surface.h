@@ -17,6 +17,17 @@ struct PremultipliedCMYKSurface {
  bool nonisolated_knockout=false;
  std::vector<uint8_t> backdrop_ink;
  static unsigned mul255(unsigned a,unsigned b){return (a*b+127u)/255u;}
+ // Compute a separable source-over channel in one rounded division.
+ // Avoid repeated 8-bit rounding in each partial product.
+ static uint8_t blend_premultiplied(unsigned destination_p,
+     unsigned src_unassociated,unsigned blended,
+     unsigned source_alpha,unsigned destination_alpha){
+  const uint64_t numerator=
+      uint64_t(destination_p)*(255u-source_alpha)*255u+
+      uint64_t(src_unassociated)*source_alpha*(255u-destination_alpha)+
+      uint64_t(blended)*source_alpha*destination_alpha;
+  return uint8_t(std::min<uint64_t>(255u,(numerator+32512u)/65025u));
+ }
  bool resize(unsigned w,unsigned h){
   if(!w||!h||size_t(w)*h>1048576u)return false;
   width=w;height=h;
@@ -55,10 +66,8 @@ struct PremultipliedCMYKSurface {
       (unsigned(ink[i+c])*255u+ad/2u)/ad):0u;
    const unsigned blended=mode==1?mul255(src[c],d):
       mode==2?255u-mul255(255u-src[c],255u-d):src[c];
-   const unsigned result=mul255(ink[i+c],255u-alpha)+
-      mul255(src[c],mul255(alpha,255u-ad))+
-      mul255(blended,mul255(alpha,ad));
-   ink[i+c]=uint8_t(std::min(255u,result));
+   ink[i+c]=blend_premultiplied(ink[i+c],src[c],blended,
+                                alpha,ad);
   }
   ink[i+4]=uint8_t(std::min(255u,alpha+mul255(ad,255u-alpha)));
   shape[p]=uint8_t(std::min(255u,geometry+mul255(shape[p],255u-geometry)));
@@ -166,10 +175,7 @@ struct PremultipliedCMYKSurface {
        (unsigned(ink[i+c])*255u+ad/2u)/ad):0u;
     const unsigned blend=mode==1?mul255(source,dest):
        mode==2?255u-mul255(255u-source,255u-dest):source;
-    const unsigned result=mul255(ink[i+c],255u-as)+
-       mul255(source,mul255(as,255u-ad))+
-       mul255(blend,mul255(as,ad));
-    ink[i+c]=uint8_t(std::min(255u,result));
+    ink[i+c]=blend_premultiplied(ink[i+c],source,blend,as,ad);
    }
    ink[i+4]=uint8_t(std::min(255u,as+mul255(ad,255u-as)));
    shape[p]=uint8_t(std::min(255u,unsigned(child.shape[p])+
