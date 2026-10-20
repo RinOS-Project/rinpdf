@@ -70,6 +70,8 @@ struct PremultipliedCMYKSurface {
                                 alpha,ad);
   }
   ink[i+4]=uint8_t(std::min(255u,alpha+mul255(ad,255u-alpha)));
+  for(unsigned c=0;c<4;++c)
+   ink[i+c]=uint8_t(std::min<unsigned>(ink[i+c],ink[i+4]));
   shape[p]=uint8_t(std::min(255u,geometry+mul255(shape[p],255u-geometry)));
   return true;
  }
@@ -178,6 +180,8 @@ struct PremultipliedCMYKSurface {
     ink[i+c]=blend_premultiplied(ink[i+c],source,blend,as,ad);
    }
    ink[i+4]=uint8_t(std::min(255u,as+mul255(ad,255u-as)));
+   for(unsigned c=0;c<4;++c)
+    ink[i+c]=uint8_t(std::min<unsigned>(ink[i+c],ink[i+4]));
    shape[p]=uint8_t(std::min(255u,unsigned(child.shape[p])+
       mul255(shape[p],255u-child.shape[p])));
   }
