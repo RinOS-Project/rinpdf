@@ -1198,31 +1198,85 @@ struct Reader {
        if(!object(resolved.array[3],function))return false;
       }else function=resolved.array[3];
       if(function.kind!=Value::Kind::Dictionary)return false;
-      const Value* type=get(function,"FunctionType");
-      const Value* exponent=get(function,"N");
-      if(!type||type->kind!=Value::Kind::Integer||type->integer!=2||
-         !exponent)return false;
       auto numeric=[](const Value& v,double& out)->bool{
        if(v.kind==Value::Kind::Integer)out=double(v.integer);
        else if(v.kind==Value::Kind::Real)out=v.real;
        else return false;
        return std::isfinite(out);
       };
-      if(!numeric(*exponent,separation.exponent)||
-         separation.exponent<=0||separation.exponent>100)return false;
-      for(const auto& field:{"C0","C1"}){
-       const Value* values=get(function,field);
-       if(!values)continue;
-       if(values->kind!=Value::Kind::Array||
-          values->array.size()!=separation.components)return false;
-       for(unsigned c=0;c<separation.components;++c){
-        double component=0;
-        if(!numeric(values->array[c],component)||
-           component<0||component>1)return false;
-        if(field[1]=='0')separation.c0[c]=component;
-        else separation.c1[c]=component;
+      auto type2=[&](const Value& fn,
+                     SeparationColorSpace::Segment& segment)->bool{
+       if(fn.kind!=Value::Kind::Dictionary)return false;
+       const Value* type=get(fn,"FunctionType");
+       const Value* exponent=get(fn,"N");
+       if(!type||type->kind!=Value::Kind::Integer||type->integer!=2||
+          !exponent||!numeric(*exponent,segment.exponent)||
+          segment.exponent<=0||segment.exponent>100)return false;
+       for(unsigned c=0;c<separation.components;++c)
+        segment.c1[c]=1;
+       for(const auto& field:{"C0","C1"}){
+        const Value* values=get(fn,field);
+        if(!values)continue;
+        if(values->kind!=Value::Kind::Array||
+           values->array.size()!=separation.components)return false;
+        for(unsigned c=0;c<separation.components;++c){
+         double component=0;
+         if(!numeric(values->array[c],component)||
+            component<0||component>1)return false;
+         if(field[1]=='0')segment.c0[c]=component;
+         else segment.c1[c]=component;
+        }
        }
-      }
+       return true;
+      };
+      const Value* type=get(function,"FunctionType");
+      if(!type||type->kind!=Value::Kind::Integer)return false;
+      if(type->integer==2){
+       SeparationColorSpace::Segment segment;
+       if(!type2(function,segment))return false;
+       for(unsigned c=0;c<separation.components;++c){
+        separation.c0[c]=segment.c0[c];
+        separation.c1[c]=segment.c1[c];
+       }
+       separation.exponent=segment.exponent;
+      }else if(type->integer==3){
+       const Value* functions=get(function,"Functions");
+       const Value* bounds=get(function,"Bounds");
+       const Value* encode=get(function,"Encode");
+       const Value* domain=get(function,"Domain");
+       if(!functions||functions->kind!=Value::Kind::Array||
+          functions->array.empty()||functions->array.size()>16||
+          !bounds||bounds->kind!=Value::Kind::Array||
+          bounds->array.size()+1!=functions->array.size()||
+          !encode||encode->kind!=Value::Kind::Array||
+          encode->array.size()!=2*functions->array.size()||
+          !domain||domain->kind!=Value::Kind::Array||
+          domain->array.size()!=2)return false;
+       double d0=0,d1=0;
+       if(!numeric(domain->array[0],d0)||!numeric(domain->array[1],d1)||
+          d0!=0||d1!=1)return false;
+       double prior=0;
+       for(const Value& bound:bounds->array){
+        double value=0;
+        if(!numeric(bound,value)||value<=prior||value>=1)return false;
+        separation.bounds.push_back(value);
+        prior=value;
+       }
+       for(const Value& value:encode->array){
+        double n=0;
+        if(!numeric(value,n)||n<0||n>1)return false;
+        separation.encode.push_back(n);
+       }
+       for(const Value& entry: functions->array){
+        Value child;
+        if(entry.kind==Value::Kind::Reference){
+         if(!object(entry,child))return false;
+        }else child=entry;
+        SeparationColorSpace::Segment segment;
+        if(!type2(child,segment))return false;
+        separation.segments.push_back(segment);
+       }
+      }else return false;
       form.local_separations.emplace(alias,separation);
       continue;
      }
