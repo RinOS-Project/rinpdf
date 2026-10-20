@@ -1,6 +1,7 @@
 #include "rectangles.h"
 #include "premultiplied_surface.h"
 #include "premultiplied_cmyk_surface.h"
+#include "icc_matrix_profile.h"
 #include "path_mask.h"
 #include "cubic_arc.h"
 #include "cubic_dash.h"
@@ -470,6 +471,13 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
          surface,ink,fm.own_resources?fm.local_color_spaces:named_color_spaces,
          fm.own_resources?fm.local_separations:separations);
      };
+     // A parsed ICC profile is not sufficient to render its color space.
+     // Accept only supported matrix/gamma RGB profiles at this boundary;
+     // LUT, Gray and CMYK profiles need a separate transform pipeline.
+     IccMatrixProfile icc_matrix;
+     if(fm.group_color_space=="ICCBased"&&
+        (fm.group_icc_channels!=3||
+         !icc_matrix.parse(fm.group_icc_profile)))return false;
      if(fm.knockout_transparency_group&&!fm.transparency_group)
       return false;
      if(cmyk_target){
@@ -602,6 +610,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
       }
       continue;
      }
+     if(fm.group_color_space=="ICCBased")return false;
      if(fm.transparency_group&&!fm.isolated_transparency_group){
       // The current non-isolated backdrop reconciliation is RGB/Gray;
       // a CMYK inherited backdrop needs a separate four-channel model.
@@ -678,6 +687,9 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
       group.knockout=fm.knockout_transparency_group;
       group.grayscale_group=fm.group_color_space=="DeviceGray";
       group.cmyk_group=fm.group_color_space=="DeviceCMYK";
+      // Matrix/TRC group rendering still requires PCS conversion;
+      // do not silently draw it as DeviceRGB.
+      if(fm.group_color_space=="ICCBased")return false;
       // Native CMYK group knockout is applied in its five-channel
       // workspace. Avoid applying the RGB knockout approximation too.
       const size_t rowbytes=size_t(width)*4;
