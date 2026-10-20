@@ -48,6 +48,32 @@ struct PremultipliedCMYKSurface {
   shape[p]=uint8_t(std::min(255u,geometry+mul255(shape[p],255u-geometry)));
   return true;
  }
+ // Composite a child isolated CMYK group in native premultiplied ink.
+ bool composite_group(const PremultipliedCMYKSurface& child,unsigned mode=0){
+  if(mode>2||width!=child.width||height!=child.height||
+     ink.size()!=child.ink.size()||shape.size()!=child.shape.size()||
+     ink.size()!=size_t(width)*height*5)return false;
+  for(size_t p=0;p<shape.size();++p){
+   const size_t i=p*5;
+   const unsigned as=child.ink[i+4],ad=ink[i+4];
+   for(unsigned c=0;c<4;++c){
+    const unsigned source=as?std::min(255u,
+       (unsigned(child.ink[i+c])*255u+as/2u)/as):0u;
+    const unsigned dest=ad?std::min(255u,
+       (unsigned(ink[i+c])*255u+ad/2u)/ad):0u;
+    const unsigned blend=mode==1?mul255(source,dest):
+       mode==2?255u-mul255(255u-source,255u-dest):source;
+    const unsigned result=mul255(ink[i+c],255u-as)+
+       mul255(source,mul255(as,255u-ad))+
+       mul255(blend,mul255(as,ad));
+    ink[i+c]=uint8_t(std::min(255u,result));
+   }
+   ink[i+4]=uint8_t(std::min(255u,as+mul255(ad,255u-as)));
+   shape[p]=uint8_t(std::min(255u,unsigned(child.shape[p])+
+      mul255(shape[p],255u-child.shape[p])));
+  }
+  return true;
+ }
  // Bridge for existing RGB rasterizers until they can emit native CMYK.
  // Premultiplied RGB is unassociated before conversion to ink components.
  bool import_rgba(const uint8_t* rgba,size_t stride){
