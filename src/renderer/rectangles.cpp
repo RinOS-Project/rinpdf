@@ -687,9 +687,8 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
       group.knockout=fm.knockout_transparency_group;
       group.grayscale_group=fm.group_color_space=="DeviceGray";
       group.cmyk_group=fm.group_color_space=="DeviceCMYK";
-      // Matrix/TRC group rendering still requires PCS conversion;
-      // do not silently draw it as DeviceRGB.
-      if(fm.group_color_space=="ICCBased")return false;
+      // Matrix/TRC RGB profiles use the existing RGB drawing primitives
+      // and are converted through the profile PCS after group painting.
       // Native CMYK group knockout is applied in its five-channel
       // workspace. Avoid applying the RGB knockout approximation too.
       const size_t rowbytes=size_t(width)*4;
@@ -706,6 +705,8 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
        group.pixels=std::move(converted);
        group.shape=std::move(ink_group.shape);
       }else if(!draw_form(scratch.data(),rowbytes,&group))return false;
+      if(fm.group_color_space=="ICCBased"&&
+         !icc_matrix.convert_premultiplied_rgba(group.pixels))return false;
       const unsigned external_mode=transparent_blend_mode();
       if(transparent_target){
        if(transparent_target->knockout_nonisolated){
