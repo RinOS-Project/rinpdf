@@ -87,8 +87,10 @@ struct PremultipliedCMYKSurface {
     if(mode!=0&&c<4){
      // Blend the completed object against the immutable group backdrop,
      // not against earlier knockout siblings.
-     const unsigned oa=object.ink[i+4];
      const unsigned ba=nonisolated_knockout?backdrop_ink[i+4]:0u;
+     const unsigned inherited_alpha=mul255(ba,keep);
+     const unsigned oa=object.ink[i+4]>inherited_alpha?
+       unsigned(object.ink[i+4])-inherited_alpha:0u;
      const unsigned src=oa?std::min(255u,
        (painted*255u+oa/2u)/oa):0u;
      const unsigned dst=ba?std::min(255u,
