@@ -1414,7 +1414,9 @@ struct Reader {
               sizes->array.size()!=1||
               sizes->array[0].kind!=Value::Kind::Integer||
               sizes->array[0].integer<2||sizes->array[0].integer>4096||
-              !bits||bits->kind!=Value::Kind::Integer||bits->integer!=8||
+              !bits||bits->kind!=Value::Kind::Integer||
+              (bits->integer!=1&&bits->integer!=2&&bits->integer!=4&&
+               bits->integer!=8&&bits->integer!=12&&bits->integer!=16)||
               !domain||domain->kind!=Value::Kind::Array||
               domain->array.size()!=2||
               !range||range->kind!=Value::Kind::Array||
@@ -1433,10 +1435,24 @@ struct Reader {
             for(unsigned j=0;j<2;++j)
              if(!numeric(encoding->array[j],branch.encode[j]))return false;
            }
-           const size_t expected=size_t(branch.sample_count)*
-                                  separation.components;
-           if(!decode_stream(data,size,leaf_stream,branch.samples,expected)||
-              branch.samples.size()!=expected)return false;
+           const size_t count=size_t(branch.sample_count)*
+                              separation.components;
+           const unsigned depth=unsigned(bits->integer);
+           const size_t expected=(count*depth+7u)/8u;
+           std::vector<uint8_t> packed;
+           if(!decode_stream(data,size,leaf_stream,packed,expected)||
+              packed.size()!=expected)return false;
+           branch.samples.reserve(count);
+           const unsigned maximum=(1u<<depth)-1u;
+           for(size_t n=0;n<count;++n){
+            const size_t offset=n*depth;
+            unsigned value=0;
+            for(unsigned bit=0;bit<depth;++bit)
+             value=(value<<1u)|((packed[(offset+bit)/8u]>>
+                      (7u-unsigned((offset+bit)%8u)))&1u);
+            branch.samples.push_back(uint8_t(
+                        (value*255u+maximum/2u)/maximum));
+           }
           }else return false;
           segment.children.push_back(std::move(branch));
          }
