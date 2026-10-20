@@ -69,6 +69,18 @@ rinpdf_status rinpdf_export_pages_lossless_memory(const rinpdf_document *doc,
  const size_t *indices,size_t count,uint8_t **data,size_t *size);
 rinpdf_status rinpdf_export_pages_lossless_file(const char *path,
  const rinpdf_document *doc,const size_t *indices,size_t count);
+/* Merge pages from multiple opened PDF documents in the supplied order.
+ * Pages are rasterized at DPI 36..600; original text/vectors are not retained.
+ * Repeated pages and sources from the same document are supported.
+ */
+typedef struct rinpdf_page_source {
+ const rinpdf_document *document;
+ size_t page_index;
+} rinpdf_page_source;
+rinpdf_status rinpdf_merge_pages_memory(const rinpdf_page_source *pages,
+ size_t count,unsigned dpi,uint8_t **data,size_t *size);
+rinpdf_status rinpdf_merge_pages_file(const char *path,
+ const rinpdf_page_source *pages,size_t count,unsigned dpi);
 #ifdef __cplusplus
 }
 #endif
