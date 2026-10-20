@@ -1391,11 +1391,53 @@ struct Reader {
          }
          for(const auto& leaf:nested_f->array){
           Value fn;
+          StreamRange leaf_stream;
+          bool streamed=false;
           if(leaf.kind==Value::Kind::Reference){
-           if(!object(leaf,fn))return false;
+           const XrefEntry* ent=nullptr;
+           if(!this->entry(leaf,ent))return false;
+           if(locate_indirect_stream(data,size,*ent,xref,leaf_stream)){
+            fn=leaf_stream.dictionary;streamed=true;
+           }else if(!object(leaf,fn))return false;
           }else fn=leaf;
           SeparationColorSpace::Segment branch;
-          if(!type2(fn,branch))return false;
+          const Value* fn_type=get(fn,"FunctionType");
+          if(!fn_type||fn_type->kind!=Value::Kind::Integer)return false;
+          if(fn_type->integer==2){
+           if(!type2(fn,branch))return false;
+          }else if(fn_type->integer==0){
+           const Value* sizes=get(fn,"Size");
+           const Value* bits=get(fn,"BitsPerSample");
+           const Value* domain=get(fn,"Domain");
+           const Value* range=get(fn,"Range");
+           if(!streamed||!sizes||sizes->kind!=Value::Kind::Array||
+              sizes->array.size()!=1||
+              sizes->array[0].kind!=Value::Kind::Integer||
+              sizes->array[0].integer<2||sizes->array[0].integer>4096||
+              !bits||bits->kind!=Value::Kind::Integer||bits->integer!=8||
+              !domain||domain->kind!=Value::Kind::Array||
+              domain->array.size()!=2||
+              !range||range->kind!=Value::Kind::Array||
+              range->array.size()!=2*separation.components)return false;
+           for(unsigned j=0;j<2;++j)
+            if(!numeric(domain->array[j],branch.domain[j]))return false;
+           if(branch.domain[0]>=branch.domain[1])return false;
+           for(unsigned j=0;j<2*separation.components;++j)
+            if(!numeric(range->array[j],branch.range[j]))return false;
+           branch.sample_count=unsigned(sizes->array[0].integer);
+           branch.encode[1]=double(branch.sample_count-1);
+           const Value* encoding=get(fn,"Encode");
+           if(encoding){
+            if(encoding->kind!=Value::Kind::Array||
+               encoding->array.size()!=2)return false;
+            for(unsigned j=0;j<2;++j)
+             if(!numeric(encoding->array[j],branch.encode[j]))return false;
+           }
+           const size_t expected=size_t(branch.sample_count)*
+                                  separation.components;
+           if(!decode_stream(data,size,leaf_stream,branch.samples,expected)||
+              branch.samples.size()!=expected)return false;
+          }else return false;
           segment.children.push_back(std::move(branch));
          }
         }else if(child_type->integer==0){
