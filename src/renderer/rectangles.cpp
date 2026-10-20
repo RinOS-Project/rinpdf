@@ -32,7 +32,8 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
  const FormResources& forms,bool clear_background,unsigned form_depth,
  const GraphicsStateResources& graphic_states,
  PremultipliedSurface* transparent_target,
- PremultipliedCMYKSurface* cmyk_target){
+ PremultipliedCMYKSurface* cmyk_target,
+ const std::map<std::string,std::string>& named_color_spaces){
  if(form_depth>8)return false;
  if(!std::isfinite(box.x0)||!std::isfinite(box.y0)||!std::isfinite(box.x1)||!std::isfinite(box.y1)||box.x1<=box.x0||box.y1<=box.y0)return false;
  const double sx=(double)width/(box.x1-box.x0),sy=(double)height/(box.y1-box.y0);
@@ -330,10 +331,15 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
    }
    if(!in_text&&next.kind==parser::TokenKind::Keyword&&
       (next.value=="cs"||next.value=="CS")&&stack.empty()){
-    if(token.value!="DeviceGray"&&token.value!="DeviceRGB"&&
-       token.value!="DeviceCMYK")return false;
-    if(next.value=="cs")fill_space=token.value;
-    else stroke_space=token.value;
+    std::string selected=token.value;
+    if(selected!="DeviceGray"&&selected!="DeviceRGB"&&
+       selected!="DeviceCMYK"){
+     const auto alias=named_color_spaces.find(selected);
+     if(alias==named_color_spaces.end())return false;
+     selected=alias->second;
+    }
+    if(next.value=="cs")fill_space=selected;
+    else stroke_space=selected;
     lex=look;continue;
    }
    if(!in_text&&next.kind==parser::TokenKind::Keyword&&
@@ -456,7 +462,8 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
       return render_rectangles_box_with_fonts(
          reinterpret_cast<const uint8_t*>(stream.data()),stream.size(),
          width,height,target,target_stride,box,scoped_fonts,properties,
-         scoped_images,scoped_forms,false,form_depth+1,form_graphics,surface,ink);
+         scoped_images,scoped_forms,false,form_depth+1,form_graphics,
+         surface,ink,fm.own_resources?fm.local_color_spaces:named_color_spaces);
      };
      if(fm.knockout_transparency_group&&!fm.transparency_group)
       return false;
