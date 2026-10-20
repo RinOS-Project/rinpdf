@@ -60,6 +60,15 @@ rinpdf_status rinpdf_export_pages_memory(const rinpdf_document *doc,
  const size_t *indices,size_t count,unsigned dpi,uint8_t **data,size_t *size);
 rinpdf_status rinpdf_export_pages_file(const char *path,
  const rinpdf_document *doc,const size_t *indices,size_t count,unsigned dpi);
+/* Non-raster page selection/reordering for unencrypted PDFs with ordinary
+ * cross-reference entries. Preserves page content streams and resources;
+ * unsupported xref updates and compressed object tables return UNSUPPORTED.
+ * Output from the memory API must be released with rinpdf_free_buffer.
+ */
+rinpdf_status rinpdf_export_pages_lossless_memory(const rinpdf_document *doc,
+ const size_t *indices,size_t count,uint8_t **data,size_t *size);
+rinpdf_status rinpdf_export_pages_lossless_file(const char *path,
+ const rinpdf_document *doc,const size_t *indices,size_t count);
 #ifdef __cplusplus
 }
 #endif
