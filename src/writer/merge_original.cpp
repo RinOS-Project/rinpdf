@@ -93,9 +93,10 @@ bool resolve_length(const Input& doc,const V& length,size_t& out){
 }
 bool prepare(Input& doc){
  V trailer;
+ // read_object_xref resolves /Prev revision chains and hybrid /XRefStm.
+ // Only the latest live entries are exported; obsolete revisions are discarded.
  if(!rinpdf::parser::read_object_xref(doc.bytes,doc.length,doc.xref,doc.compressed,trailer)||
-    field(trailer,"Encrypt")||field(trailer,"Prev")||
-    field(trailer,"XRefStm"))return false;
+    field(trailer,"Encrypt"))return false;
  // Type-2 entries are decoded and materialized into ordinary indirect objects.
  const V* root_ref=field(trailer,"Root");
  if(!root_ref||root_ref->kind!=K::Reference||root_ref->generation!=0)return false;
