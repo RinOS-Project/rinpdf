@@ -124,9 +124,8 @@ rinpdf_status rinpdf_page_editor_export_memory(const rinpdf_page_editor *editor,
  uint8_t **data,size_t *size);
 rinpdf_status rinpdf_page_editor_export_file(const rinpdf_page_editor *editor,
  const char *path);
-/* Write an incremental Info dictionary revision without altering page streams.
- * Metadata strings are byte strings; UTF-8 is not automatically converted
- * into PDFDocEncoding or UTF-16BE. Use ASCII for portable interoperability.
+/* Write an incremental Info dictionary revision without changing page streams.
+ * Inputs are UTF-8, stored as UTF-16BE PDF text strings.
  * Existing Info fields not supplied are not retained.
  */
 typedef struct rinpdf_metadata {
@@ -139,6 +138,11 @@ rinpdf_status rinpdf_metadata_update_memory(const uint8_t *pdf,size_t pdf_size,
  const rinpdf_metadata *metadata,uint8_t **output,size_t *output_size);
 rinpdf_status rinpdf_metadata_update_file(const char *output_path,
  const uint8_t *pdf,size_t pdf_size,const rinpdf_metadata *metadata);
+/* Read a standard Info field (Title, Author, Subject, Keywords, Creator,
+ * Producer) as UTF-8. The returned buffer is freed with rinpdf_free_buffer.
+ * PDFDocEncoding beyond ASCII is not yet supported. */
+rinpdf_status rinpdf_metadata_get_utf8(const uint8_t *pdf,size_t pdf_size,
+ const char *key,char **output);
 #ifdef __cplusplus
 }
 #endif
