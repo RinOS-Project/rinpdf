@@ -183,6 +183,53 @@ extern "C" rinpdf_status rinpdf_page_editor_insert_range(
   return RINPDF_OK;
  }catch(const std::bad_alloc&){return RINPDF_OUT_OF_MEMORY;}
 }
+extern "C" rinpdf_status rinpdf_page_editor_move_range(
+ rinpdf_page_editor* editor,size_t first,size_t count,size_t destination){
+ if(!editor||first>editor->pages.size()||
+    count>editor->pages.size()-first||
+    destination>editor->pages.size()-count)return RINPDF_INVALID_ARGUMENT;
+ if(!count||first==destination)return RINPDF_OK;
+ // Destination is an index in the sequence after removal.
+ if(destination<first){
+  std::rotate(editor->pages.begin()+destination,editor->pages.begin()+first,
+              editor->pages.begin()+first+count);
+  std::rotate(editor->geometry.begin()+destination,editor->geometry.begin()+first,
+              editor->geometry.begin()+first+count);
+ }else{
+  std::rotate(editor->pages.begin()+first,editor->pages.begin()+first+count,
+              editor->pages.begin()+destination+count);
+  std::rotate(editor->geometry.begin()+first,editor->geometry.begin()+first+count,
+              editor->geometry.begin()+destination+count);
+ }
+ return RINPDF_OK;
+}
+extern "C" rinpdf_status rinpdf_page_editor_duplicate_range(
+ rinpdf_page_editor* editor,size_t first,size_t count,size_t at){
+ if(!editor||first>editor->pages.size()||
+    count>editor->pages.size()-first||at>editor->pages.size()||
+    count>10000-editor->pages.size())return RINPDF_INVALID_ARGUMENT;
+ if(!count)return RINPDF_OK;
+ try{
+  // Snapshot both arrays and commit atomically only after both inserts succeed.
+  std::vector<rinpdf_page_source> pages=editor->pages;
+  std::vector<rinpdf_page_box_override> geometry=editor->geometry;
+  std::vector<rinpdf_page_source> selected_pages(
+   editor->pages.begin()+first,editor->pages.begin()+first+count);
+  std::vector<rinpdf_page_box_override> selected_geometry(
+   editor->geometry.begin()+first,editor->geometry.begin()+first+count);
+  pages.insert(pages.begin()+at,selected_pages.begin(),selected_pages.end());
+  geometry.insert(geometry.begin()+at,selected_geometry.begin(),selected_geometry.end());
+  editor->pages.swap(pages);
+  editor->geometry.swap(geometry);
+  return RINPDF_OK;
+ }catch(const std::bad_alloc&){return RINPDF_OUT_OF_MEMORY;}
+}
+extern "C" rinpdf_status rinpdf_page_editor_get_source(
+ const rinpdf_page_editor* editor,size_t index,rinpdf_page_source* source){
+ if(!editor||!source||index>=editor->pages.size())return RINPDF_INVALID_ARGUMENT;
+ *source=editor->pages[index];
+ return RINPDF_OK;
+}
 extern "C" rinpdf_status rinpdf_page_editor_export_memory(const rinpdf_page_editor* editor,
  uint8_t** data,size_t* size){
  if(!data||!size)return RINPDF_INVALID_ARGUMENT;
