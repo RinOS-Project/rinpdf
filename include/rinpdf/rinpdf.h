@@ -175,6 +175,18 @@ rinpdf_status rinpdf_page_editor_insert(rinpdf_page_editor *editor,
  size_t at,const rinpdf_document *source,size_t source_page);
 rinpdf_status rinpdf_page_editor_duplicate(rinpdf_page_editor *editor,
  size_t index,size_t at);
+/* Rotate a consecutive range, preserving per-page box overrides. */
+rinpdf_status rinpdf_page_editor_rotate_range(rinpdf_page_editor *editor,
+ size_t first,size_t count,int quarter_turns);
+/* Replace a consecutive range with pages from another open document. */
+rinpdf_status rinpdf_page_editor_replace_range(rinpdf_page_editor *editor,
+ size_t at,size_t remove_count,const rinpdf_document *source,
+ size_t first,size_t insert_count);
+/* Keep listed editor slots, in the specified order. Repeats duplicate pages.
+ * Passing zero indices clears the editor (an empty PDF cannot be exported).
+ */
+rinpdf_status rinpdf_page_editor_keep_indices(rinpdf_page_editor *editor,
+ const size_t *indices,size_t count);
 rinpdf_status rinpdf_page_editor_export_memory(const rinpdf_page_editor *editor,
  uint8_t **data,size_t *size);
 rinpdf_status rinpdf_page_editor_export_file(const rinpdf_page_editor *editor,
