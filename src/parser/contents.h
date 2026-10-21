@@ -22,6 +22,15 @@ public:
   const std::vector<XrefEntry>& entries,
   const std::vector<XrefStreamEntry>& compressed,const Value& trailer);
  ~ScopedPageXref();
+ struct View {
+  std::vector<XrefEntry> owned_entries;
+  std::vector<XrefStreamEntry> owned_compressed;
+  Value owned_trailer;
+  const std::vector<XrefEntry>* entries=nullptr;
+  const std::vector<XrefStreamEntry>* compressed=nullptr;
+  const Value* trailer=nullptr;
+  bool open(const uint8_t* data,size_t size);
+ };
  static bool read(const uint8_t* data,size_t size,
   std::vector<XrefEntry>& entries,
   std::vector<XrefStreamEntry>& compressed,Value& trailer);
