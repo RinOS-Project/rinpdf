@@ -172,7 +172,7 @@ bool resolve_length(const Input& doc,const V& length,size_t& out){
  out=(size_t)resolved.integer;
  return true;
 }
-bool prepare(Input& doc){
+bool prepare(Input& doc,bool serialize_objects=true){
  V trailer;
  // read_object_xref resolves /Prev revision chains and hybrid /XRefStm.
  // Only the latest live entries are exported; obsolete revisions are discarded.
@@ -278,11 +278,13 @@ bool prepare(Input& doc){
    V parent;parent.kind=K::Reference;parent.integer=2;
    value.dictionary["Parent"]=parent;
   }else gather_refs(value,doc.offset,doc.dependencies[entry.object]);
-  std::string serialized;
-  if(!encode(value,serialized))return false;
-  doc.values[entry.object]=value;
-  doc.tails[entry.object]=tail;
-  doc.objects[entry.object]=std::move(serialized)+tail;
+  doc.values[entry.object]=std::move(value);
+  doc.tails[entry.object]=std::move(tail);
+  if(serialize_objects){
+   std::string serialized;
+   if(!encode(doc.values[entry.object],serialized))return false;
+   doc.objects[entry.object]=std::move(serialized)+doc.tails[entry.object];
+  }
  }
  for(const auto& entry:doc.compressed){
   if(entry.type!=2)continue;
@@ -298,10 +300,12 @@ bool prepare(Input& doc){
    V parent;parent.kind=K::Reference;parent.integer=2;
    value.dictionary["Parent"]=parent;
   }else gather_refs(value,doc.offset,doc.dependencies[entry.object]);
-  std::string serialized;
-  if(!encode(value,serialized))return false;
-  doc.values[entry.object]=value;
-  doc.objects[entry.object]=std::move(serialized);
+  doc.values[entry.object]=std::move(value);
+  if(serialize_objects){
+   std::string serialized;
+   if(!encode(doc.values[entry.object],serialized))return false;
+   doc.objects[entry.object]=std::move(serialized);
+  }
   doc.present[entry.object]=true;
  }
  if(!doc.present[doc.root_pages])return false;
@@ -341,7 +345,7 @@ rinpdf_status compose_selected_pdf_bytes(
   for(size_t i=0;i<document_count;++i){
    if(!bytes[i]||lengths[i]<8||lengths[i]>256*1024*1024)return RINPDF_INVALID_ARGUMENT;
    auto& doc=docs[i];doc.bytes=bytes[i];doc.length=lengths[i];doc.offset=next-1;
-   if(!prepare(doc))return RINPDF_UNSUPPORTED;
+   if(!prepare(doc,false))return RINPDF_UNSUPPORTED;
    if(doc.max_id>=1000000-next)return RINPDF_UNSUPPORTED;
    next+=doc.max_id;
    V trailer;
