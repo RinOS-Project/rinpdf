@@ -399,6 +399,9 @@ extern "C" rinpdf_status rinpdf_document_page_geometry(
  }catch(const std::bad_alloc&){return RINPDF_OUT_OF_MEMORY;}
 }
 
+namespace {
+size_t trim_locked(rinpdf_document& doc,size_t target);
+}
 extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t index,unsigned width,unsigned height,unsigned char *rgba,size_t stride){
  if(!doc||!rgba||width==0||height==0||width>16384||height>16384||stride<(size_t)width*4)return RINPDF_INVALID_ARGUMENT;
  if((size_t)width*height>16777216)return RINPDF_UNSUPPORTED;
