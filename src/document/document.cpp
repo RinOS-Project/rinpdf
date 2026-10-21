@@ -466,3 +466,41 @@ extern "C" rinpdf_status rinpdf_compose_pages_direct_memory(
       output,output_size);
  }catch(const std::bad_alloc&){return RINPDF_OUT_OF_MEMORY;}
 }
+
+namespace rinpdf {
+rinpdf_status compose_selected_pdf_stream(
+ const uint8_t* const*,const size_t*,size_t,const size_t*,const size_t*,
+ const rinpdf_page_box_override*,size_t,FILE*,uint8_t**,size_t*);
+}
+extern "C" rinpdf_status rinpdf_compose_pages_direct_file(
+ const char* path,const rinpdf_page_source* pages,
+ const rinpdf_page_box_override* geometry,size_t count){
+ if(!path||!pages||!count||count>10000)return RINPDF_INVALID_ARGUMENT;
+ try {
+  std::vector<const rinpdf_document*> documents;
+  std::vector<const uint8_t*> buffers;
+  std::vector<size_t> lengths,document_ids,page_ids;
+  documents.reserve(128);buffers.reserve(128);lengths.reserve(128);
+  document_ids.reserve(count);page_ids.reserve(count);
+  for(size_t i=0;i<count;++i){
+   if(!pages[i].document)return RINPDF_INVALID_ARGUMENT;
+   auto it=std::find(documents.begin(),documents.end(),pages[i].document);
+   size_t id=(size_t)(it-documents.begin());
+   if(it==documents.end()){
+    if(documents.size()>=128)return RINPDF_UNSUPPORTED;
+    const auto& bytes=pages[i].document->bytes;
+    documents.push_back(pages[i].document);
+    buffers.push_back(bytes.data());lengths.push_back(bytes.size());
+   }
+   document_ids.push_back(id);page_ids.push_back(pages[i].page_index);
+  }
+  FILE* file=std::fopen(path,"wb");
+  if(!file)return RINPDF_IO_ERROR;
+  uint8_t* unused=nullptr;size_t unused_size=0;
+  auto result=rinpdf::compose_selected_pdf_stream(
+   buffers.data(),lengths.data(),buffers.size(),
+   document_ids.data(),page_ids.data(),geometry,count,file,&unused,&unused_size);
+  if(std::fclose(file)!=0)result=RINPDF_IO_ERROR;
+  return result;
+ }catch(const std::bad_alloc&){return RINPDF_OUT_OF_MEMORY;}
+}
