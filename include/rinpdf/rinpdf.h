@@ -149,6 +149,15 @@ rinpdf_status rinpdf_page_editor_swap(rinpdf_page_editor *editor,
 rinpdf_status rinpdf_page_editor_page_count(const rinpdf_page_editor *editor,
  size_t *count);
 rinpdf_status rinpdf_page_editor_delete(rinpdf_page_editor *editor,size_t index);
+/* Range operations use [first, first+count) and accept count=0.
+ * Insert range copies references to the source PDF (source must remain open).
+ */
+rinpdf_status rinpdf_page_editor_delete_range(rinpdf_page_editor *editor,
+ size_t first,size_t count);
+rinpdf_status rinpdf_page_editor_reverse_range(rinpdf_page_editor *editor,
+ size_t first,size_t count);
+rinpdf_status rinpdf_page_editor_insert_range(rinpdf_page_editor *editor,
+ size_t at,const rinpdf_document *source,size_t first,size_t count);
 rinpdf_status rinpdf_page_editor_move(rinpdf_page_editor *editor,
  size_t from,size_t to);
 rinpdf_status rinpdf_page_editor_insert(rinpdf_page_editor *editor,
