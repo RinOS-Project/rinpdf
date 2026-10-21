@@ -86,6 +86,7 @@ struct rinpdf_document {
  mutable std::mutex content_mutex;
  mutable std::map<size_t,std::shared_ptr<const std::vector<uint8_t>>> content_cache;
  mutable size_t content_cache_bytes=0;
+ mutable size_t content_cache_budget=16*1024*1024;
  mutable std::map<size_t,size_t> content_access;
  mutable size_t content_clock=0;
  mutable std::mutex geometry_mutex;
@@ -174,6 +175,57 @@ extern "C" rinpdf_status rinpdf_document_open_file(const char *path,rinpdf_docum
 #endif
 }
 extern "C" void rinpdf_document_close(rinpdf_document *d){delete d;}
+extern "C" rinpdf_status rinpdf_document_content_cache_stats(
+ const rinpdf_document* doc,size_t* bytes,size_t* entries,size_t* budget){
+ if(!doc||!bytes||!entries||!budget)return RINPDF_INVALID_ARGUMENT;
+ std::lock_guard<std::mutex> lock(doc->content_mutex);
+ *bytes=doc->content_cache_bytes;
+ *entries=doc->content_cache.size();
+ *budget=doc->content_cache_budget;
+ return RINPDF_OK;
+}
+extern "C" rinpdf_status rinpdf_document_set_content_cache_budget(
+ rinpdf_document* doc,size_t budget){
+ if(!doc)return RINPDF_INVALID_ARGUMENT;
+ std::lock_guard<std::mutex> lock(doc->content_mutex);
+ doc->content_cache_budget=budget;
+ while(doc->content_cache_bytes>budget && !doc->content_access.empty()){
+  auto oldest=std::min_element(doc->content_access.begin(),doc->content_access.end(),
+   [](const auto& a,const auto& b){return a.second<b.second;});
+  auto it=doc->content_cache.find(oldest->first);
+  if(it!=doc->content_cache.end()){
+   doc->content_cache_bytes-=it->second->size();
+   doc->content_cache.erase(it);
+  }
+  doc->content_access.erase(oldest);
+ }
+ return RINPDF_OK;
+}
+extern "C" rinpdf_status rinpdf_document_clear_content_cache(rinpdf_document* doc){
+ if(!doc)return RINPDF_INVALID_ARGUMENT;
+ std::lock_guard<std::mutex> lock(doc->content_mutex);
+ doc->content_cache.clear();
+ doc->content_access.clear();
+ doc->content_cache_bytes=0;
+ return RINPDF_OK;
+}
+extern "C" rinpdf_status rinpdf_document_clear_render_caches(rinpdf_document* doc){
+ if(!doc)return RINPDF_INVALID_ARGUMENT;
+ // All cached resources use shared ownership so ongoing renders remain valid.
+ {
+  std::scoped_lock lock(doc->content_mutex,doc->font_mutex,doc->image_mutex,
+   doc->form_mutex,doc->graphics_mutex,doc->property_mutex,doc->geometry_mutex);
+  doc->content_cache.clear();doc->content_access.clear();doc->content_cache_bytes=0;
+  doc->font_cache.entries.clear();doc->font_cache.ages.clear();
+  doc->image_cache.entries.clear();doc->image_cache.ages.clear();
+  doc->form_cache.entries.clear();doc->form_cache.ages.clear();
+  doc->graphics_cache.entries.clear();doc->graphics_cache.ages.clear();
+  doc->property_cache.entries.clear();doc->property_cache.ages.clear();
+  doc->geometry_cache.clear();
+ }
+ return RINPDF_OK;
+}
+
 extern "C" rinpdf_status rinpdf_document_version(const rinpdf_document *d,unsigned *major,unsigned *minor){
  if(!d||!major||!minor)return RINPDF_INVALID_ARGUMENT;
  *major=d->major;*minor=d->minor;return RINPDF_OK;
@@ -281,7 +333,7 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
    if(!rinpdf::parser::read_page_contents(doc->data(),doc->size(),index,*decoded))
     return RINPDF_UNSUPPORTED;
    contents=decoded;
-   if(decoded->size()<=4*1024*1024){
+   if(decoded->size()<=4*1024*1024 && decoded->size()<=doc->content_cache_budget){
     std::lock_guard<std::mutex> guard(doc->content_mutex);
     auto existing=doc->content_cache.find(index);
     if(existing!=doc->content_cache.end()){
@@ -289,7 +341,7 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
      doc->content_access[index]=++doc->content_clock;
     }else{
      while((doc->content_cache.size()>=64 ||
-           doc->content_cache_bytes>16*1024*1024-decoded->size()) &&
+           doc->content_cache_bytes>doc->content_cache_budget-decoded->size()) &&
            !doc->content_access.empty()){
       const auto oldest=std::min_element(doc->content_access.begin(),
        doc->content_access.end(),[](const auto& a,const auto& b){
