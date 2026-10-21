@@ -232,7 +232,7 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
   }
   // Serialize preparation for the same page, preventing duplicate
   // expensive resource decoding by concurrent first-time renders.
-  std::lock_guard<std::mutex> page_guard(*page_lock);
+  std::unique_lock<std::mutex> page_guard(*page_lock);
   size_t ordinary_objects=0,compressed_objects=0;
   const auto index_status=rinpdf_document_xref_statistics(doc,
    &ordinary_objects,&compressed_objects);
@@ -355,9 +355,21 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
     graphic_states=it->second;
    }
   }
+  // Parsed resource handles remain alive via shared_ptr after this unlock.
+  // Only first-time parsing is serialized; pixel rendering can run in parallel.
+  page_guard.unlock();
   const unsigned rotation=box.rotation;
   const unsigned source_width=(rotation==90||rotation==270)?height:width;
   const unsigned source_height=(rotation==90||rotation==270)?width:height;
+  if(rotation==0){
+   // Render directly into the caller's buffer to avoid an extra full-page
+   // RGBA allocation and pixel copy.
+   if(!rinpdf::renderer::render_rectangles_box_with_fonts(
+      contents->data(),contents->size(),width,height,rgba,stride,
+      {box.x0,box.y0,box.x1,box.y1},*fonts,properties,*images,*forms,
+      true,0,*graphic_states))return RINPDF_UNSUPPORTED;
+   return RINPDF_OK;
+  }
   std::vector<uint8_t> temporary((size_t)width*height*4);
   if(!rinpdf::renderer::render_rectangles_box_with_fonts(contents->data(),contents->size(),source_width,source_height,temporary.data(),(size_t)source_width*4,{box.x0,box.y0,box.x1,box.y1},*fonts,properties,*images,*forms,true,0,*graphic_states))return RINPDF_UNSUPPORTED;
   for(unsigned y=0;y<height;++y){
