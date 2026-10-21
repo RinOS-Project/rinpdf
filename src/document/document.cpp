@@ -7,6 +7,8 @@
 #include "../renderer/rectangles.h"
 #include "rinpdf/render.h"
 #include <cstdio>
+#include <cwchar>
+#include <climits>
 #include <cstring>
 #include <new>
 #include <map>
@@ -503,26 +505,35 @@ extern "C" rinpdf_status rinpdf_compose_pages_direct_file(
    document_ids.push_back(id);page_ids.push_back(pages[i].page_index);
   }
 #ifdef _WIN32
-  // Create a unique sibling file without truncating the destination.
-  std::string base(path);
-  std::string temporary=base+".rinpdf-";
-  std::string temp_name;
+  // Public paths use UTF-8; Windows APIs require UTF-16 for Japanese filenames.
+  auto wide_path=[](const std::string& utf8,std::wstring& wide)->bool{
+   if(utf8.empty()||utf8.size()>INT_MAX)return false;
+   int length=MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,utf8.data(),
+                                  (int)utf8.size(),nullptr,0);
+   if(length<=0)return false;
+   wide.resize(length);
+   return MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,utf8.data(),
+                              (int)utf8.size(),wide.data(),length)==length;
+  };
+  std::wstring destination;
+  if(!wide_path(path,destination))return RINPDF_INVALID_ARGUMENT;
+  std::wstring temporary=destination+L".rinpdf-";
+  std::wstring temp_name;
   FILE* file=nullptr;
   for(unsigned attempt=0;attempt<32;++attempt){
-   // CREATE_NEW guarantees exclusivity even if another process is writing.
-   char suffix[24];std::snprintf(suffix,sizeof(suffix),"%08lx-%u",
+   wchar_t suffix[32];std::swprintf(suffix,32,L"%08lx-%u",
       (unsigned long)GetCurrentProcessId(),attempt);
    temp_name=temporary+suffix;
-   HANDLE handle=CreateFileA(temp_name.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,
+   HANDLE handle=CreateFileW(temp_name.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,
                               FILE_ATTRIBUTE_NORMAL,nullptr);
    if(handle==INVALID_HANDLE_VALUE){
     if(GetLastError()==ERROR_FILE_EXISTS||GetLastError()==ERROR_ALREADY_EXISTS)continue;
     return RINPDF_IO_ERROR;
    }
    int fd=_open_osfhandle((intptr_t)handle,_O_BINARY|_O_WRONLY);
-   if(fd<0){CloseHandle(handle);DeleteFileA(temp_name.c_str());return RINPDF_IO_ERROR;}
+   if(fd<0){CloseHandle(handle);DeleteFileW(temp_name.c_str());return RINPDF_IO_ERROR;}
    file=_fdopen(fd,"wb");
-   if(!file){_close(fd);DeleteFileA(temp_name.c_str());return RINPDF_IO_ERROR;}
+   if(!file){_close(fd);DeleteFileW(temp_name.c_str());return RINPDF_IO_ERROR;}
    break;
   }
   if(!file)return RINPDF_IO_ERROR;
@@ -550,9 +561,9 @@ extern "C" rinpdf_status rinpdf_compose_pages_direct_file(
   if(std::fclose(file)!=0)result=RINPDF_IO_ERROR;
 #ifdef _WIN32
   if(result==RINPDF_OK &&
-     !MoveFileExA(temp_name.c_str(),path,MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH))
+     !MoveFileExW(temp_name.c_str(),destination.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH))
     result=RINPDF_IO_ERROR;
-  if(result!=RINPDF_OK)DeleteFileA(temp_name.c_str());
+  if(result!=RINPDF_OK)DeleteFileW(temp_name.c_str());
 #else
   if(result==RINPDF_OK && std::rename(name.data(),path)!=0)result=RINPDF_IO_ERROR;
   if(result!=RINPDF_OK)std::remove(name.data());
