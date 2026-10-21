@@ -80,6 +80,12 @@ typedef struct rinpdf_page_box_override {
  double media_box[4];
  int set_crop_box;
  double crop_box[4];
+ int set_trim_box;
+ double trim_box[4];
+ int set_bleed_box;
+ double bleed_box[4];
+ int set_art_box;
+ double art_box[4];
 } rinpdf_page_box_override;
 rinpdf_status rinpdf_export_pages_with_boxes_memory(const rinpdf_document *doc,
  const size_t *indices,const rinpdf_page_box_override *overrides,
@@ -129,6 +135,8 @@ typedef struct rinpdf_page_editor rinpdf_page_editor;
 rinpdf_status rinpdf_page_editor_create(const rinpdf_document *document,
  rinpdf_page_editor **out);
 void rinpdf_page_editor_close(rinpdf_page_editor *editor);
+rinpdf_status rinpdf_page_editor_set_geometry(rinpdf_page_editor *editor,
+ size_t index,const rinpdf_page_box_override *geometry);
 rinpdf_status rinpdf_page_editor_page_count(const rinpdf_page_editor *editor,
  size_t *count);
 rinpdf_status rinpdf_page_editor_delete(rinpdf_page_editor *editor,size_t index);
