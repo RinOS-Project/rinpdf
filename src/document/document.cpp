@@ -210,6 +210,12 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
  if(rinpdf_document_page_count(doc,&pages)!=RINPDF_OK)return RINPDF_UNSUPPORTED;
  if(index>=pages)return RINPDF_INVALID_ARGUMENT;
  try{
+  size_t ordinary_objects=0,compressed_objects=0;
+  const auto index_status=rinpdf_document_xref_statistics(doc,
+   &ordinary_objects,&compressed_objects);
+  if(index_status!=RINPDF_OK)return index_status;
+  rinpdf::parser::ScopedPageXref xref_scope(doc->data(),doc->size(),
+    doc->cached_xref,doc->cached_compressed,doc->cached_trailer);
   std::vector<uint8_t> contents;
   if(!rinpdf::parser::read_page_contents(doc->data(),doc->size(),index,contents))return RINPDF_UNSUPPORTED;
   rinpdf_page_geometry geometry{};
