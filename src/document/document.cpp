@@ -20,6 +20,7 @@
 #include <cstdlib>
 #include <memory>
 #include <span>
+#include <mutex>
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -36,6 +37,9 @@ struct rinpdf_document {
  const uint8_t* mapped=nullptr;
  size_t mapped_size=0;
  unsigned major=0,minor=0;
+ mutable std::once_flag page_count_once;
+ mutable size_t cached_page_count=0;
+ mutable bool page_count_valid=false;
  const uint8_t* data() const {return mapped?mapped:bytes.data();}
  size_t size() const {return mapped?mapped_size:bytes.size();}
  ~rinpdf_document(){
@@ -126,9 +130,13 @@ extern "C" rinpdf_status rinpdf_document_version(const rinpdf_document *d,unsign
 }
 extern "C" rinpdf_status rinpdf_document_page_count(const rinpdf_document *d,size_t *count){
  if(!d||!count)return RINPDF_INVALID_ARGUMENT;
- size_t result=0;
- if(!rinpdf::parser::count_page_tree(d->data(),d->size(),result))return RINPDF_UNSUPPORTED;
- *count=result;return RINPDF_OK;
+ std::call_once(d->page_count_once,[d]{
+  size_t result=0;
+  d->page_count_valid=rinpdf::parser::count_page_tree(d->data(),d->size(),result);
+  if(d->page_count_valid)d->cached_page_count=result;
+ });
+ if(!d->page_count_valid)return RINPDF_UNSUPPORTED;
+ *count=d->cached_page_count;return RINPDF_OK;
 }
 
 extern "C" rinpdf_status rinpdf_document_page_geometry(
@@ -149,7 +157,7 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
  if(!doc||!rgba||width==0||height==0||width>16384||height>16384||stride<(size_t)width*4)return RINPDF_INVALID_ARGUMENT;
  if((size_t)width*height>16777216)return RINPDF_UNSUPPORTED;
  size_t pages=0;
- if(!rinpdf::parser::count_page_tree(doc->data(),doc->size(),pages))return RINPDF_UNSUPPORTED;
+ if(rinpdf_document_page_count(doc,&pages)!=RINPDF_OK)return RINPDF_UNSUPPORTED;
  if(index>=pages)return RINPDF_INVALID_ARGUMENT;
  try{
   std::vector<uint8_t> contents;
