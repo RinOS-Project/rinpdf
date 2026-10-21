@@ -76,6 +76,7 @@ bool encode(const V& v,std::string& s,unsigned depth=0){
 }
 struct Input{
  const uint8_t* bytes=nullptr;size_t length=0,offset=0,max_id=0,root_pages=0,page_count=0;
+ V page_root_reference;
  std::vector<rinpdf::parser::XrefEntry> xref;
  std::vector<rinpdf::parser::XrefStreamEntry> compressed;
  std::vector<std::string> objects;
@@ -189,6 +190,7 @@ bool index_for_direct(Input& doc){
  const V* pages=field(catalog,"Pages");
  if(!pages||pages->kind!=K::Reference||pages->integer<=0)return false;
  doc.root_pages=(size_t)pages->integer;
+ doc.page_root_reference=*pages;
  for(const auto& e:doc.xref){
   if(e.object>100000)return false;
   doc.max_id=std::max(doc.max_id,e.object);
@@ -471,18 +473,8 @@ rinpdf_status compose_selected_pdf_bytes(
    if(!index_for_direct(doc))return RINPDF_UNSUPPORTED;
    if(doc.max_id>=1000000-next)return RINPDF_UNSUPPORTED;
    next+=doc.max_id;
-   V trailer;
-   std::vector<rinpdf::parser::XrefEntry> ordinary;
-   std::vector<rinpdf::parser::XrefStreamEntry> compressed;
-   if(!rinpdf::parser::read_object_xref(bytes[i],lengths[i],ordinary,compressed,trailer))
-    return RINPDF_UNSUPPORTED;
-   const V* catalog_ref=field(trailer,"Root");
-   V catalog;
-   if(!catalog_ref||!rinpdf::parser::resolve_reference_value(bytes[i],lengths[i],
-      ordinary,compressed,*catalog_ref,catalog))return RINPDF_UNSUPPORTED;
-   const V* page_root=field(catalog,"Pages");
    std::vector<size_t> active;
-   if(!page_root||!collect_page_leaves(doc,*page_root,{},leaves[i],active))
+   if(!collect_page_leaves(doc,doc.page_root_reference,{},leaves[i],active))
     return RINPDF_UNSUPPORTED;
   }
   if(count>1000000-next)return RINPDF_UNSUPPORTED;
