@@ -419,8 +419,8 @@ extern "C" rinpdf_status rinpdf_merge_documents_lossless_memory(
   buffers.reserve(count);lengths.reserve(count);
   for(size_t i=0;i<count;++i){
    if(!documents[i])return RINPDF_INVALID_ARGUMENT;
-   buffers.push_back(documents[i]->bytes.data());
-   lengths.push_back(documents[i]->bytes.size());
+   buffers.push_back(documents[i]->data());
+   lengths.push_back(documents[i]->size());
   }
   return rinpdf::merge_original_pdf_bytes(buffers.data(),lengths.data(),count,data,size);
  }catch(const std::bad_alloc&){return RINPDF_OUT_OF_MEMORY;}
@@ -541,7 +541,7 @@ extern "C" rinpdf_status rinpdf_compose_pages_direct_file(
    size_t id=(size_t)(it-documents.begin());
    if(it==documents.end()){
     if(documents.size()>=128)return RINPDF_UNSUPPORTED;
-    const auto& bytes=pages[i].document->bytes;
+    const std::span<const uint8_t> bytes(pages[i].document->data(),pages[i].document->size());
     documents.push_back(pages[i].document);
     buffers.push_back(bytes.data());lengths.push_back(bytes.size());
    }
