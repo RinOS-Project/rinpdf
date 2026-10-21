@@ -22,6 +22,7 @@
 #include <span>
 #include <mutex>
 #include <atomic>
+#include <cstdint>
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -37,23 +38,24 @@ template<class T>
 struct PageLru {
  std::map<size_t,std::shared_ptr<const T>> entries;
  std::map<size_t,size_t> ages;
- size_t clock=0;
+ std::atomic<uint64_t>* shared_clock=nullptr;
+ uint64_t tick(){return shared_clock?shared_clock->fetch_add(1,std::memory_order_relaxed)+1:0;}
  std::shared_ptr<const T> find(size_t page) {
   auto it=entries.find(page);
   if(it==entries.end())return {};
-  ages[page]=++clock;
+  ages[page]=tick();
   return it->second;
  }
  std::shared_ptr<const T> insert(size_t page,std::shared_ptr<const T> value,size_t limit){
   auto it=entries.find(page);
-  if(it!=entries.end()){ages[page]=++clock;return it->second;}
+  if(it!=entries.end()){ages[page]=tick();return it->second;}
   if(entries.size()>=limit && !ages.empty()){
    auto oldest=std::min_element(ages.begin(),ages.end(),
     [](const auto& a,const auto& b){return a.second<b.second;});
    entries.erase(oldest->first);ages.erase(oldest);
   }
   entries.emplace(page,value);
-  ages[page]=++clock;
+  ages[page]=tick();
   return value;
  }
 };
@@ -73,6 +75,7 @@ struct rinpdf_document {
  mutable size_t cached_page_count=0;
  mutable bool page_count_valid=false;
  mutable size_t render_cache_budget=64*1024*1024;
+ mutable std::atomic<uint64_t> global_cache_clock{0};
  mutable std::atomic<uint64_t> cache_hits{0};
  mutable std::atomic<uint64_t> cache_misses{0};
  mutable std::atomic<uint64_t> cache_evictions{0};
@@ -93,9 +96,16 @@ struct rinpdf_document {
  mutable size_t content_cache_bytes=0;
  mutable size_t content_cache_budget=16*1024*1024;
  mutable std::map<size_t,size_t> content_access;
- mutable size_t content_clock=0;
+
  mutable std::mutex geometry_mutex;
  mutable std::map<size_t,rinpdf_page_geometry> geometry_cache;
+ rinpdf_document(){
+  property_cache.shared_clock=&global_cache_clock;
+  form_cache.shared_clock=&global_cache_clock;
+  graphics_cache.shared_clock=&global_cache_clock;
+  image_cache.shared_clock=&global_cache_clock;
+  font_cache.shared_clock=&global_cache_clock;
+ }
  const uint8_t* data() const {return mapped?mapped:bytes.data();}
  size_t size() const {return mapped?mapped_size:bytes.size();}
  ~rinpdf_document(){
@@ -275,36 +285,42 @@ size_t render_cache_estimate_locked(const rinpdf_document& d){
  return bytes;
 }
 bool trim_one_locked(rinpdf_document& d){
- // Each cache is independently age-ranked. Prioritize entries from expensive
- // caches, then evict from smaller metadata caches if still over budget.
- auto trim=[&](auto& cache)->bool{
-  if(cache.ages.empty())return false;
-  auto it=std::min_element(cache.ages.begin(),cache.ages.end(),
-    [](const auto& a,const auto& b){return a.second<b.second;});
-  cache.entries.erase(it->first);cache.ages.erase(it);
-  d.cache_evictions.fetch_add(1,std::memory_order_relaxed);return true;
+ // Compare the oldest access timestamps from every resource category.
+ uint64_t oldest=UINT64_MAX;
+ int category=-1;
+ auto inspect=[&](const auto& ages,int kind){
+  for(const auto& [page,stamp]:ages)
+   if(stamp<oldest){oldest=stamp;category=kind;}
  };
- if(trim(d.image_cache))return true;
- if(trim(d.form_cache))return true;
- if(trim(d.font_cache))return true;
- if(!d.content_access.empty()){
+ inspect(d.content_access,0);
+ inspect(d.font_cache.ages,1);
+ inspect(d.image_cache.ages,2);
+ inspect(d.form_cache.ages,3);
+ inspect(d.graphics_cache.ages,4);
+ inspect(d.property_cache.ages,5);
+ if(category<0)return false;
+ auto erase_oldest=[&](auto& cache){
+  auto it=std::min_element(cache.ages.begin(),cache.ages.end(),
+   [](const auto& a,const auto& b){return a.second<b.second;});
+  if(it==cache.ages.end())return;
+  cache.entries.erase(it->first);cache.ages.erase(it);
+ };
+ if(category==0){
   auto it=std::min_element(d.content_access.begin(),d.content_access.end(),
-    [](const auto& a,const auto& b){return a.second<b.second;});
-  auto cached=d.content_cache.find(it->first);
-  if(cached!=d.content_cache.end()){
-   d.content_cache_bytes-=cached->second->size();
-   d.content_cache.erase(cached);
+   [](const auto& a,const auto& b){return a.second<b.second;});
+  auto entry=d.content_cache.find(it->first);
+  if(entry!=d.content_cache.end()){
+   d.content_cache_bytes-=entry->second->size();
+   d.content_cache.erase(entry);
   }
   d.content_access.erase(it);
-  d.cache_evictions.fetch_add(1,std::memory_order_relaxed);return true;
- }
- if(trim(d.graphics_cache))return true;
- if(trim(d.property_cache))return true;
- if(!d.geometry_cache.empty()){
-  d.geometry_cache.erase(d.geometry_cache.begin());
-  d.cache_evictions.fetch_add(1,std::memory_order_relaxed);return true;
- }
- return false;
+ }else if(category==1)erase_oldest(d.font_cache);
+ else if(category==2)erase_oldest(d.image_cache);
+ else if(category==3)erase_oldest(d.form_cache);
+ else if(category==4)erase_oldest(d.graphics_cache);
+ else erase_oldest(d.property_cache);
+ d.cache_evictions.fetch_add(1,std::memory_order_relaxed);
+ return true;
 }
 size_t trim_locked(rinpdf_document& d,size_t target){
  size_t current=render_cache_estimate_locked(d);
@@ -456,7 +472,7 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
    if(it!=doc->content_cache.end()){
     contents=it->second;
     doc->cache_hits.fetch_add(1,std::memory_order_relaxed);
-    doc->content_access[index]=++doc->content_clock;
+    doc->content_access[index]=doc->global_cache_clock.fetch_add(1,std::memory_order_relaxed)+1;
    }
   }
   if(!contents){
@@ -471,7 +487,7 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
     auto existing=doc->content_cache.find(index);
     if(existing!=doc->content_cache.end()){
      contents=existing->second;
-     doc->content_access[index]=++doc->content_clock;
+     doc->content_access[index]=doc->global_cache_clock.fetch_add(1,std::memory_order_relaxed)+1;
     }else{
      while((doc->content_cache.size()>=64 ||
            doc->content_cache_bytes>doc->content_cache_budget-decoded->size()) &&
@@ -488,7 +504,7 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
       doc->content_access.erase(oldest);
      }
      doc->content_cache.emplace(index,decoded);
-     doc->content_access[index]=++doc->content_clock;
+     doc->content_access[index]=doc->global_cache_clock.fetch_add(1,std::memory_order_relaxed)+1;
      doc->content_cache_bytes+=decoded->size();
     }
     }
