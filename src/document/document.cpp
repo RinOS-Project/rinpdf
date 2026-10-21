@@ -439,8 +439,9 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
    if(!rinpdf::parser::read_page_contents(doc->data(),doc->size(),index,*decoded))
     return RINPDF_UNSUPPORTED;
    contents=decoded;
-   if(decoded->size()<=4*1024*1024 && decoded->size()<=doc->content_cache_budget){
+   if(decoded->size()<=4*1024*1024){
     std::lock_guard<std::mutex> guard(doc->content_mutex);
+    if(decoded->size()<=doc->content_cache_budget){
     auto existing=doc->content_cache.find(index);
     if(existing!=doc->content_cache.end()){
      contents=existing->second;
@@ -463,6 +464,7 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
      doc->content_cache.emplace(index,decoded);
      doc->content_access[index]=++doc->content_clock;
      doc->content_cache_bytes+=decoded->size();
+    }
     }
    }
   }
