@@ -154,7 +154,13 @@ extern "C" rinpdf_status rinpdf_document_page_count(const rinpdf_document *d,siz
  if(!d||!count)return RINPDF_INVALID_ARGUMENT;
  std::call_once(d->page_count_once,[d]{
   size_t result=0;
-  d->page_count_valid=rinpdf::parser::count_page_tree(d->data(),d->size(),result);
+  std::call_once(d->xref_once,[d]{
+   d->xref_valid=rinpdf::parser::read_object_xref(d->data(),d->size(),
+    d->cached_xref,d->cached_compressed,d->cached_trailer);
+  });
+  d->page_count_valid=d->xref_valid &&
+   rinpdf::parser::count_page_tree_indexed(d->data(),d->size(),
+    d->cached_xref,d->cached_compressed,d->cached_trailer,result);
   if(d->page_count_valid)d->cached_page_count=result;
  });
  if(!d->page_count_valid)return RINPDF_UNSUPPORTED;
