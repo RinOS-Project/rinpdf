@@ -52,6 +52,20 @@ typedef struct rinpdf_cache_metrics {
 rinpdf_status rinpdf_document_cache_metrics(const rinpdf_document *doc,
  rinpdf_cache_metrics *metrics);
 rinpdf_status rinpdf_document_reset_cache_metrics(rinpdf_document *doc);
+/* Cumulative monotonic timing for completed render phases, in nanoseconds.
+ * Preparation includes waiting for the per-page lock and resource resolution.
+ * Raster includes software rendering and output rotation/copy.
+ * Calls are counted on successful completion of each phase.
+ */
+typedef struct rinpdf_render_timings {
+ uint64_t preparation_ns;
+ uint64_t raster_ns;
+ uint64_t prepared_calls;
+ uint64_t rendered_calls;
+} rinpdf_render_timings;
+rinpdf_status rinpdf_document_render_timings(const rinpdf_document *doc,
+ rinpdf_render_timings *timings);
+rinpdf_status rinpdf_document_reset_render_timings(rinpdf_document *doc);
 #ifdef __cplusplus
 }
 #endif
