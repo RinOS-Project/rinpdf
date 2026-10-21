@@ -47,6 +47,10 @@ struct rinpdf_document {
  mutable std::once_flag page_count_once;
  mutable size_t cached_page_count=0;
  mutable bool page_count_valid=false;
+ mutable std::mutex form_mutex;
+ mutable std::map<size_t,std::shared_ptr<const rinpdf::renderer::FormResources>> form_cache;
+ mutable std::mutex graphics_mutex;
+ mutable std::map<size_t,std::shared_ptr<const rinpdf::parser::PageGraphicsStates>> graphics_cache;
  mutable std::mutex image_mutex;
  mutable std::map<size_t,std::shared_ptr<const rinpdf::renderer::ImageResources>> image_cache;
  mutable std::mutex font_mutex;
@@ -300,17 +304,50 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
     }
    }
   }
-  rinpdf::renderer::FormResources forms;
-  if(!rinpdf::parser::read_page_forms(doc->data(),
-       doc->size(),index,forms))return RINPDF_UNSUPPORTED;
-  rinpdf::parser::PageGraphicsStates graphic_states;
-  if(!rinpdf::parser::read_page_graphics_states(doc->data(),
-       doc->size(),index,graphic_states))return RINPDF_UNSUPPORTED;
+  std::shared_ptr<const rinpdf::renderer::FormResources> forms;
+  {
+   std::lock_guard<std::mutex> lock(doc->form_mutex);
+   auto it=doc->form_cache.find(index);
+   if(it!=doc->form_cache.end())forms=it->second;
+  }
+  if(!forms){
+   auto decoded=std::make_shared<rinpdf::renderer::FormResources>();
+   if(!rinpdf::parser::read_page_forms(doc->data(),doc->size(),index,*decoded))
+    return RINPDF_UNSUPPORTED;
+   forms=decoded;
+   // Bound the number of cached form trees; large forms remain transient.
+   size_t content_bytes=0;
+   for(const auto& [name,form]:*decoded)content_bytes+=form.content.size();
+   if(content_bytes<=4*1024*1024){
+    std::lock_guard<std::mutex> lock(doc->form_mutex);
+    if(doc->form_cache.size()<16){
+     auto [it,inserted]=doc->form_cache.emplace(index,decoded);
+     forms=it->second;
+    }
+   }
+  }
+  std::shared_ptr<const rinpdf::parser::PageGraphicsStates> graphic_states;
+  {
+   std::lock_guard<std::mutex> lock(doc->graphics_mutex);
+   auto it=doc->graphics_cache.find(index);
+   if(it!=doc->graphics_cache.end())graphic_states=it->second;
+  }
+  if(!graphic_states){
+   auto decoded=std::make_shared<rinpdf::parser::PageGraphicsStates>();
+   if(!rinpdf::parser::read_page_graphics_states(doc->data(),doc->size(),index,*decoded))
+    return RINPDF_UNSUPPORTED;
+   graphic_states=decoded;
+   std::lock_guard<std::mutex> lock(doc->graphics_mutex);
+   if(doc->graphics_cache.size()<128){
+    auto [it,inserted]=doc->graphics_cache.emplace(index,decoded);
+    graphic_states=it->second;
+   }
+  }
   const unsigned rotation=box.rotation;
   const unsigned source_width=(rotation==90||rotation==270)?height:width;
   const unsigned source_height=(rotation==90||rotation==270)?width:height;
   std::vector<uint8_t> temporary((size_t)width*height*4);
-  if(!rinpdf::renderer::render_rectangles_box_with_fonts(contents->data(),contents->size(),source_width,source_height,temporary.data(),(size_t)source_width*4,{box.x0,box.y0,box.x1,box.y1},*fonts,properties,*images,forms,true,0,graphic_states))return RINPDF_UNSUPPORTED;
+  if(!rinpdf::renderer::render_rectangles_box_with_fonts(contents->data(),contents->size(),source_width,source_height,temporary.data(),(size_t)source_width*4,{box.x0,box.y0,box.x1,box.y1},*fonts,properties,*images,*forms,true,0,*graphic_states))return RINPDF_UNSUPPORTED;
   for(unsigned y=0;y<height;++y){
    for(unsigned x=0;x<width;++x){
     unsigned sx=x,sy=y;
