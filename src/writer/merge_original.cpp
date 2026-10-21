@@ -203,10 +203,13 @@ bool prepare(Input& doc){
   if(!rebase(value,doc.offset,doc.generations))return false;
   // Parent of the source root points to the new merged Pages node.
   if(entry.object==doc.root_pages){
+   // The imported Pages root is attached to our new Pages dictionary.
+   // Its synthetic Parent is *not* an input-document reference.
+   value.dictionary.erase("Parent");
+   gather_refs(value,doc.offset,doc.dependencies[entry.object]);
    V parent;parent.kind=K::Reference;parent.integer=2;
    value.dictionary["Parent"]=parent;
-  }
-  gather_refs(value,doc.offset,doc.dependencies[entry.object]);
+  }else gather_refs(value,doc.offset,doc.dependencies[entry.object]);
   std::string serialized;
   if(!encode(value,serialized))return false;
   doc.objects[entry.object]=std::move(serialized)+tail;
@@ -220,10 +223,11 @@ bool prepare(Input& doc){
   if(!rebase(value,doc.offset,doc.generations))return false;
   if(entry.object==doc.root_pages){
    if(value.kind!=K::Dictionary||!named(field(value,"Type"),"Pages"))return false;
+   value.dictionary.erase("Parent");
+   gather_refs(value,doc.offset,doc.dependencies[entry.object]);
    V parent;parent.kind=K::Reference;parent.integer=2;
    value.dictionary["Parent"]=parent;
-  }
-  gather_refs(value,doc.offset,doc.dependencies[entry.object]);
+  }else gather_refs(value,doc.offset,doc.dependencies[entry.object]);
   std::string serialized;
   if(!encode(value,serialized))return false;
   doc.objects[entry.object]=std::move(serialized);
