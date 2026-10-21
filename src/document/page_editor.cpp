@@ -299,54 +299,15 @@ extern "C" rinpdf_status rinpdf_page_editor_keep_indices(
   return RINPDF_OK;
  }catch(const std::bad_alloc&){return RINPDF_OUT_OF_MEMORY;}
 }
+extern "C" rinpdf_status rinpdf_compose_pages_direct_memory(
+ const rinpdf_page_source*,const rinpdf_page_box_override*,size_t,uint8_t**,size_t*);
 extern "C" rinpdf_status rinpdf_page_editor_export_memory(const rinpdf_page_editor* editor,
  uint8_t** data,size_t* size){
  if(!data||!size)return RINPDF_INVALID_ARGUMENT;
  *data=nullptr;*size=0;
  if(!editor||editor->pages.empty())return RINPDF_INVALID_ARGUMENT;
- try{
-  struct FreePdf{void operator()(uint8_t* p)const{rinpdf_free_buffer(p);}};
-  // A single source document can be exported directly: no intermediate
-  // PDF, no second parse and no second serialization pass.
-  const rinpdf_document* first_document=editor->pages.front().document;
-  bool single_source=true;
-  for(const auto& page:editor->pages)
-   if(page.document!=first_document){single_source=false;break;}
-  if(single_source){
-   std::vector<size_t> indices;
-   indices.reserve(editor->pages.size());
-   for(const auto& page:editor->pages)indices.push_back(page.page_index);
-   return rinpdf_export_pages_with_boxes_memory(first_document,
-      indices.data(),editor->geometry.data(),indices.size(),data,size);
-  }
-  std::vector<std::unique_ptr<uint8_t,FreePdf>> owned;
-  std::vector<const uint8_t*> buffers;
-  std::vector<size_t> lengths;
-  owned.reserve(128);buffers.reserve(128);lengths.reserve(128);
-  size_t first=0;
-  while(first<editor->pages.size()){
-   const rinpdf_document* doc=editor->pages[first].document;
-   size_t end=first+1;
-   while(end<editor->pages.size()&&editor->pages[end].document==doc)++end;
-   if(owned.size()>=128)return RINPDF_UNSUPPORTED;
-   std::vector<size_t> indices;
-   std::vector<rinpdf_page_box_override> overrides;
-   indices.reserve(end-first);overrides.reserve(end-first);
-   for(size_t i=first;i<end;++i){
-    indices.push_back(editor->pages[i].page_index);
-    overrides.push_back(editor->geometry[i]);
-   }
-   uint8_t* bytes=nullptr;size_t length=0;
-   auto status=rinpdf_export_pages_with_boxes_memory(doc,indices.data(),
-      overrides.data(),indices.size(),&bytes,&length);
-   if(status!=RINPDF_OK)return status;
-   owned.emplace_back(bytes);
-   buffers.push_back(bytes);lengths.push_back(length);
-   first=end;
-  }
-  return rinpdf::merge_original_pdf_bytes(buffers.data(),lengths.data(),
-                                          buffers.size(),data,size);
- }catch(const std::bad_alloc&){return RINPDF_OUT_OF_MEMORY;}
+ return rinpdf_compose_pages_direct_memory(editor->pages.data(),
+  editor->geometry.data(),editor->pages.size(),data,size);
 }
 extern "C" rinpdf_status rinpdf_page_editor_export_file(const rinpdf_page_editor* editor,
  const char* path){
