@@ -34,6 +34,13 @@ typedef struct rinpdf_render_cache_counts {
 } rinpdf_render_cache_counts;
 rinpdf_status rinpdf_document_render_cache_counts(const rinpdf_document *doc,
  rinpdf_render_cache_counts *counts);
+/* Approximate resident decoded-render cache budget. Does not include source
+ * mappings, parser indexes, container overhead or in-flight render references.
+ */
+rinpdf_status rinpdf_document_set_render_cache_budget(rinpdf_document *doc,size_t bytes);
+rinpdf_status rinpdf_document_render_cache_usage(const rinpdf_document *doc,
+ size_t *estimated_bytes,size_t *budget_bytes);
+rinpdf_status rinpdf_document_trim_render_caches(rinpdf_document *doc,size_t target_bytes);
 #ifdef __cplusplus
 }
 #endif
