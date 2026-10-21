@@ -37,6 +37,11 @@ struct rinpdf_document {
  const uint8_t* mapped=nullptr;
  size_t mapped_size=0;
  unsigned major=0,minor=0;
+ mutable std::once_flag xref_once;
+ mutable bool xref_valid=false;
+ mutable std::vector<rinpdf::parser::XrefEntry> cached_xref;
+ mutable std::vector<rinpdf::parser::XrefStreamEntry> cached_compressed;
+ mutable rinpdf::parser::Value cached_trailer;
  mutable std::once_flag page_count_once;
  mutable size_t cached_page_count=0;
  mutable bool page_count_valid=false;
@@ -129,6 +134,21 @@ extern "C" void rinpdf_document_close(rinpdf_document *d){delete d;}
 extern "C" rinpdf_status rinpdf_document_version(const rinpdf_document *d,unsigned *major,unsigned *minor){
  if(!d||!major||!minor)return RINPDF_INVALID_ARGUMENT;
  *major=d->major;*minor=d->minor;return RINPDF_OK;
+}
+extern "C" rinpdf_status rinpdf_document_xref_statistics(
+ const rinpdf_document* doc,size_t* ordinary,size_t* compressed){
+ if(!doc||!ordinary||!compressed)return RINPDF_INVALID_ARGUMENT;
+ try{
+  std::call_once(doc->xref_once,[doc]{
+   doc->xref_valid=rinpdf::parser::read_object_xref(doc->data(),doc->size(),
+    doc->cached_xref,doc->cached_compressed,doc->cached_trailer);
+  });
+  if(!doc->xref_valid)return RINPDF_UNSUPPORTED;
+  *ordinary=0;*compressed=0;
+  for(const auto& item:doc->cached_xref)if(item.in_use)++*ordinary;
+  for(const auto& item:doc->cached_compressed)if(item.type==2)++*compressed;
+  return RINPDF_OK;
+ }catch(const std::bad_alloc&){return RINPDF_OUT_OF_MEMORY;}
 }
 extern "C" rinpdf_status rinpdf_document_page_count(const rinpdf_document *d,size_t *count){
  if(!d||!count)return RINPDF_INVALID_ARGUMENT;
