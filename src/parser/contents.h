@@ -11,12 +11,20 @@ namespace rinpdf::parser {
 // Scoped per-thread view of an immutable document xref cache. The scope
 // never outlives the owning document and is restored after nested calls.
 class ScopedPageXref {
- const void* previous_;
+ const ScopedPageXref* previous_;
+ const uint8_t* data_;
+ size_t size_;
+ const std::vector<XrefEntry>* entries_;
+ const std::vector<XrefStreamEntry>* compressed_;
+ const Value* trailer_;
 public:
  ScopedPageXref(const uint8_t* data,size_t size,
   const std::vector<XrefEntry>& entries,
   const std::vector<XrefStreamEntry>& compressed,const Value& trailer);
  ~ScopedPageXref();
+ static bool read(const uint8_t* data,size_t size,
+  std::vector<XrefEntry>& entries,
+  std::vector<XrefStreamEntry>& compressed,Value& trailer);
  ScopedPageXref(const ScopedPageXref&)=delete;
  ScopedPageXref& operator=(const ScopedPageXref&)=delete;
 };
