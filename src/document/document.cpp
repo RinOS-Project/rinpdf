@@ -209,6 +209,20 @@ extern "C" rinpdf_status rinpdf_document_clear_content_cache(rinpdf_document* do
  doc->content_cache_bytes=0;
  return RINPDF_OK;
 }
+extern "C" rinpdf_status rinpdf_document_render_cache_counts(
+ const rinpdf_document* doc,rinpdf_render_cache_counts* counts){
+ if(!doc||!counts)return RINPDF_INVALID_ARGUMENT;
+ std::scoped_lock lock(doc->content_mutex,doc->font_mutex,doc->image_mutex,
+  doc->form_mutex,doc->graphics_mutex,doc->property_mutex,doc->geometry_mutex);
+ counts->content_pages=doc->content_cache.size();
+ counts->font_pages=doc->font_cache.entries.size();
+ counts->image_pages=doc->image_cache.entries.size();
+ counts->form_pages=doc->form_cache.entries.size();
+ counts->graphics_pages=doc->graphics_cache.entries.size();
+ counts->property_pages=doc->property_cache.entries.size();
+ counts->geometry_pages=doc->geometry_cache.size();
+ return RINPDF_OK;
+}
 extern "C" rinpdf_status rinpdf_document_clear_render_caches(rinpdf_document* doc){
  if(!doc)return RINPDF_INVALID_ARGUMENT;
  // All cached resources use shared ownership so ongoing renders remain valid.
