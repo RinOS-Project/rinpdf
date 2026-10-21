@@ -17,6 +17,9 @@
 #include <cmath>
 #include <cstdlib>
 #include <memory>
+#ifndef _WIN32
+#include <unistd.h>
+#endif
 struct rinpdf_document { std::vector<uint8_t> bytes; unsigned major,minor; };
 extern "C" rinpdf_status rinpdf_document_open_memory(const uint8_t *data,size_t size,rinpdf_document **out) {
  if(!out) return RINPDF_INVALID_ARGUMENT;
@@ -494,13 +497,31 @@ extern "C" rinpdf_status rinpdf_compose_pages_direct_file(
    }
    document_ids.push_back(id);page_ids.push_back(pages[i].page_index);
   }
+#ifndef _WIN32
+  // Create the temporary file in the destination directory for an atomic
+  // same-filesystem rename. Never truncate the existing destination first.
+  std::string temporary=std::string(path)+".rinpdf-XXXXXX";
+  std::vector<char> name(temporary.begin(),temporary.end());
+  name.push_back('\0');
+  int fd=mkstemp(name.data());
+  if(fd<0)return RINPDF_IO_ERROR;
+  FILE* file=fdopen(fd,"wb");
+  if(!file){close(fd);std::remove(name.data());return RINPDF_IO_ERROR;}
+#else
+  // Windows uses the existing direct-write path until an equivalent
+  // exclusive temporary-file backend is available.
   FILE* file=std::fopen(path,"wb");
   if(!file)return RINPDF_IO_ERROR;
+#endif
   uint8_t* unused=nullptr;size_t unused_size=0;
   auto result=rinpdf::compose_selected_pdf_stream(
    buffers.data(),lengths.data(),buffers.size(),
    document_ids.data(),page_ids.data(),geometry,count,file,&unused,&unused_size);
   if(std::fclose(file)!=0)result=RINPDF_IO_ERROR;
+#ifndef _WIN32
+  if(result==RINPDF_OK && std::rename(name.data(),path)!=0)result=RINPDF_IO_ERROR;
+  if(result!=RINPDF_OK)std::remove(name.data());
+#endif
   return result;
  }catch(const std::bad_alloc&){return RINPDF_OUT_OF_MEMORY;}
 }
