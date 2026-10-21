@@ -81,6 +81,8 @@ struct Input{
  std::vector<std::string> objects;
  std::vector<V> values;
  std::vector<std::string> tails;
+ std::vector<size_t> stream_starts;
+ std::vector<size_t> stream_lengths;
  std::vector<bool> present;
  std::vector<int> generations;
  std::vector<std::vector<size_t>> dependencies;
@@ -201,6 +203,8 @@ bool prepare(Input& doc,bool serialize_objects=true,bool walk_full_tree=true){
  doc.objects.resize(doc.max_id+1);
  doc.values.resize(doc.max_id+1);
  doc.tails.resize(doc.max_id+1);
+ doc.stream_starts.assign(doc.max_id+1,0);
+ doc.stream_lengths.assign(doc.max_id+1,0);
  doc.present.assign(doc.max_id+1,false);
  doc.generations.assign(doc.max_id+1,-1);
  doc.dependencies.resize(doc.max_id+1);
@@ -259,9 +263,14 @@ bool prepare(Input& doc,bool serialize_objects=true,bool walk_full_tree=true){
    rinpdf::parser::Lexer ending(doc.bytes+p,limit-p);
    auto endobj=ending.next();
    if(endobj.kind!=rinpdf::parser::TokenKind::Keyword||endobj.value!="endobj")return false;
-   tail=" \nstream\n";
-   tail.append((const char*)doc.bytes+start,n);
-   tail+="\nendstream";
+   if(!serialize_objects){
+    doc.stream_starts[entry.object]=start;
+    doc.stream_lengths[entry.object]=n;
+   }else{
+    tail=" \nstream\n";
+    tail.append((const char*)doc.bytes+start,n);
+    tail+="\nendstream";
+   }
   }else if(token.kind!=rinpdf::parser::TokenKind::Keyword||token.value!="endobj")
    return false;
   if(entry.object==doc.root_pages){
@@ -427,7 +436,13 @@ rinpdf_status compose_selected_pdf_bytes(
     }
     std::string serialized;
     if(!encode(value,serialized))return RINPDF_UNSUPPORTED;
-    add(mapping.at(id+doc.offset),serialized+doc.tails[id]);
+    if(doc.stream_starts[id]){
+     const size_t object_id=mapping.at(id+doc.offset);
+     positions[object_id]=pdf.size();
+     pdf+=std::to_string(object_id)+" 0 obj\n"+serialized+"\nstream\n";
+     pdf.append((const char*)doc.bytes+doc.stream_starts[id],doc.stream_lengths[id]);
+     pdf+="\nendstream\nendobj\n";
+    }else add(mapping.at(id+doc.offset),serialized+doc.tails[id]);
    }
   for(size_t i=0;i<count;++i){
    V page=selected[i];
