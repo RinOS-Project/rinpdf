@@ -71,6 +71,7 @@ struct rinpdf_document {
  mutable std::once_flag page_count_once;
  mutable size_t cached_page_count=0;
  mutable bool page_count_valid=false;
+ mutable size_t render_cache_budget=64*1024*1024;
  mutable std::mutex page_lock_mutex;
  mutable std::map<size_t,std::shared_ptr<std::mutex>> page_locks;
  mutable std::mutex property_mutex;
@@ -240,6 +241,94 @@ extern "C" rinpdf_status rinpdf_document_clear_render_caches(rinpdf_document* do
  return RINPDF_OK;
 }
 
+namespace {
+size_t render_cache_estimate_locked(const rinpdf_document& d){
+ size_t bytes=d.content_cache_bytes;
+ for(const auto& [page,fonts]:d.font_cache.entries){
+  bytes+=sizeof(*fonts);
+  for(const auto& [name,font]:*fonts)
+   bytes+=name.size()+sizeof(font)+font.embedded_truetype.size();
+ }
+ for(const auto& [page,images]:d.image_cache.entries){
+  bytes+=sizeof(*images);
+  for(const auto& [name,image]:*images)
+   bytes+=name.size()+sizeof(image)+image.pixels.size()+
+     image.alpha.size()+image.cmyk_pixels.size();
+ }
+ for(const auto& [page,forms]:d.form_cache.entries){
+  bytes+=sizeof(*forms);
+  for(const auto& [name,form]:*forms)
+   bytes+=name.size()+sizeof(form)+form.content.size();
+ }
+ for(const auto& [page,graphics]:d.graphics_cache.entries)
+  bytes+=sizeof(*graphics)+graphics->size()*128;
+ for(const auto& [page,properties]:d.property_cache.entries){
+  bytes+=sizeof(*properties);
+  for(const auto& [key,value]:*properties)
+   bytes+=key.size()+sizeof(value)+value.language.size()+value.actual_text.size();
+ }
+ bytes+=d.geometry_cache.size()*sizeof(rinpdf_page_geometry);
+ return bytes;
+}
+bool trim_one_locked(rinpdf_document& d){
+ // Each cache is independently age-ranked. Prioritize entries from expensive
+ // caches, then evict from smaller metadata caches if still over budget.
+ auto trim=[&](auto& cache)->bool{
+  if(cache.ages.empty())return false;
+  auto it=std::min_element(cache.ages.begin(),cache.ages.end(),
+    [](const auto& a,const auto& b){return a.second<b.second;});
+  cache.entries.erase(it->first);cache.ages.erase(it);return true;
+ };
+ if(trim(d.image_cache))return true;
+ if(trim(d.form_cache))return true;
+ if(trim(d.font_cache))return true;
+ if(!d.content_access.empty()){
+  auto it=std::min_element(d.content_access.begin(),d.content_access.end(),
+    [](const auto& a,const auto& b){return a.second<b.second;});
+  auto cached=d.content_cache.find(it->first);
+  if(cached!=d.content_cache.end()){
+   d.content_cache_bytes-=cached->second->size();
+   d.content_cache.erase(cached);
+  }
+  d.content_access.erase(it);return true;
+ }
+ if(trim(d.graphics_cache))return true;
+ if(trim(d.property_cache))return true;
+ if(!d.geometry_cache.empty()){d.geometry_cache.erase(d.geometry_cache.begin());return true;}
+ return false;
+}
+size_t trim_locked(rinpdf_document& d,size_t target){
+ size_t current=render_cache_estimate_locked(d);
+ while(current>target&&trim_one_locked(d))
+  current=render_cache_estimate_locked(d);
+ return current;
+}
+}
+extern "C" rinpdf_status rinpdf_document_set_render_cache_budget(
+ rinpdf_document* doc,size_t budget){
+ if(!doc)return RINPDF_INVALID_ARGUMENT;
+ std::scoped_lock lock(doc->content_mutex,doc->font_mutex,doc->image_mutex,
+  doc->form_mutex,doc->graphics_mutex,doc->property_mutex,doc->geometry_mutex);
+ doc->render_cache_budget=budget;
+ trim_locked(*doc,budget);
+ return RINPDF_OK;
+}
+extern "C" rinpdf_status rinpdf_document_render_cache_usage(
+ const rinpdf_document* doc,size_t* used,size_t* budget){
+ if(!doc||!used||!budget)return RINPDF_INVALID_ARGUMENT;
+ std::scoped_lock lock(doc->content_mutex,doc->font_mutex,doc->image_mutex,
+  doc->form_mutex,doc->graphics_mutex,doc->property_mutex,doc->geometry_mutex);
+ *used=render_cache_estimate_locked(*doc);*budget=doc->render_cache_budget;
+ return RINPDF_OK;
+}
+extern "C" rinpdf_status rinpdf_document_trim_render_caches(
+ rinpdf_document* doc,size_t target){
+ if(!doc)return RINPDF_INVALID_ARGUMENT;
+ std::scoped_lock lock(doc->content_mutex,doc->font_mutex,doc->image_mutex,
+  doc->form_mutex,doc->graphics_mutex,doc->property_mutex,doc->geometry_mutex);
+ trim_locked(*doc,target);
+ return RINPDF_OK;
+}
 extern "C" rinpdf_status rinpdf_document_version(const rinpdf_document *d,unsigned *major,unsigned *minor){
  if(!d||!major||!minor)return RINPDF_INVALID_ARGUMENT;
  *major=d->major;*minor=d->minor;return RINPDF_OK;
@@ -471,6 +560,11 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
   }
   // Parsed resource handles remain alive via shared_ptr after this unlock.
   // Only first-time parsing is serialized; pixel rendering can run in parallel.
+  {
+   std::scoped_lock lock(doc->content_mutex,doc->font_mutex,doc->image_mutex,
+    doc->form_mutex,doc->graphics_mutex,doc->property_mutex,doc->geometry_mutex);
+   trim_locked(*doc,doc->render_cache_budget);
+  }
   page_guard.unlock();
   const unsigned rotation=box.rotation;
   const unsigned source_width=(rotation==90||rotation==270)?height:width;
