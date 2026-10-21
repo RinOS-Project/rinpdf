@@ -137,6 +137,15 @@ rinpdf_status rinpdf_page_editor_create(const rinpdf_document *document,
 void rinpdf_page_editor_close(rinpdf_page_editor *editor);
 rinpdf_status rinpdf_page_editor_set_geometry(rinpdf_page_editor *editor,
  size_t index,const rinpdf_page_box_override *geometry);
+rinpdf_status rinpdf_page_editor_get_geometry(const rinpdf_page_editor *editor,
+ size_t index,rinpdf_page_box_override *geometry);
+rinpdf_status rinpdf_page_editor_clear_geometry(rinpdf_page_editor *editor,
+ size_t index);
+/* Rotate clockwise in increments of 90 degrees; negative values rotate CCW. */
+rinpdf_status rinpdf_page_editor_rotate(rinpdf_page_editor *editor,
+ size_t index,int quarter_turns);
+rinpdf_status rinpdf_page_editor_swap(rinpdf_page_editor *editor,
+ size_t first,size_t second);
 rinpdf_status rinpdf_page_editor_page_count(const rinpdf_page_editor *editor,
  size_t *count);
 rinpdf_status rinpdf_page_editor_delete(rinpdf_page_editor *editor,size_t index);
