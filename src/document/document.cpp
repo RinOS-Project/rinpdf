@@ -289,6 +289,9 @@ extern "C" rinpdf_status rinpdf_export_pages_with_boxes_memory(
     };
     if(edit.set_media_box&&!set_box("MediaBox",edit.media_box))return RINPDF_INVALID_ARGUMENT;
     if(edit.set_crop_box&&!set_box("CropBox",edit.crop_box))return RINPDF_INVALID_ARGUMENT;
+    if(edit.set_trim_box&&!set_box("TrimBox",edit.trim_box))return RINPDF_INVALID_ARGUMENT;
+    if(edit.set_bleed_box&&!set_box("BleedBox",edit.bleed_box))return RINPDF_INVALID_ARGUMENT;
+    if(edit.set_art_box&&!set_box("ArtBox",edit.art_box))return RINPDF_INVALID_ARGUMENT;
    }
    serialized.clear();
    if(!pdf_serialize(page,serialized))return RINPDF_UNSUPPORTED;
