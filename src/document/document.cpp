@@ -23,6 +23,7 @@
 #include <mutex>
 #include <atomic>
 #include <chrono>
+#include <array>
 #include <cstdint>
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -84,8 +85,7 @@ struct rinpdf_document {
  mutable std::atomic<uint64_t> cache_hits{0};
  mutable std::atomic<uint64_t> cache_misses{0};
  mutable std::atomic<uint64_t> cache_evictions{0};
- mutable std::mutex page_lock_mutex;
- mutable std::map<size_t,std::shared_ptr<std::mutex>> page_locks;
+ mutable std::array<std::mutex,64> page_prepare_locks;
  mutable std::mutex property_mutex;
  mutable PageLru<rinpdf::parser::PageProperties> property_cache;
  mutable std::mutex form_mutex;
@@ -472,16 +472,11 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
  if(index>=pages)return RINPDF_INVALID_ARGUMENT;
  try{
   const auto prep_start=std::chrono::steady_clock::now();
-  std::shared_ptr<std::mutex> page_lock;
-  {
-   std::lock_guard<std::mutex> lock(doc->page_lock_mutex);
-   auto [it,inserted]=doc->page_locks.try_emplace(index);
-   if(inserted)it->second=std::make_shared<std::mutex>();
-   page_lock=it->second;
-  }
-  // Serialize preparation for the same page, preventing duplicate
-  // expensive resource decoding by concurrent first-time renders.
-  std::unique_lock<std::mutex> page_guard(*page_lock);
+  // Bounded striped synchronization: no per-page mutex allocations or
+  // unbounded lock table for documents with many distinct page indices.
+  // Hash collisions serialize preparation only, not rasterization.
+  std::unique_lock<std::mutex> page_guard(
+   doc->page_prepare_locks[index%doc->page_prepare_locks.size()]);
   size_t ordinary_objects=0,compressed_objects=0;
   const auto index_status=rinpdf_document_xref_statistics(doc,
    &ordinary_objects,&compressed_objects);
