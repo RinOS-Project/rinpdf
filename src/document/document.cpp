@@ -539,6 +539,14 @@ extern "C" rinpdf_status rinpdf_compose_pages_direct_file(
   auto result=rinpdf::compose_selected_pdf_stream(
    buffers.data(),lengths.data(),buffers.size(),
    document_ids.data(),page_ids.data(),geometry,count,file,&unused,&unused_size);
+  if(result==RINPDF_OK){
+   if(std::fflush(file)!=0)result=RINPDF_IO_ERROR;
+#ifdef _WIN32
+   if(result==RINPDF_OK && _commit(_fileno(file))!=0)result=RINPDF_IO_ERROR;
+#else
+   if(result==RINPDF_OK && fsync(fileno(file))!=0)result=RINPDF_IO_ERROR;
+#endif
+  }
   if(std::fclose(file)!=0)result=RINPDF_IO_ERROR;
 #ifdef _WIN32
   if(result==RINPDF_OK &&
