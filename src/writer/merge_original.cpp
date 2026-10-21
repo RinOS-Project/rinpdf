@@ -172,7 +172,7 @@ bool resolve_length(const Input& doc,const V& length,size_t& out){
  out=(size_t)resolved.integer;
  return true;
 }
-bool prepare(Input& doc,bool serialize_objects=true){
+bool prepare(Input& doc,bool serialize_objects=true,bool walk_full_tree=true){
  V trailer;
  // read_object_xref resolves /Prev revision chains and hybrid /XRefStm.
  // Only the latest live entries are exported; obsolete revisions are discarded.
@@ -309,6 +309,7 @@ bool prepare(Input& doc,bool serialize_objects=true){
   doc.present[entry.object]=true;
  }
  if(!doc.present[doc.root_pages])return false;
+ if(!walk_full_tree)return true;
  // Reachability starts at the imported Pages root, not the source Catalog.
  // Each reference must point to a live object in the current xref revision.
  std::vector<size_t> pending{doc.root_pages};
@@ -320,7 +321,6 @@ bool prepare(Input& doc,bool serialize_objects=true){
   if(++visited>100000)return false;
   doc.reachable[id]=true;
   for(size_t target:doc.dependencies[id]){
-   if(target==0||target>doc.max_id||!doc.present[target])return false;
    if(target==0||target>doc.max_id||!doc.present[target])return false;
    if(!doc.reachable[target])pending.push_back(target);
   }
@@ -345,7 +345,7 @@ rinpdf_status compose_selected_pdf_bytes(
   for(size_t i=0;i<document_count;++i){
    if(!bytes[i]||lengths[i]<8||lengths[i]>256*1024*1024)return RINPDF_INVALID_ARGUMENT;
    auto& doc=docs[i];doc.bytes=bytes[i];doc.length=lengths[i];doc.offset=next-1;
-   if(!prepare(doc,false))return RINPDF_UNSUPPORTED;
+   if(!prepare(doc,false,false))return RINPDF_UNSUPPORTED;
    if(doc.max_id>=1000000-next)return RINPDF_UNSUPPORTED;
    next+=doc.max_id;
    V trailer;
