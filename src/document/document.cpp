@@ -86,6 +86,8 @@ struct rinpdf_document {
  mutable std::mutex content_mutex;
  mutable std::map<size_t,std::shared_ptr<const std::vector<uint8_t>>> content_cache;
  mutable size_t content_cache_bytes=0;
+ mutable std::map<size_t,size_t> content_access;
+ mutable size_t content_clock=0;
  mutable std::mutex geometry_mutex;
  mutable std::map<size_t,rinpdf_page_geometry> geometry_cache;
  const uint8_t* data() const {return mapped?mapped:bytes.data();}
@@ -269,7 +271,10 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
   {
    std::lock_guard<std::mutex> guard(doc->content_mutex);
    auto it=doc->content_cache.find(index);
-   if(it!=doc->content_cache.end())contents=it->second;
+   if(it!=doc->content_cache.end()){
+    contents=it->second;
+    doc->content_access[index]=++doc->content_clock;
+   }
   }
   if(!contents){
    auto decoded=std::make_shared<std::vector<uint8_t>>();
@@ -278,11 +283,28 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
    contents=decoded;
    if(decoded->size()<=4*1024*1024){
     std::lock_guard<std::mutex> guard(doc->content_mutex);
-    if(doc->content_cache.size()<64 &&
-       doc->content_cache_bytes<=16*1024*1024-decoded->size()){
-     auto [it,inserted]=doc->content_cache.emplace(index,decoded);
-     if(inserted)doc->content_cache_bytes+=decoded->size();
-     contents=it->second;
+    auto existing=doc->content_cache.find(index);
+    if(existing!=doc->content_cache.end()){
+     contents=existing->second;
+     doc->content_access[index]=++doc->content_clock;
+    }else{
+     while((doc->content_cache.size()>=64 ||
+           doc->content_cache_bytes>16*1024*1024-decoded->size()) &&
+           !doc->content_access.empty()){
+      const auto oldest=std::min_element(doc->content_access.begin(),
+       doc->content_access.end(),[](const auto& a,const auto& b){
+        return a.second<b.second;
+       });
+      auto victim=doc->content_cache.find(oldest->first);
+      if(victim!=doc->content_cache.end()){
+       doc->content_cache_bytes-=victim->second->size();
+       doc->content_cache.erase(victim);
+      }
+      doc->content_access.erase(oldest);
+     }
+     doc->content_cache.emplace(index,decoded);
+     doc->content_access[index]=++doc->content_clock;
+     doc->content_cache_bytes+=decoded->size();
     }
    }
   }
