@@ -86,6 +86,8 @@ struct Input{
  std::vector<bool> present;
  std::vector<int> generations;
  std::vector<std::vector<size_t>> dependencies;
+ std::vector<size_t> object_offsets;
+ std::vector<size_t> object_limits;
  std::vector<bool> reachable;
 };
 void gather_refs(const V& value,size_t offset,std::vector<size_t>& refs,unsigned depth=0){
@@ -174,6 +176,118 @@ bool resolve_length(const Input& doc,const V& length,size_t& out){
  out=(size_t)resolved.integer;
  return true;
 }
+
+bool index_for_direct(Input& doc){
+ V trailer;
+ if(!rinpdf::parser::read_object_xref(doc.bytes,doc.length,doc.xref,doc.compressed,trailer)||
+    field(trailer,"Encrypt"))return false;
+ const V* root=field(trailer,"Root");
+ V catalog;
+ if(!root||!rinpdf::parser::resolve_reference_value(doc.bytes,doc.length,
+   doc.xref,doc.compressed,*root,catalog)||!named(field(catalog,"Type"),"Catalog"))
+  return false;
+ const V* pages=field(catalog,"Pages");
+ if(!pages||pages->kind!=K::Reference||pages->integer<=0)return false;
+ doc.root_pages=(size_t)pages->integer;
+ for(const auto& e:doc.xref){
+  if(e.object>100000)return false;
+  doc.max_id=std::max(doc.max_id,e.object);
+ }
+ for(const auto& e:doc.compressed){
+  if(e.object>100000)return false;
+  doc.max_id=std::max(doc.max_id,e.object);
+ }
+ const size_t slots=doc.max_id+1;
+ doc.values.resize(slots);
+ doc.objects.resize(slots);
+ doc.tails.resize(slots);
+ doc.present.assign(slots,false);
+ doc.reachable.assign(slots,false);
+ doc.generations.assign(slots,-1);
+ doc.dependencies.resize(slots);
+ doc.stream_starts.assign(slots,0);
+ doc.stream_lengths.assign(slots,0);
+ doc.object_offsets.assign(slots,0);
+ doc.object_limits.assign(slots,0);
+ std::vector<rinpdf::parser::XrefEntry> ordered;
+ for(const auto& e:doc.xref){
+  if(!e.in_use)continue;
+  if(e.object==0||e.offset>=doc.length||doc.present[e.object])return false;
+  doc.present[e.object]=true;
+  doc.generations[e.object]=e.generation;
+  ordered.push_back(e);
+ }
+ for(const auto& e:doc.compressed){
+  if(e.type!=2)continue;
+  if(e.object==0||e.object>=slots||doc.present[e.object])return false;
+  doc.present[e.object]=true;
+  doc.generations[e.object]=0;
+ }
+ std::sort(ordered.begin(),ordered.end(),[](const auto& a,const auto& b){
+  return a.offset<b.offset;
+ });
+ for(size_t i=0;i<ordered.size();++i){
+  if(i && ordered[i].offset==ordered[i-1].offset)return false;
+  const auto& e=ordered[i];
+  doc.object_offsets[e.object]=e.offset;
+  doc.object_limits[e.object]=i+1<ordered.size()?ordered[i+1].offset:doc.length;
+ }
+ return doc.root_pages<slots&&doc.present[doc.root_pages];
+}
+bool load_direct(Input& doc,size_t id){
+ if(id==0||id>=doc.present.size()||!doc.present[id])return false;
+ if(doc.values[id].kind!=K::Invalid)return true;
+ V value;
+ if(doc.object_limits[id]){
+  const size_t offset=doc.object_offsets[id],limit=doc.object_limits[id];
+  if(limit<=offset)return false;
+  rinpdf::parser::Lexer header(doc.bytes+offset,limit-offset);
+  auto number=header.next(),generation=header.next(),keyword=header.next();
+  if(number.kind!=rinpdf::parser::TokenKind::Integer||
+     generation.kind!=rinpdf::parser::TokenKind::Integer||
+     keyword.kind!=rinpdf::parser::TokenKind::Keyword||keyword.value!="obj"||
+     number.value!=std::to_string(id)||
+     generation.value!=std::to_string(doc.generations[id]))return false;
+  const size_t begin=offset+header.position();
+  rinpdf::parser::Lexer lexer(doc.bytes+begin,limit-begin);
+  if(!rinpdf::parser::parse_value(lexer,value))return false;
+  const size_t end=begin+lexer.position();
+  rinpdf::parser::Lexer trailing(doc.bytes+end,limit-end);
+  const auto token=trailing.next();
+  if(token.kind==rinpdf::parser::TokenKind::Keyword&&token.value=="stream"){
+   if(value.kind!=K::Dictionary)return false;
+   const V* length=field(value,"Length");size_t n=0;
+   if(!length||!resolve_length(doc,*length,n))return false;
+   size_t start=end+trailing.position();
+   if(start>=limit)return false;
+   if(doc.bytes[start]=='\r'&&start+1<limit&&doc.bytes[start+1]=='\n')start+=2;
+   else if(doc.bytes[start]=='\n')++start;
+   else return false;
+   if(n>limit-start)return false;
+   size_t after=start+n;
+   while(after<limit&&(doc.bytes[after]=='\n'||doc.bytes[after]=='\r'||doc.bytes[after]==' '))++after;
+   if(limit-after<9||std::memcmp(doc.bytes+after,"endstream",9)!=0)return false;
+   after+=9;
+   rinpdf::parser::Lexer closing(doc.bytes+after,limit-after);
+   const auto endobj=closing.next();
+   if(endobj.kind!=rinpdf::parser::TokenKind::Keyword||endobj.value!="endobj")
+    return false;
+   doc.stream_starts[id]=start;
+   doc.stream_lengths[id]=n;
+  }else if(token.kind!=rinpdf::parser::TokenKind::Keyword||token.value!="endobj")
+   return false;
+ }else{
+  if(!rinpdf::parser::resolve_compressed_object(doc.bytes,doc.length,
+       doc.compressed,id,value))return false;
+ }
+ if(!rebase(value,doc.offset,doc.generations))return false;
+ // A source Pages root is not an output Page object. It is never selected
+ // as a dependency of a flattened Page dictionary.
+ gather_refs(value,doc.offset,doc.dependencies[id]);
+ doc.values[id]=std::move(value);
+ return true;
+}
+
 bool prepare(Input& doc,bool serialize_objects=true,bool walk_full_tree=true){
  V trailer;
  // read_object_xref resolves /Prev revision chains and hybrid /XRefStm.
@@ -354,7 +468,7 @@ rinpdf_status compose_selected_pdf_bytes(
   for(size_t i=0;i<document_count;++i){
    if(!bytes[i]||lengths[i]<8||lengths[i]>256*1024*1024)return RINPDF_INVALID_ARGUMENT;
    auto& doc=docs[i];doc.bytes=bytes[i];doc.length=lengths[i];doc.offset=next-1;
-   if(!prepare(doc,false,false))return RINPDF_UNSUPPORTED;
+   if(!index_for_direct(doc))return RINPDF_UNSUPPORTED;
    if(doc.max_id>=1000000-next)return RINPDF_UNSUPPORTED;
    next+=doc.max_id;
    V trailer;
@@ -389,6 +503,7 @@ rinpdf_status compose_selected_pdf_bytes(
     size_t id=pending.back();pending.pop_back();
     if(id==0||id>=doc.present.size()||!doc.present[id])return RINPDF_UNSUPPORTED;
     if(doc.reachable[id])continue;
+    if(!load_direct(doc,id))return RINPDF_UNSUPPORTED;
     doc.reachable[id]=true;
     for(size_t child:doc.dependencies[id]){
      if(child==0||child>=doc.present.size()||!doc.present[child])return RINPDF_UNSUPPORTED;
