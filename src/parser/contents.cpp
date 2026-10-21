@@ -22,6 +22,29 @@
 #include <sstream>
 #include <charconv>
 namespace rinpdf::parser {
+namespace {
+thread_local const ScopedPageXref* active_xref=nullptr;
+}
+ScopedPageXref::ScopedPageXref(const uint8_t* data,size_t size,
+ const std::vector<XrefEntry>& entries,
+ const std::vector<XrefStreamEntry>& compressed,const Value& trailer)
+ :previous_(active_xref),data_(data),size_(size),entries_(&entries),
+  compressed_(&compressed),trailer_(&trailer){
+ active_xref=this;
+}
+ScopedPageXref::~ScopedPageXref(){active_xref=previous_;}
+bool ScopedPageXref::read(const uint8_t* data,size_t size,
+ std::vector<XrefEntry>& entries,std::vector<XrefStreamEntry>& compressed,
+ Value& trailer){
+ if(active_xref && active_xref->data_==data && active_xref->size_==size){
+  entries=*active_xref->entries_;
+  compressed=*active_xref->compressed_;
+  trailer=*active_xref->trailer_;
+  return true;
+ }
+ return read_object_xref(data,size,entries,compressed,trailer);
+}
+
 static const Value* get(const Value& v,const char* name){
  if(v.kind!=Value::Kind::Dictionary)return nullptr;
  auto it=v.dictionary.find(name);
@@ -1928,7 +1951,7 @@ struct Reader {
 bool read_page_contents(const uint8_t *data,size_t size,size_t index,std::vector<uint8_t>& contents,size_t limit){
  contents.clear();if(!data||limit==0)return false;
  std::vector<XrefEntry> xref;std::vector<XrefStreamEntry> compressed;Value trailer;
- if(!read_object_xref(data,size,xref,compressed,trailer))return false;
+ if(!ScopedPageXref::read(data,size,xref,compressed,trailer))return false;
  if(get(trailer,"Encrypt"))return false;
  const Value *root=get(trailer,"Root");if(!root)return false;
  Reader reader{data,size,xref,compressed,{}};Value catalog;
@@ -1941,7 +1964,7 @@ bool read_page_contents(const uint8_t *data,size_t size,size_t index,std::vector
 bool read_page_box(const uint8_t *data,size_t size,size_t index,MediaBox& box){
  box={0,0,0,0};if(!data)return false;
  std::vector<XrefEntry> xref;std::vector<XrefStreamEntry> compressed;Value trailer;
- if(!read_object_xref(data,size,xref,compressed,trailer))return false;
+ if(!ScopedPageXref::read(data,size,xref,compressed,trailer))return false;
  if(get(trailer,"Encrypt"))return false;
  const Value *root=get(trailer,"Root");if(!root)return false;
  Reader reader{data,size,xref,compressed,{}};Value catalog;
@@ -1956,7 +1979,7 @@ bool read_page_fonts(const uint8_t* data,size_t size,size_t index,
  std::map<std::string,PageFont>& fonts){
  if(!data)return false;
  std::vector<XrefEntry> xref;std::vector<XrefStreamEntry> compressed;Value trailer;
- if(!read_object_xref(data,size,xref,compressed,trailer))return false;
+ if(!ScopedPageXref::read(data,size,xref,compressed,trailer))return false;
  const Value* root=get(trailer,"Root");
  if(!root)return false;
  Reader reader{data,size,xref,compressed,{}};
@@ -1983,7 +2006,7 @@ bool read_page_graphics_states(const uint8_t* data,size_t size,size_t index,
  std::vector<XrefEntry> xref;
  std::vector<XrefStreamEntry> compressed;
  Value trailer;
- if(!read_object_xref(data,size,xref,compressed,trailer)||
+ if(!ScopedPageXref::read(data,size,xref,compressed,trailer)||
     get(trailer,"Encrypt"))return false;
  const Value* root=get(trailer,"Root");
  if(!root)return false;
@@ -2006,7 +2029,7 @@ bool read_page_properties(const uint8_t* data,size_t size,size_t index,
  std::vector<XrefEntry> xref;
  std::vector<XrefStreamEntry> compressed;
  Value trailer;
- if(!read_object_xref(data,size,xref,compressed,trailer)||
+ if(!ScopedPageXref::read(data,size,xref,compressed,trailer)||
     get(trailer,"Encrypt"))return false;
  const Value* root=get(trailer,"Root");
  if(!root)return false;
@@ -2028,7 +2051,7 @@ bool read_page_images(const uint8_t* data,size_t size,size_t index,
  std::map<std::string,PageImage>& images){
  if(!data)return false;
  std::vector<XrefEntry> xref;std::vector<XrefStreamEntry> compressed;Value trailer;
- if(!read_object_xref(data,size,xref,compressed,trailer)||
+ if(!ScopedPageXref::read(data,size,xref,compressed,trailer)||
     get(trailer,"Encrypt"))return false;
  const Value* root=get(trailer,"Root");if(!root)return false;
  Reader reader{data,size,xref,compressed,{}};
@@ -2050,7 +2073,7 @@ bool read_page_color_spaces(const uint8_t* data,size_t size,size_t index,
  std::vector<XrefEntry> xref;
  std::vector<XrefStreamEntry> compressed;
  Value trailer;
- if(!read_object_xref(data,size,xref,compressed,trailer)||
+ if(!ScopedPageXref::read(data,size,xref,compressed,trailer)||
     get(trailer,"Encrypt"))return false;
  const Value* root=get(trailer,"Root");
  if(!root)return false;
@@ -2075,7 +2098,7 @@ bool read_page_forms(const uint8_t* data,size_t size,size_t index,
  std::map<std::string,PageForm>& forms){
  if(!data)return false;
  std::vector<XrefEntry> xref;std::vector<XrefStreamEntry> compressed;Value trailer;
- if(!read_object_xref(data,size,xref,compressed,trailer)||get(trailer,"Encrypt"))
+ if(!ScopedPageXref::read(data,size,xref,compressed,trailer)||get(trailer,"Encrypt"))
   return false;
  const Value* root=get(trailer,"Root");if(!root)return false;
  Reader reader{data,size,xref,compressed,{}};
