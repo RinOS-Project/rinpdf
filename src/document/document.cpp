@@ -339,8 +339,13 @@ extern "C" rinpdf_status rinpdf_export_pages_with_boxes_memory(
   std::vector<rinpdf::parser::XrefEntry> entries;
   std::vector<rinpdf::parser::XrefStreamEntry> compressed;
   PDFValue trailer;
-  if(!rinpdf::parser::read_object_xref(bytes.data(),bytes.size(),entries,compressed,trailer)||
-     !compressed.empty()||pdf_field(trailer,"Encrypt")||
+  size_t ordinary_count=0,compressed_count=0;
+  if(rinpdf_document_xref_statistics(doc,&ordinary_count,&compressed_count)!=RINPDF_OK)
+   return RINPDF_UNSUPPORTED;
+  entries=doc->cached_xref;
+  compressed=doc->cached_compressed;
+  trailer=doc->cached_trailer;
+  if(!compressed.empty()||pdf_field(trailer,"Encrypt")||
      pdf_field(trailer,"Prev")||pdf_field(trailer,"XRefStm"))
    return RINPDF_UNSUPPORTED;
   const PDFValue* root_ref=pdf_field(trailer,"Root");
