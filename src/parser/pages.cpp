@@ -44,12 +44,12 @@ struct Context {
   count+=local;return true;
  }
 };
-bool count_page_tree(const uint8_t *data,size_t size,size_t& count){
- count=0;std::vector<XrefEntry> entries;
- std::vector<XrefStreamEntry> compressed;
- Value trailer;
- if(!read_object_xref(data,size,entries,compressed,trailer))return false;
- if(field(trailer,"Encrypt"))return false;
+bool count_page_tree_indexed(const uint8_t *data,size_t size,
+ const std::vector<XrefEntry>& entries,
+ const std::vector<XrefStreamEntry>& compressed,
+ const Value& trailer,size_t& count){
+ count=0;
+ if(!data||field(trailer,"Encrypt"))return false;
  const Value* root_ref=field(trailer,"Root");
  if(!root_ref||root_ref->kind!=Value::Kind::Reference)return false;
  Context ctx{data,size,entries,compressed,{ },0,{ }};
@@ -59,5 +59,12 @@ bool count_page_tree(const uint8_t *data,size_t size,size_t& count){
  if(!type||!named(*type,"Catalog"))return false;
  const Value* pages=field(root,"Pages");
  return pages&&ctx.walk(*pages,0,count);
+}
+bool count_page_tree(const uint8_t *data,size_t size,size_t& count){
+ count=0;std::vector<XrefEntry> entries;
+ std::vector<XrefStreamEntry> compressed;
+ Value trailer;
+ if(!read_object_xref(data,size,entries,compressed,trailer))return false;
+ return count_page_tree_indexed(data,size,entries,compressed,trailer,count);
 }
 }
