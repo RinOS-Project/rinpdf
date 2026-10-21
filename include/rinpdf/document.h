@@ -13,6 +13,16 @@ rinpdf_status rinpdf_document_version(const rinpdf_document *doc,unsigned *major
 /* Parse and cache the document cross-reference index; report live object counts. */
 rinpdf_status rinpdf_document_xref_statistics(const rinpdf_document *doc,
  size_t *ordinary,size_t *compressed);
+/* Decoded-content cache controls. Statistics count resident content bytes only;
+ * mapped source file and other resource caches are not included.
+ * Concurrent renders may temporarily hold evicted entries alive.
+ */
+rinpdf_status rinpdf_document_content_cache_stats(const rinpdf_document *doc,
+ size_t *resident_bytes,size_t *entry_count,size_t *budget_bytes);
+rinpdf_status rinpdf_document_set_content_cache_budget(rinpdf_document *doc,
+ size_t budget_bytes);
+rinpdf_status rinpdf_document_clear_content_cache(rinpdf_document *doc);
+rinpdf_status rinpdf_document_clear_render_caches(rinpdf_document *doc);
 #ifdef __cplusplus
 }
 #endif
