@@ -40,6 +40,8 @@ struct rinpdf_document {
  mutable std::once_flag page_count_once;
  mutable size_t cached_page_count=0;
  mutable bool page_count_valid=false;
+ mutable std::mutex geometry_mutex;
+ mutable std::map<size_t,rinpdf_page_geometry> geometry_cache;
  const uint8_t* data() const {return mapped?mapped:bytes.data();}
  size_t size() const {return mapped?mapped_size:bytes.size();}
  ~rinpdf_document(){
@@ -142,15 +144,24 @@ extern "C" rinpdf_status rinpdf_document_page_count(const rinpdf_document *d,siz
 extern "C" rinpdf_status rinpdf_document_page_geometry(
  const rinpdf_document *doc,size_t page_index,rinpdf_page_geometry *geometry) {
  if(!doc||!geometry)return RINPDF_INVALID_ARGUMENT;
- rinpdf::parser::MediaBox box{};
- if(!rinpdf::parser::read_page_box(doc->data(),doc->size(),page_index,box))
-  return RINPDF_UNSUPPORTED;
- geometry->x0=box.x0;
- geometry->y0=box.y0;
- geometry->x1=box.x1;
- geometry->y1=box.y1;
- geometry->rotation=box.rotation;
- return RINPDF_OK;
+ try {
+  {
+   std::lock_guard<std::mutex> lock(doc->geometry_mutex);
+   const auto it=doc->geometry_cache.find(page_index);
+   if(it!=doc->geometry_cache.end()){*geometry=it->second;return RINPDF_OK;}
+  }
+  rinpdf::parser::MediaBox box{};
+  if(!rinpdf::parser::read_page_box(doc->data(),doc->size(),page_index,box))
+   return RINPDF_UNSUPPORTED;
+  const rinpdf_page_geometry resolved{box.x0,box.y0,box.x1,box.y1,box.rotation};
+  {
+   std::lock_guard<std::mutex> lock(doc->geometry_mutex);
+   if(doc->geometry_cache.size()<4096)
+    doc->geometry_cache.emplace(page_index,resolved);
+  }
+  *geometry=resolved;
+  return RINPDF_OK;
+ }catch(const std::bad_alloc&){return RINPDF_OUT_OF_MEMORY;}
 }
 
 extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t index,unsigned width,unsigned height,unsigned char *rgba,size_t stride){
@@ -162,8 +173,10 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
  try{
   std::vector<uint8_t> contents;
   if(!rinpdf::parser::read_page_contents(doc->data(),doc->size(),index,contents))return RINPDF_UNSUPPORTED;
-  rinpdf::parser::MediaBox box{};
-  if(!rinpdf::parser::read_page_box(doc->data(),doc->size(),index,box))return RINPDF_UNSUPPORTED;
+  rinpdf_page_geometry geometry{};
+  const auto geometry_status=rinpdf_document_page_geometry(doc,index,&geometry);
+  if(geometry_status!=RINPDF_OK)return geometry_status;
+  rinpdf::parser::MediaBox box{geometry.x0,geometry.y0,geometry.x1,geometry.y1,geometry.rotation};
   std::map<std::string,rinpdf::parser::PageFont> page_fonts;
   if(!rinpdf::parser::read_page_fonts(doc->data(),doc->size(),index,page_fonts))
    return RINPDF_UNSUPPORTED;
