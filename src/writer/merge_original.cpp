@@ -79,6 +79,8 @@ struct Input{
  std::vector<rinpdf::parser::XrefEntry> xref;
  std::vector<rinpdf::parser::XrefStreamEntry> compressed;
  std::vector<std::string> objects;
+ std::vector<V> values;
+ std::vector<std::string> tails;
  std::vector<bool> present;
  std::vector<int> generations;
  std::vector<std::vector<size_t>> dependencies;
@@ -144,6 +146,21 @@ bool apply_page_geometry(V& node,const rinpdf_page_box_override& edit){
  (!edit.set_art_box||apply_page_box(node,"ArtBox",edit.art_box));
 }
 
+bool compact_references(V& node,const std::map<size_t,size_t>& mapping,unsigned depth=0){
+ if(depth>64)return false;
+ if(node.kind==K::Reference){
+  if(node.integer<=0)return false;
+  auto it=mapping.find((size_t)node.integer);
+  if(it==mapping.end())return false;
+  node.integer=(long long)it->second;node.generation=0;
+ }else if(node.kind==K::Array){
+  for(auto& child:node.array)if(!compact_references(child,mapping,depth+1))return false;
+ }else if(node.kind==K::Dictionary){
+  for(auto& entry:node.dictionary)
+   if(!compact_references(entry.second,mapping,depth+1))return false;
+ }
+ return true;
+}
 bool resolve_length(const Input& doc,const V& length,size_t& out){
  V resolved=length;
  if(length.kind==K::Reference){
@@ -182,6 +199,8 @@ bool prepare(Input& doc){
   doc.max_id=std::max(doc.max_id,item.object);
  }
  doc.objects.resize(doc.max_id+1);
+ doc.values.resize(doc.max_id+1);
+ doc.tails.resize(doc.max_id+1);
  doc.present.assign(doc.max_id+1,false);
  doc.generations.assign(doc.max_id+1,-1);
  doc.dependencies.resize(doc.max_id+1);
@@ -261,6 +280,8 @@ bool prepare(Input& doc){
   }else gather_refs(value,doc.offset,doc.dependencies[entry.object]);
   std::string serialized;
   if(!encode(value,serialized))return false;
+  doc.values[entry.object]=value;
+  doc.tails[entry.object]=tail;
   doc.objects[entry.object]=std::move(serialized)+tail;
  }
  for(const auto& entry:doc.compressed){
@@ -279,6 +300,7 @@ bool prepare(Input& doc){
   }else gather_refs(value,doc.offset,doc.dependencies[entry.object]);
   std::string serialized;
   if(!encode(value,serialized))return false;
+  doc.values[entry.object]=value;
   doc.objects[entry.object]=std::move(serialized);
   doc.present[entry.object]=true;
  }
@@ -364,24 +386,47 @@ rinpdf_status compose_selected_pdf_bytes(
    page.dictionary["Parent"]=parent;
    selected.push_back(std::move(page));
   }
+  // Assign compact IDs only to the live dependency closure. Distinct
+  // source PDFs share no IDs; all selected page dictionaries are new.
+  std::map<size_t,size_t> mapping;
+  size_t allocated=3;
+  for(const auto& doc:docs)
+   for(size_t id=1;id<doc.objects.size();++id)
+    if(doc.reachable[id])mapping.emplace(id+doc.offset,allocated++);
+  const size_t first_compact_page=allocated;
+  if(count>1000000-allocated)return RINPDF_UNSUPPORTED;
+  allocated+=count;
   std::string pdf="%PDF-1.7\n%\xE2\xE3\xCF\xD3\n";
-  std::vector<size_t> positions(last_id+1,0);
+  std::vector<size_t> positions(allocated,0);
   auto add=[&](size_t id,const std::string& body){
    positions[id]=pdf.size();
    pdf+=std::to_string(id)+" 0 obj\n"+body+"\nendobj\n";
   };
   add(1,"<< /Type /Catalog /Pages 2 0 R >>");
   std::string kids="[ ";
-  for(size_t i=0;i<count;++i)kids+=std::to_string(first_page+i)+" 0 R ";
+  for(size_t i=0;i<count;++i)
+   kids+=std::to_string(first_compact_page+i)+" 0 R ";
   kids+="]";
   add(2,"<< /Type /Pages /Kids "+kids+" /Count "+std::to_string(count)+" >>");
   for(const auto& doc:docs)
-   for(size_t id=1;id<doc.objects.size();++id)
-    if(doc.reachable[id])add(id+doc.offset,doc.objects[id]);
+   for(size_t id=1;id<doc.objects.size();++id){
+    if(!doc.reachable[id])continue;
+    V value=doc.values[id];
+    if(!compact_references(value,mapping))return RINPDF_UNSUPPORTED;
+    std::string serialized;
+    if(!encode(value,serialized))return RINPDF_UNSUPPORTED;
+    add(mapping.at(id+doc.offset),serialized+doc.tails[id]);
+   }
   for(size_t i=0;i<count;++i){
+   V page=selected[i];
+   // /Parent 2 0 R targets the synthetic document root, not a source object.
+   page.dictionary.erase("Parent");
+   if(!compact_references(page,mapping))return RINPDF_UNSUPPORTED;
+   V parent;parent.kind=K::Reference;parent.integer=2;
+   page.dictionary["Parent"]=parent;
    std::string serialized;
-   if(!encode(selected[i],serialized))return RINPDF_UNSUPPORTED;
-   add(first_page+i,serialized);
+   if(!encode(page,serialized))return RINPDF_UNSUPPORTED;
+   add(first_compact_page+i,serialized);
   }
   const size_t xref=pdf.size();
   pdf+="xref\n0 "+std::to_string(positions.size())+"\n0000000000 65535 f \n";
