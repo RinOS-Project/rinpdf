@@ -47,6 +47,8 @@ struct rinpdf_document {
  mutable std::once_flag page_count_once;
  mutable size_t cached_page_count=0;
  mutable bool page_count_valid=false;
+ mutable std::mutex image_mutex;
+ mutable std::map<size_t,std::shared_ptr<const rinpdf::renderer::ImageResources>> image_cache;
  mutable std::mutex font_mutex;
  mutable std::map<size_t,std::shared_ptr<const rinpdf::renderer::FontResources>> font_cache;
  mutable std::mutex content_mutex;
@@ -276,9 +278,28 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
   }
   rinpdf::parser::PageProperties properties;
   if(!rinpdf::parser::read_page_properties(doc->data(),doc->size(),index,properties))return RINPDF_UNSUPPORTED;
-  rinpdf::renderer::ImageResources images;
-  if(!rinpdf::parser::read_page_images(doc->data(),
-       doc->size(),index,images))return RINPDF_UNSUPPORTED;
+  std::shared_ptr<const rinpdf::renderer::ImageResources> images;
+  {
+   std::lock_guard<std::mutex> lock(doc->image_mutex);
+   auto it=doc->image_cache.find(index);
+   if(it!=doc->image_cache.end())images=it->second;
+  }
+  if(!images){
+   auto decoded=std::make_shared<rinpdf::renderer::ImageResources>();
+   if(!rinpdf::parser::read_page_images(doc->data(),doc->size(),index,*decoded))
+    return RINPDF_UNSUPPORTED;
+   size_t bytes=0;
+   for(const auto& [name,image]:*decoded)
+    bytes+=image.pixels.size()+image.alpha.size()+image.cmyk_pixels.size();
+   images=decoded;
+   if(bytes<=8*1024*1024){
+    std::lock_guard<std::mutex> lock(doc->image_mutex);
+    if(doc->image_cache.size()<16){
+     auto [it,inserted]=doc->image_cache.emplace(index,decoded);
+     images=it->second;
+    }
+   }
+  }
   rinpdf::renderer::FormResources forms;
   if(!rinpdf::parser::read_page_forms(doc->data(),
        doc->size(),index,forms))return RINPDF_UNSUPPORTED;
@@ -289,7 +310,7 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
   const unsigned source_width=(rotation==90||rotation==270)?height:width;
   const unsigned source_height=(rotation==90||rotation==270)?width:height;
   std::vector<uint8_t> temporary((size_t)width*height*4);
-  if(!rinpdf::renderer::render_rectangles_box_with_fonts(contents->data(),contents->size(),source_width,source_height,temporary.data(),(size_t)source_width*4,{box.x0,box.y0,box.x1,box.y1},*fonts,properties,images,forms,true,0,graphic_states))return RINPDF_UNSUPPORTED;
+  if(!rinpdf::renderer::render_rectangles_box_with_fonts(contents->data(),contents->size(),source_width,source_height,temporary.data(),(size_t)source_width*4,{box.x0,box.y0,box.x1,box.y1},*fonts,properties,*images,forms,true,0,graphic_states))return RINPDF_UNSUPPORTED;
   for(unsigned y=0;y<height;++y){
    for(unsigned x=0;x<width;++x){
     unsigned sx=x,sy=y;
