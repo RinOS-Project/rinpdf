@@ -6,6 +6,7 @@
 #include <memory>
 #include <cmath>
 #include <cstring>
+#include <algorithm>
 
 namespace rinpdf {
 rinpdf_status merge_original_pdf_bytes(const uint8_t* const*,const size_t*,
@@ -100,6 +101,46 @@ extern "C" rinpdf_status rinpdf_page_editor_set_geometry(
     !valid(geometry->set_art_box,geometry->art_box))return RINPDF_INVALID_ARGUMENT;
  editor->geometry[index]=*geometry;return RINPDF_OK;
 }
+extern "C" rinpdf_status rinpdf_page_editor_get_geometry(
+ const rinpdf_page_editor* editor,size_t index,rinpdf_page_box_override* geometry){
+ if(!editor||!geometry||index>=editor->pages.size())return RINPDF_INVALID_ARGUMENT;
+ *geometry=editor->geometry[index];
+ return RINPDF_OK;
+}
+extern "C" rinpdf_status rinpdf_page_editor_clear_geometry(
+ rinpdf_page_editor* editor,size_t index){
+ if(!editor||index>=editor->pages.size())return RINPDF_INVALID_ARGUMENT;
+ editor->geometry[index]={};
+ return RINPDF_OK;
+}
+extern "C" rinpdf_status rinpdf_page_editor_rotate(
+ rinpdf_page_editor* editor,size_t index,int quarter_turns){
+ if(!editor||index>=editor->pages.size())return RINPDF_INVALID_ARGUMENT;
+ const auto& source=editor->pages[index];
+ unsigned current=0;
+ if(editor->geometry[index].set_rotation)current=editor->geometry[index].rotation;
+ else {
+  rinpdf_page_geometry actual{};
+  auto status=rinpdf_document_page_geometry(source.document,source.page_index,&actual);
+  if(status!=RINPDF_OK)return status;
+  current=actual.rotation;
+ }
+ // Normalize negative turns without signed overflow.
+ int turns=quarter_turns%4;
+ if(turns<0)turns+=4;
+ auto& g=editor->geometry[index];
+ g.rotation=((current/90+static_cast<unsigned>(turns))%4)*90;
+ g.set_rotation=1;
+ return RINPDF_OK;
+}
+extern "C" rinpdf_status rinpdf_page_editor_swap(
+ rinpdf_page_editor* editor,size_t a,size_t b){
+ if(!editor||a>=editor->pages.size()||b>=editor->pages.size())
+  return RINPDF_INVALID_ARGUMENT;
+ std::swap(editor->pages[a],editor->pages[b]);
+ std::swap(editor->geometry[a],editor->geometry[b]);
+ return RINPDF_OK;
+}
 extern "C" rinpdf_status rinpdf_page_editor_export_memory(const rinpdf_page_editor* editor,
  uint8_t** data,size_t* size){
  if(!data||!size)return RINPDF_INVALID_ARGUMENT;
@@ -107,6 +148,19 @@ extern "C" rinpdf_status rinpdf_page_editor_export_memory(const rinpdf_page_edit
  if(!editor||editor->pages.empty())return RINPDF_INVALID_ARGUMENT;
  try{
   struct FreePdf{void operator()(uint8_t* p)const{rinpdf_free_buffer(p);}};
+  // A single source document can be exported directly: no intermediate
+  // PDF, no second parse and no second serialization pass.
+  const rinpdf_document* first_document=editor->pages.front().document;
+  bool single_source=true;
+  for(const auto& page:editor->pages)
+   if(page.document!=first_document){single_source=false;break;}
+  if(single_source){
+   std::vector<size_t> indices;
+   indices.reserve(editor->pages.size());
+   for(const auto& page:editor->pages)indices.push_back(page.page_index);
+   return rinpdf_export_pages_with_boxes_memory(first_document,
+      indices.data(),editor->geometry.data(),indices.size(),data,size);
+  }
   std::vector<std::unique_ptr<uint8_t,FreePdf>> owned;
   std::vector<const uint8_t*> buffers;
   std::vector<size_t> lengths;
