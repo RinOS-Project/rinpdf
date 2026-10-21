@@ -463,10 +463,15 @@ public:
  explicit PdfOutput(FILE* file):file_(file){}
  bool append(const char* data,size_t length){
   if(!good_||length>SIZE_MAX-written_)return good_=false;
+  const size_t total_length=length;
   if(file_){
-   if(length&&std::fwrite(data,1,length,file_)!=length)return good_=false;
+   while(length){
+    const size_t chunk=std::min(length,(size_t)65536);
+    if(std::fwrite(data,1,chunk,file_)!=chunk)return good_=false;
+    data+=chunk;length-=chunk;
+   }
   }else memory_.append(data,length);
-  written_+=length;
+  written_+=total_length;
   return true;
  }
  bool append(const std::string& text){return append(text.data(),text.size());}
@@ -474,7 +479,7 @@ public:
  bool good()const{return good_;}
  rinpdf_status release(uint8_t** result,size_t* size){
   if(!good_)return RINPDF_IO_ERROR;
-  if(file_)return RINPDF_OK;
+  if(file_)return std::fflush(file_)==0?RINPDF_OK:RINPDF_IO_ERROR;
   uint8_t* output=(uint8_t*)std::malloc(memory_.size());
   if(!output)return RINPDF_OUT_OF_MEMORY;
   std::memcpy(output,memory_.data(),memory_.size());
