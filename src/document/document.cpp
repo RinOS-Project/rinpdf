@@ -47,6 +47,8 @@ struct rinpdf_document {
  mutable std::once_flag page_count_once;
  mutable size_t cached_page_count=0;
  mutable bool page_count_valid=false;
+ mutable std::mutex page_lock_mutex;
+ mutable std::map<size_t,std::shared_ptr<std::mutex>> page_locks;
  mutable std::mutex form_mutex;
  mutable std::map<size_t,std::shared_ptr<const rinpdf::renderer::FormResources>> form_cache;
  mutable std::mutex graphics_mutex;
@@ -221,6 +223,16 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
  if(rinpdf_document_page_count(doc,&pages)!=RINPDF_OK)return RINPDF_UNSUPPORTED;
  if(index>=pages)return RINPDF_INVALID_ARGUMENT;
  try{
+  std::shared_ptr<std::mutex> page_lock;
+  {
+   std::lock_guard<std::mutex> lock(doc->page_lock_mutex);
+   auto [it,inserted]=doc->page_locks.try_emplace(index);
+   if(inserted)it->second=std::make_shared<std::mutex>();
+   page_lock=it->second;
+  }
+  // Serialize preparation for the same page, preventing duplicate
+  // expensive resource decoding by concurrent first-time renders.
+  std::lock_guard<std::mutex> page_guard(*page_lock);
   size_t ordinary_objects=0,compressed_objects=0;
   const auto index_status=rinpdf_document_xref_statistics(doc,
    &ordinary_objects,&compressed_objects);
