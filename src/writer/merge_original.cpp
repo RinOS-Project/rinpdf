@@ -95,6 +95,55 @@ void gather_refs(const V& value,size_t offset,std::vector<size_t>& refs,unsigned
   for(const auto& item:value.dictionary)gather_refs(item.second,offset,refs,depth+1);
  }
 }
+
+bool collect_page_leaves(const Input& doc,const V& ref,
+ const std::map<std::string,V>& inherited,std::vector<V>& leaves,
+ std::vector<size_t>& active,unsigned depth=0){
+ if(depth>64||ref.kind!=K::Reference||ref.integer<=0)return false;
+ size_t id=(size_t)ref.integer;
+ if(std::find(active.begin(),active.end(),id)!=active.end())return false;
+ active.push_back(id);
+ V node;
+ if(!rinpdf::parser::resolve_reference_value(doc.bytes,doc.length,doc.xref,
+      doc.compressed,ref,node)||node.kind!=K::Dictionary)return false;
+ auto properties=inherited;
+ for(const char* key:{"Resources","MediaBox","CropBox","Rotate","TrimBox","BleedBox","ArtBox"}){
+  if(const V* item=field(node,key))properties[key]=*item;
+ }
+ if(named(field(node,"Type"),"Page")){
+  for(const auto& [key,item]:properties)if(!field(node,key))node.dictionary[key]=item;
+  node.dictionary.erase("Parent");
+  leaves.push_back(std::move(node));
+ }else if(named(field(node,"Type"),"Pages")){
+  const V* kids=field(node,"Kids");
+  if(!kids||kids->kind!=K::Array||kids->array.size()>100000)return false;
+  for(const V& child:kids->array)
+   if(!collect_page_leaves(doc,child,properties,leaves,active,depth+1))return false;
+ }else return false;
+ active.pop_back();
+ return leaves.size()<=100000;
+}
+bool apply_page_box(V& node,const char* key,const double* coordinates){
+ if(!std::isfinite(coordinates[0])||!std::isfinite(coordinates[1])||
+    !std::isfinite(coordinates[2])||!std::isfinite(coordinates[3])||
+    coordinates[0]>=coordinates[2]||coordinates[1]>=coordinates[3])return false;
+ V box;box.kind=K::Array;
+ for(unsigned i=0;i<4;++i){V v;v.kind=K::Real;v.real=coordinates[i];box.array.push_back(v);}
+ node.dictionary[key]=std::move(box);return true;
+}
+bool apply_page_geometry(V& node,const rinpdf_page_box_override& edit){
+ if(edit.set_rotation){
+  if(edit.rotation!=0&&edit.rotation!=90&&edit.rotation!=180&&edit.rotation!=270)return false;
+  V rotate;rotate.kind=K::Integer;rotate.integer=edit.rotation;
+  node.dictionary["Rotate"]=rotate;
+ }
+ return (!edit.set_media_box||apply_page_box(node,"MediaBox",edit.media_box))&&
+ (!edit.set_crop_box||apply_page_box(node,"CropBox",edit.crop_box))&&
+ (!edit.set_trim_box||apply_page_box(node,"TrimBox",edit.trim_box))&&
+ (!edit.set_bleed_box||apply_page_box(node,"BleedBox",edit.bleed_box))&&
+ (!edit.set_art_box||apply_page_box(node,"ArtBox",edit.art_box));
+}
+
 bool resolve_length(const Input& doc,const V& length,size_t& out){
  V resolved=length;
  if(length.kind==K::Reference){
