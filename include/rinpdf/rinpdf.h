@@ -160,6 +160,17 @@ rinpdf_status rinpdf_page_editor_insert_range(rinpdf_page_editor *editor,
  size_t at,const rinpdf_document *source,size_t first,size_t count);
 rinpdf_status rinpdf_page_editor_move(rinpdf_page_editor *editor,
  size_t from,size_t to);
+/* Move [first, first+count) into the destination index after removal.
+ * No image rendering or temporary PDF is needed for these edits.
+ */
+rinpdf_status rinpdf_page_editor_move_range(rinpdf_page_editor *editor,
+ size_t first,size_t count,size_t destination);
+/* Duplicate a page range including its geometry overrides. */
+rinpdf_status rinpdf_page_editor_duplicate_range(rinpdf_page_editor *editor,
+ size_t first,size_t count,size_t at);
+/* Inspect which source document and page currently occupies an editor slot. */
+rinpdf_status rinpdf_page_editor_get_source(const rinpdf_page_editor *editor,
+ size_t index,rinpdf_page_source *source);
 rinpdf_status rinpdf_page_editor_insert(rinpdf_page_editor *editor,
  size_t at,const rinpdf_document *source,size_t source_page);
 rinpdf_status rinpdf_page_editor_duplicate(rinpdf_page_editor *editor,
