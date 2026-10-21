@@ -41,6 +41,17 @@ rinpdf_status rinpdf_document_set_render_cache_budget(rinpdf_document *doc,size_
 rinpdf_status rinpdf_document_render_cache_usage(const rinpdf_document *doc,
  size_t *estimated_bytes,size_t *budget_bytes);
 rinpdf_status rinpdf_document_trim_render_caches(rinpdf_document *doc,size_t target_bytes);
+/* Counters cover decoded resource-cache lookups and budget evictions.
+ * Counters are cumulative until explicitly reset, not per render.
+ */
+typedef struct rinpdf_cache_metrics {
+ uint64_t hits;
+ uint64_t misses;
+ uint64_t evictions;
+} rinpdf_cache_metrics;
+rinpdf_status rinpdf_document_cache_metrics(const rinpdf_document *doc,
+ rinpdf_cache_metrics *metrics);
+rinpdf_status rinpdf_document_reset_cache_metrics(rinpdf_document *doc);
 #ifdef __cplusplus
 }
 #endif
