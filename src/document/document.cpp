@@ -39,7 +39,9 @@ struct rinpdf_document {
  const uint8_t* data() const {return mapped?mapped:bytes.data();}
  size_t size() const {return mapped?mapped_size:bytes.size();}
  ~rinpdf_document(){
-#ifndef _WIN32
+#ifdef _WIN32
+  if(mapped)UnmapViewOfFile(mapped);
+#else
   if(mapped)munmap(const_cast<uint8_t*>(mapped),mapped_size);
 #endif
  }
@@ -81,14 +83,40 @@ extern "C" rinpdf_status rinpdf_document_open_file(const char *path,rinpdf_docum
  doc->major=bytes[5]-'0';doc->minor=bytes[7]-'0';
  *out=doc;return RINPDF_OK;
 #else
- FILE *f=std::fopen(path,"rb");if(!f)return RINPDF_IO_ERROR;
- std::vector<uint8_t> bytes;uint8_t buffer[8192];size_t n;
- try {
-  while((n=std::fread(buffer,1,sizeof(buffer),f))>0)bytes.insert(bytes.end(),buffer,buffer+n);
- }catch(const std::bad_alloc&){std::fclose(f);return RINPDF_OUT_OF_MEMORY;}
- bool bad=std::ferror(f);std::fclose(f);
- if(bad)return RINPDF_IO_ERROR;
- return rinpdf_document_open_memory(bytes.data(),bytes.size(),out);
+ // Open UTF-8 paths through the Unicode Win32 file API.
+ const size_t path_bytes=std::strlen(path);
+ if(!path_bytes||path_bytes>INT_MAX)return RINPDF_INVALID_ARGUMENT;
+ const int wide_length=MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,
+    path,(int)path_bytes,nullptr,0);
+ if(wide_length<=0)return RINPDF_INVALID_ARGUMENT;
+ std::wstring wide_path((size_t)wide_length,L'\0');
+ if(MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,path,(int)path_bytes,
+     wide_path.data(),wide_length)!=wide_length)return RINPDF_INVALID_ARGUMENT;
+ HANDLE file=CreateFileW(wide_path.c_str(),GENERIC_READ,FILE_SHARE_READ,
+     nullptr,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,nullptr);
+ if(file==INVALID_HANDLE_VALUE)return RINPDF_IO_ERROR;
+ LARGE_INTEGER file_size{};
+ if(!GetFileSizeEx(file,&file_size)){CloseHandle(file);return RINPDF_IO_ERROR;}
+ if(file_size.QuadPart<8){CloseHandle(file);return RINPDF_INVALID_PDF;}
+ if((unsigned long long)file_size.QuadPart>SIZE_MAX){
+  CloseHandle(file);return RINPDF_UNSUPPORTED;
+ }
+ HANDLE mapping=CreateFileMappingW(file,nullptr,PAGE_READONLY,0,0,nullptr);
+ if(!mapping){CloseHandle(file);return RINPDF_IO_ERROR;}
+ void* memory=MapViewOfFile(mapping,FILE_MAP_READ,0,0,0);
+ CloseHandle(mapping);
+ CloseHandle(file);
+ if(!memory)return RINPDF_IO_ERROR;
+ const auto* bytes=static_cast<const uint8_t*>(memory);
+ if(std::memcmp(bytes,"%PDF-",5)!=0||bytes[5]<'0'||bytes[5]>'9'||
+    bytes[6]!='.'||bytes[7]<'0'||bytes[7]>'9'){
+  UnmapViewOfFile(memory);return RINPDF_INVALID_PDF;
+ }
+ auto* doc=new(std::nothrow) rinpdf_document;
+ if(!doc){UnmapViewOfFile(memory);return RINPDF_OUT_OF_MEMORY;}
+ doc->mapped=bytes;doc->mapped_size=(size_t)file_size.QuadPart;
+ doc->major=bytes[5]-'0';doc->minor=bytes[7]-'0';
+ *out=doc;return RINPDF_OK;
 #endif
 }
 extern "C" void rinpdf_document_close(rinpdf_document *d){delete d;}
