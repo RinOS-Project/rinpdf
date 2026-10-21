@@ -98,7 +98,6 @@ void gather_refs(const V& value,size_t offset,std::vector<size_t>& refs,unsigned
 bool resolve_length(const Input& doc,const V& length,size_t& out){
  V resolved=length;
  if(length.kind==K::Reference){
-  if(length.generation!=0)return false;
   if(!rinpdf::parser::resolve_reference_value(doc.bytes,doc.length,doc.xref,
                                                doc.compressed,length,resolved))return false;
  }
@@ -203,6 +202,7 @@ bool prepare(Input& doc){
   if(!rebase(value,doc.offset,doc.generations))return false;
   // Parent of the source root points to the new merged Pages node.
   if(entry.object==doc.root_pages){
+   if(value.kind!=K::Dictionary||!named(field(value,"Type"),"Pages"))return false;
    // The imported Pages root is attached to our new Pages dictionary.
    // Its synthetic Parent is *not* an input-document reference.
    value.dictionary.erase("Parent");
@@ -245,6 +245,7 @@ bool prepare(Input& doc){
   if(++visited>100000)return false;
   doc.reachable[id]=true;
   for(size_t target:doc.dependencies[id]){
+   if(target==0||target>doc.max_id||!doc.present[target])return false;
    if(target==0||target>doc.max_id||!doc.present[target])return false;
    if(!doc.reachable[target])pending.push_back(target);
   }
