@@ -126,7 +126,12 @@ extern "C" rinpdf_status rinpdf_document_open_memory(const uint8_t *data,size_t 
  *out=nullptr;
  if(!data || size<8) return RINPDF_INVALID_PDF;
  if(std::memcmp(data,"%PDF-",5)!=0 || data[5]<'0'||data[5]>'9'||data[6]!='.'||data[7]<'0'||data[7]>'9') return RINPDF_INVALID_PDF;
- try { auto *d=new rinpdf_document; d->major=data[5]-'0'; d->minor=data[7]-'0'; d->bytes.assign(data,data+size); *out=d; return RINPDF_OK; }
+ try {
+  auto d=std::make_unique<rinpdf_document>();
+  d->major=data[5]-'0';d->minor=data[7]-'0';
+  d->bytes.assign(data,data+size);
+  *out=d.release();return RINPDF_OK;
+ }
  catch(const std::bad_alloc&) {return RINPDF_OUT_OF_MEMORY;}
 }
 extern "C" rinpdf_status rinpdf_document_open_file(const char *path,rinpdf_document **out) {
