@@ -22,6 +22,7 @@
 #include <span>
 #include <mutex>
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -76,6 +77,10 @@ struct rinpdf_document {
  mutable bool page_count_valid=false;
  mutable size_t render_cache_budget=64*1024*1024;
  mutable std::atomic<uint64_t> global_cache_clock{0};
+ mutable std::atomic<uint64_t> preparation_ns{0};
+ mutable std::atomic<uint64_t> raster_ns{0};
+ mutable std::atomic<uint64_t> prepared_calls{0};
+ mutable std::atomic<uint64_t> rendered_calls{0};
  mutable std::atomic<uint64_t> cache_hits{0};
  mutable std::atomic<uint64_t> cache_misses{0};
  mutable std::atomic<uint64_t> cache_evictions{0};
@@ -354,6 +359,23 @@ extern "C" rinpdf_status rinpdf_document_trim_render_caches(
  trim_locked(*doc,target);
  return RINPDF_OK;
 }
+extern "C" rinpdf_status rinpdf_document_render_timings(
+ const rinpdf_document* doc,rinpdf_render_timings* out){
+ if(!doc||!out)return RINPDF_INVALID_ARGUMENT;
+ out->preparation_ns=doc->preparation_ns.load(std::memory_order_relaxed);
+ out->raster_ns=doc->raster_ns.load(std::memory_order_relaxed);
+ out->prepared_calls=doc->prepared_calls.load(std::memory_order_relaxed);
+ out->rendered_calls=doc->rendered_calls.load(std::memory_order_relaxed);
+ return RINPDF_OK;
+}
+extern "C" rinpdf_status rinpdf_document_reset_render_timings(rinpdf_document* doc){
+ if(!doc)return RINPDF_INVALID_ARGUMENT;
+ doc->preparation_ns.store(0,std::memory_order_relaxed);
+ doc->raster_ns.store(0,std::memory_order_relaxed);
+ doc->prepared_calls.store(0,std::memory_order_relaxed);
+ doc->rendered_calls.store(0,std::memory_order_relaxed);
+ return RINPDF_OK;
+}
 extern "C" rinpdf_status rinpdf_document_cache_metrics(
  const rinpdf_document* doc,rinpdf_cache_metrics* metrics){
  if(!doc||!metrics)return RINPDF_INVALID_ARGUMENT;
@@ -449,6 +471,7 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
  if(rinpdf_document_page_count(doc,&pages)!=RINPDF_OK)return RINPDF_UNSUPPORTED;
  if(index>=pages)return RINPDF_INVALID_ARGUMENT;
  try{
+  const auto prep_start=std::chrono::steady_clock::now();
   std::shared_ptr<std::mutex> page_lock;
   {
    std::lock_guard<std::mutex> lock(doc->page_lock_mutex);
@@ -623,6 +646,11 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
    trim_locked(*doc,doc->render_cache_budget);
   }
   page_guard.unlock();
+  const auto raster_start=std::chrono::steady_clock::now();
+  const auto prep_elapsed=std::chrono::duration_cast<std::chrono::nanoseconds>(
+    raster_start-prep_start).count();
+  doc->preparation_ns.fetch_add(uint64_t(prep_elapsed),std::memory_order_relaxed);
+  doc->prepared_calls.fetch_add(1,std::memory_order_relaxed);
   const unsigned rotation=box.rotation;
   const unsigned source_width=(rotation==90||rotation==270)?height:width;
   const unsigned source_height=(rotation==90||rotation==270)?width:height;
@@ -633,6 +661,10 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
       contents->data(),contents->size(),width,height,rgba,stride,
       {box.x0,box.y0,box.x1,box.y1},*fonts,*properties,*images,*forms,
       true,0,*graphic_states))return RINPDF_UNSUPPORTED;
+   const auto elapsed=std::chrono::duration_cast<std::chrono::nanoseconds>(
+     std::chrono::steady_clock::now()-raster_start).count();
+   doc->raster_ns.fetch_add(uint64_t(elapsed),std::memory_order_relaxed);
+   doc->rendered_calls.fetch_add(1,std::memory_order_relaxed);
    return RINPDF_OK;
   }
   std::vector<uint8_t> temporary((size_t)width*height*4);
@@ -646,6 +678,10 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
     std::memcpy(rgba+(size_t)y*stride+(size_t)x*4,temporary.data()+((size_t)sy*source_width+sx)*4,4);
    }
   }
+  const auto elapsed=std::chrono::duration_cast<std::chrono::nanoseconds>(
+    std::chrono::steady_clock::now()-raster_start).count();
+  doc->raster_ns.fetch_add(uint64_t(elapsed),std::memory_order_relaxed);
+  doc->rendered_calls.fetch_add(1,std::memory_order_relaxed);
   return RINPDF_OK;
  }catch(const std::bad_alloc&){return RINPDF_OUT_OF_MEMORY;}
 }
