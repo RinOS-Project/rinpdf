@@ -412,7 +412,15 @@ rinpdf_status compose_selected_pdf_bytes(
    for(size_t id=1;id<doc.objects.size();++id){
     if(!doc.reachable[id])continue;
     V value=doc.values[id];
+    // An imported /Pages root already received a synthetic parent during
+    // preparation. Do not confuse that reference with a source object ID.
+    const bool imported_root=id==doc.root_pages;
+    if(imported_root&&value.kind==K::Dictionary)value.dictionary.erase("Parent");
     if(!compact_references(value,mapping))return RINPDF_UNSUPPORTED;
+    if(imported_root){
+     V parent;parent.kind=K::Reference;parent.integer=2;
+     value.dictionary["Parent"]=parent;
+    }
     std::string serialized;
     if(!encode(value,serialized))return RINPDF_UNSUPPORTED;
     add(mapping.at(id+doc.offset),serialized+doc.tails[id]);
