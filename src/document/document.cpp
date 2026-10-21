@@ -19,6 +19,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <memory>
+#include <span>
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -26,8 +27,23 @@
 #include <fcntl.h>
 #else
 #include <unistd.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #endif
-struct rinpdf_document { std::vector<uint8_t> bytes; unsigned major,minor; };
+struct rinpdf_document {
+ std::vector<uint8_t> bytes;
+ const uint8_t* mapped=nullptr;
+ size_t mapped_size=0;
+ unsigned major=0,minor=0;
+ const uint8_t* data() const {return mapped?mapped:bytes.data();}
+ size_t size() const {return mapped?mapped_size:bytes.size();}
+ ~rinpdf_document(){
+#ifndef _WIN32
+  if(mapped)munmap(const_cast<uint8_t*>(mapped),mapped_size);
+#endif
+ }
+};
 extern "C" rinpdf_status rinpdf_document_open_memory(const uint8_t *data,size_t size,rinpdf_document **out) {
  if(!out) return RINPDF_INVALID_ARGUMENT;
  *out=nullptr;
@@ -37,15 +53,43 @@ extern "C" rinpdf_status rinpdf_document_open_memory(const uint8_t *data,size_t 
  catch(const std::bad_alloc&) {return RINPDF_OUT_OF_MEMORY;}
 }
 extern "C" rinpdf_status rinpdf_document_open_file(const char *path,rinpdf_document **out) {
- if(!path||!out) return RINPDF_INVALID_ARGUMENT;
+ if(!path||!out)return RINPDF_INVALID_ARGUMENT;
  *out=nullptr;
- FILE *f=std::fopen(path,"rb"); if(!f) return RINPDF_IO_ERROR;
- std::vector<uint8_t> bytes; unsigned char buffer[8192]; size_t n;
+#ifndef _WIN32
+ int fd=open(path,O_RDONLY);
+ if(fd<0)return RINPDF_IO_ERROR;
+ struct stat statbuf{};
+ if(fstat(fd,&statbuf)!=0){close(fd);return RINPDF_IO_ERROR;}
+ if(!S_ISREG(statbuf.st_mode)||statbuf.st_size<8){
+  close(fd);return RINPDF_INVALID_PDF;
+ }
+ if(static_cast<uintmax_t>(statbuf.st_size)>SIZE_MAX){
+  close(fd);return RINPDF_UNSUPPORTED;
+ }
+ const size_t length=(size_t)statbuf.st_size;
+ void* memory=mmap(nullptr,length,PROT_READ,MAP_PRIVATE,fd,0);
+ close(fd);
+ if(memory==MAP_FAILED)return RINPDF_IO_ERROR;
+ const auto* bytes=static_cast<const uint8_t*>(memory);
+ if(std::memcmp(bytes,"%PDF-",5)!=0||bytes[5]<'0'||bytes[5]>'9'||
+    bytes[6]!='.'||bytes[7]<'0'||bytes[7]>'9'){
+  munmap(memory,length);return RINPDF_INVALID_PDF;
+ }
+ rinpdf_document* doc=new(std::nothrow) rinpdf_document;
+ if(!doc){munmap(memory,length);return RINPDF_OUT_OF_MEMORY;}
+ doc->mapped=bytes;doc->mapped_size=length;
+ doc->major=bytes[5]-'0';doc->minor=bytes[7]-'0';
+ *out=doc;return RINPDF_OK;
+#else
+ FILE *f=std::fopen(path,"rb");if(!f)return RINPDF_IO_ERROR;
+ std::vector<uint8_t> bytes;uint8_t buffer[8192];size_t n;
  try {
-  while((n=std::fread(buffer,1,sizeof(buffer),f))>0) bytes.insert(bytes.end(),buffer,buffer+n);
- } catch(const std::bad_alloc&) {std::fclose(f);return RINPDF_OUT_OF_MEMORY;}
- bool bad=std::ferror(f);std::fclose(f);if(bad)return RINPDF_IO_ERROR;
+  while((n=std::fread(buffer,1,sizeof(buffer),f))>0)bytes.insert(bytes.end(),buffer,buffer+n);
+ }catch(const std::bad_alloc&){std::fclose(f);return RINPDF_OUT_OF_MEMORY;}
+ bool bad=std::ferror(f);std::fclose(f);
+ if(bad)return RINPDF_IO_ERROR;
  return rinpdf_document_open_memory(bytes.data(),bytes.size(),out);
+#endif
 }
 extern "C" void rinpdf_document_close(rinpdf_document *d){delete d;}
 extern "C" rinpdf_status rinpdf_document_version(const rinpdf_document *d,unsigned *major,unsigned *minor){
@@ -55,7 +99,7 @@ extern "C" rinpdf_status rinpdf_document_version(const rinpdf_document *d,unsign
 extern "C" rinpdf_status rinpdf_document_page_count(const rinpdf_document *d,size_t *count){
  if(!d||!count)return RINPDF_INVALID_ARGUMENT;
  size_t result=0;
- if(!rinpdf::parser::count_page_tree(d->bytes.data(),d->bytes.size(),result))return RINPDF_UNSUPPORTED;
+ if(!rinpdf::parser::count_page_tree(d->data(),d->size(),result))return RINPDF_UNSUPPORTED;
  *count=result;return RINPDF_OK;
 }
 
@@ -63,7 +107,7 @@ extern "C" rinpdf_status rinpdf_document_page_geometry(
  const rinpdf_document *doc,size_t page_index,rinpdf_page_geometry *geometry) {
  if(!doc||!geometry)return RINPDF_INVALID_ARGUMENT;
  rinpdf::parser::MediaBox box{};
- if(!rinpdf::parser::read_page_box(doc->bytes.data(),doc->bytes.size(),page_index,box))
+ if(!rinpdf::parser::read_page_box(doc->data(),doc->size(),page_index,box))
   return RINPDF_UNSUPPORTED;
  geometry->x0=box.x0;
  geometry->y0=box.y0;
@@ -77,30 +121,30 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
  if(!doc||!rgba||width==0||height==0||width>16384||height>16384||stride<(size_t)width*4)return RINPDF_INVALID_ARGUMENT;
  if((size_t)width*height>16777216)return RINPDF_UNSUPPORTED;
  size_t pages=0;
- if(!rinpdf::parser::count_page_tree(doc->bytes.data(),doc->bytes.size(),pages))return RINPDF_UNSUPPORTED;
+ if(!rinpdf::parser::count_page_tree(doc->data(),doc->size(),pages))return RINPDF_UNSUPPORTED;
  if(index>=pages)return RINPDF_INVALID_ARGUMENT;
  try{
   std::vector<uint8_t> contents;
-  if(!rinpdf::parser::read_page_contents(doc->bytes.data(),doc->bytes.size(),index,contents))return RINPDF_UNSUPPORTED;
+  if(!rinpdf::parser::read_page_contents(doc->data(),doc->size(),index,contents))return RINPDF_UNSUPPORTED;
   rinpdf::parser::MediaBox box{};
-  if(!rinpdf::parser::read_page_box(doc->bytes.data(),doc->bytes.size(),index,box))return RINPDF_UNSUPPORTED;
+  if(!rinpdf::parser::read_page_box(doc->data(),doc->size(),index,box))return RINPDF_UNSUPPORTED;
   std::map<std::string,rinpdf::parser::PageFont> page_fonts;
-  if(!rinpdf::parser::read_page_fonts(doc->bytes.data(),doc->bytes.size(),index,page_fonts))
+  if(!rinpdf::parser::read_page_fonts(doc->data(),doc->size(),index,page_fonts))
    return RINPDF_UNSUPPORTED;
   rinpdf::renderer::FontResources fonts;
   for(const auto& [name,resource]:page_fonts)
    fonts.emplace(name,rinpdf::renderer::FontResource{resource.base_font,resource.subtype,resource.encoding,resource.embedded_truetype,resource.differences,resource.cid_map,resource.cid_widths,resource.vertical_metrics,resource.language});
   rinpdf::parser::PageProperties properties;
-  if(!rinpdf::parser::read_page_properties(doc->bytes.data(),doc->bytes.size(),index,properties))return RINPDF_UNSUPPORTED;
+  if(!rinpdf::parser::read_page_properties(doc->data(),doc->size(),index,properties))return RINPDF_UNSUPPORTED;
   rinpdf::renderer::ImageResources images;
-  if(!rinpdf::parser::read_page_images(doc->bytes.data(),
-       doc->bytes.size(),index,images))return RINPDF_UNSUPPORTED;
+  if(!rinpdf::parser::read_page_images(doc->data(),
+       doc->size(),index,images))return RINPDF_UNSUPPORTED;
   rinpdf::renderer::FormResources forms;
-  if(!rinpdf::parser::read_page_forms(doc->bytes.data(),
-       doc->bytes.size(),index,forms))return RINPDF_UNSUPPORTED;
+  if(!rinpdf::parser::read_page_forms(doc->data(),
+       doc->size(),index,forms))return RINPDF_UNSUPPORTED;
   rinpdf::parser::PageGraphicsStates graphic_states;
-  if(!rinpdf::parser::read_page_graphics_states(doc->bytes.data(),
-       doc->bytes.size(),index,graphic_states))return RINPDF_UNSUPPORTED;
+  if(!rinpdf::parser::read_page_graphics_states(doc->data(),
+       doc->size(),index,graphic_states))return RINPDF_UNSUPPORTED;
   const unsigned rotation=box.rotation;
   const unsigned source_width=(rotation==90||rotation==270)?height:width;
   const unsigned source_height=(rotation==90||rotation==270)?width:height;
@@ -222,7 +266,7 @@ extern "C" rinpdf_status rinpdf_export_pages_with_boxes_memory(
  *output=nullptr;*output_size=0;
  if(!doc||!indices||count==0||count>10000)return RINPDF_INVALID_ARGUMENT;
  try {
-  const auto& bytes=doc->bytes;
+  const std::span<const uint8_t> bytes(doc->data(),doc->size());
   std::vector<rinpdf::parser::XrefEntry> entries;
   std::vector<rinpdf::parser::XrefStreamEntry> compressed;
   PDFValue trailer;
@@ -465,9 +509,8 @@ extern "C" rinpdf_status rinpdf_compose_pages_direct_memory(
    size_t id=(size_t)(it-documents.begin());
    if(it==documents.end()){
     if(documents.size()>=128)return RINPDF_UNSUPPORTED;
-    const auto& bytes=pages[i].document->bytes;
     documents.push_back(pages[i].document);
-    buffers.push_back(bytes.data());lengths.push_back(bytes.size());
+    buffers.push_back(pages[i].document->data());lengths.push_back(pages[i].document->size());
    }
    document_ids.push_back(id);page_ids.push_back(pages[i].page_index);
   }
