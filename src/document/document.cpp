@@ -49,6 +49,8 @@ struct rinpdf_document {
  mutable bool page_count_valid=false;
  mutable std::mutex page_lock_mutex;
  mutable std::map<size_t,std::shared_ptr<std::mutex>> page_locks;
+ mutable std::mutex property_mutex;
+ mutable std::map<size_t,std::shared_ptr<const rinpdf::parser::PageProperties>> property_cache;
  mutable std::mutex form_mutex;
  mutable std::map<size_t,std::shared_ptr<const rinpdf::renderer::FormResources>> form_cache;
  mutable std::mutex graphics_mutex;
@@ -292,8 +294,28 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
     }
    }
   }
-  rinpdf::parser::PageProperties properties;
-  if(!rinpdf::parser::read_page_properties(doc->data(),doc->size(),index,properties))return RINPDF_UNSUPPORTED;
+  std::shared_ptr<const rinpdf::parser::PageProperties> properties;
+  {
+   std::lock_guard<std::mutex> lock(doc->property_mutex);
+   auto it=doc->property_cache.find(index);
+   if(it!=doc->property_cache.end())properties=it->second;
+  }
+  if(!properties){
+   auto decoded=std::make_shared<rinpdf::parser::PageProperties>();
+   if(!rinpdf::parser::read_page_properties(doc->data(),doc->size(),index,*decoded))
+    return RINPDF_UNSUPPORTED;
+   properties=decoded;
+   size_t bytes=0;
+   for(const auto& [key,value]:*decoded)
+    bytes+=key.size()+value.language.size()+value.actual_text.size();
+   if(bytes<=256*1024){
+    std::lock_guard<std::mutex> lock(doc->property_mutex);
+    if(doc->property_cache.size()<128){
+     auto [it,inserted]=doc->property_cache.emplace(index,decoded);
+     properties=it->second;
+    }
+   }
+  }
   std::shared_ptr<const rinpdf::renderer::ImageResources> images;
   {
    std::lock_guard<std::mutex> lock(doc->image_mutex);
@@ -366,7 +388,7 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
    // RGBA allocation and pixel copy.
    if(!rinpdf::renderer::render_rectangles_box_with_fonts(
       contents->data(),contents->size(),width,height,rgba,stride,
-      {box.x0,box.y0,box.x1,box.y1},*fonts,properties,*images,*forms,
+      {box.x0,box.y0,box.x1,box.y1},*fonts,*properties,*images,*forms,
       true,0,*graphic_states))return RINPDF_UNSUPPORTED;
    return RINPDF_OK;
   }
