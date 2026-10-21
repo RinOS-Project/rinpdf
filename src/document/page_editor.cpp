@@ -309,16 +309,11 @@ extern "C" rinpdf_status rinpdf_page_editor_export_memory(const rinpdf_page_edit
  return rinpdf_compose_pages_direct_memory(editor->pages.data(),
   editor->geometry.data(),editor->pages.size(),data,size);
 }
+extern "C" rinpdf_status rinpdf_compose_pages_direct_file(
+ const char*,const rinpdf_page_source*,const rinpdf_page_box_override*,size_t);
 extern "C" rinpdf_status rinpdf_page_editor_export_file(const rinpdf_page_editor* editor,
  const char* path){
  if(!editor||!path||editor->pages.empty())return RINPDF_INVALID_ARGUMENT;
- uint8_t* data=nullptr;size_t size=0;
- auto status=rinpdf_page_editor_export_memory(editor,&data,&size);
- if(status!=RINPDF_OK)return status;
- FILE* file=std::fopen(path,"wb");
- if(!file){rinpdf_free_buffer(data);return RINPDF_IO_ERROR;}
- bool ok=std::fwrite(data,1,size,file)==size;
- if(std::fclose(file)!=0)ok=false;
- rinpdf_free_buffer(data);
- return ok?RINPDF_OK:RINPDF_IO_ERROR;
+ return rinpdf_compose_pages_direct_file(path,editor->pages.data(),
+   editor->geometry.data(),editor->pages.size());
 }
