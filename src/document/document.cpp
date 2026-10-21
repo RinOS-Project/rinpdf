@@ -17,7 +17,12 @@
 #include <cmath>
 #include <cstdlib>
 #include <memory>
-#ifndef _WIN32
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <io.h>
+#include <fcntl.h>
+#else
 #include <unistd.h>
 #endif
 struct rinpdf_document { std::vector<uint8_t> bytes; unsigned major,minor; };
@@ -497,9 +502,31 @@ extern "C" rinpdf_status rinpdf_compose_pages_direct_file(
    }
    document_ids.push_back(id);page_ids.push_back(pages[i].page_index);
   }
-#ifndef _WIN32
-  // Create the temporary file in the destination directory for an atomic
-  // same-filesystem rename. Never truncate the existing destination first.
+#ifdef _WIN32
+  // Create a unique sibling file without truncating the destination.
+  std::string base(path);
+  std::string temporary=base+".rinpdf-";
+  std::string temp_name;
+  FILE* file=nullptr;
+  for(unsigned attempt=0;attempt<32;++attempt){
+   // CREATE_NEW guarantees exclusivity even if another process is writing.
+   char suffix[24];std::snprintf(suffix,sizeof(suffix),"%08lx-%u",
+      (unsigned long)GetCurrentProcessId(),attempt);
+   temp_name=temporary+suffix;
+   HANDLE handle=CreateFileA(temp_name.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,
+                              FILE_ATTRIBUTE_NORMAL,nullptr);
+   if(handle==INVALID_HANDLE_VALUE){
+    if(GetLastError()==ERROR_FILE_EXISTS||GetLastError()==ERROR_ALREADY_EXISTS)continue;
+    return RINPDF_IO_ERROR;
+   }
+   int fd=_open_osfhandle((intptr_t)handle,_O_BINARY|_O_WRONLY);
+   if(fd<0){CloseHandle(handle);DeleteFileA(temp_name.c_str());return RINPDF_IO_ERROR;}
+   file=_fdopen(fd,"wb");
+   if(!file){_close(fd);DeleteFileA(temp_name.c_str());return RINPDF_IO_ERROR;}
+   break;
+  }
+  if(!file)return RINPDF_IO_ERROR;
+#else
   std::string temporary=std::string(path)+".rinpdf-XXXXXX";
   std::vector<char> name(temporary.begin(),temporary.end());
   name.push_back('\0');
@@ -507,18 +534,18 @@ extern "C" rinpdf_status rinpdf_compose_pages_direct_file(
   if(fd<0)return RINPDF_IO_ERROR;
   FILE* file=fdopen(fd,"wb");
   if(!file){close(fd);std::remove(name.data());return RINPDF_IO_ERROR;}
-#else
-  // Windows uses the existing direct-write path until an equivalent
-  // exclusive temporary-file backend is available.
-  FILE* file=std::fopen(path,"wb");
-  if(!file)return RINPDF_IO_ERROR;
 #endif
   uint8_t* unused=nullptr;size_t unused_size=0;
   auto result=rinpdf::compose_selected_pdf_stream(
    buffers.data(),lengths.data(),buffers.size(),
    document_ids.data(),page_ids.data(),geometry,count,file,&unused,&unused_size);
   if(std::fclose(file)!=0)result=RINPDF_IO_ERROR;
-#ifndef _WIN32
+#ifdef _WIN32
+  if(result==RINPDF_OK &&
+     !MoveFileExA(temp_name.c_str(),path,MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH))
+    result=RINPDF_IO_ERROR;
+  if(result!=RINPDF_OK)DeleteFileA(temp_name.c_str());
+#else
   if(result==RINPDF_OK && std::rename(name.data(),path)!=0)result=RINPDF_IO_ERROR;
   if(result!=RINPDF_OK)std::remove(name.data());
 #endif
