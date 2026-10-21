@@ -47,6 +47,8 @@ struct rinpdf_document {
  mutable std::once_flag page_count_once;
  mutable size_t cached_page_count=0;
  mutable bool page_count_valid=false;
+ mutable std::mutex font_mutex;
+ mutable std::map<size_t,std::shared_ptr<const rinpdf::renderer::FontResources>> font_cache;
  mutable std::mutex content_mutex;
  mutable std::map<size_t,std::shared_ptr<const std::vector<uint8_t>>> content_cache;
  mutable size_t content_cache_bytes=0;
@@ -244,12 +246,34 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
   const auto geometry_status=rinpdf_document_page_geometry(doc,index,&geometry);
   if(geometry_status!=RINPDF_OK)return geometry_status;
   rinpdf::parser::MediaBox box{geometry.x0,geometry.y0,geometry.x1,geometry.y1,geometry.rotation};
-  std::map<std::string,rinpdf::parser::PageFont> page_fonts;
-  if(!rinpdf::parser::read_page_fonts(doc->data(),doc->size(),index,page_fonts))
-   return RINPDF_UNSUPPORTED;
-  rinpdf::renderer::FontResources fonts;
-  for(const auto& [name,resource]:page_fonts)
-   fonts.emplace(name,rinpdf::renderer::FontResource{resource.base_font,resource.subtype,resource.encoding,resource.embedded_truetype,resource.differences,resource.cid_map,resource.cid_widths,resource.vertical_metrics,resource.language});
+  std::shared_ptr<const rinpdf::renderer::FontResources> fonts;
+  {
+   std::lock_guard<std::mutex> lock(doc->font_mutex);
+   auto it=doc->font_cache.find(index);
+   if(it!=doc->font_cache.end())fonts=it->second;
+  }
+  if(!fonts){
+   std::map<std::string,rinpdf::parser::PageFont> page_fonts;
+   if(!rinpdf::parser::read_page_fonts(doc->data(),doc->size(),index,page_fonts))
+    return RINPDF_UNSUPPORTED;
+   auto decoded=std::make_shared<rinpdf::renderer::FontResources>();
+   size_t font_bytes=0;
+   for(const auto& [name,resource]:page_fonts){
+    font_bytes+=resource.embedded_truetype.size();
+    decoded->emplace(name,rinpdf::renderer::FontResource{
+      resource.base_font,resource.subtype,resource.encoding,
+      resource.embedded_truetype,resource.differences,resource.cid_map,
+      resource.cid_widths,resource.vertical_metrics,resource.language});
+   }
+   fonts=decoded;
+   if(font_bytes<=4*1024*1024){
+    std::lock_guard<std::mutex> lock(doc->font_mutex);
+    if(doc->font_cache.size()<32){
+     auto [it,inserted]=doc->font_cache.emplace(index,decoded);
+     fonts=it->second;
+    }
+   }
+  }
   rinpdf::parser::PageProperties properties;
   if(!rinpdf::parser::read_page_properties(doc->data(),doc->size(),index,properties))return RINPDF_UNSUPPORTED;
   rinpdf::renderer::ImageResources images;
@@ -265,7 +289,7 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
   const unsigned source_width=(rotation==90||rotation==270)?height:width;
   const unsigned source_height=(rotation==90||rotation==270)?width:height;
   std::vector<uint8_t> temporary((size_t)width*height*4);
-  if(!rinpdf::renderer::render_rectangles_box_with_fonts(contents->data(),contents->size(),source_width,source_height,temporary.data(),(size_t)source_width*4,{box.x0,box.y0,box.x1,box.y1},fonts,properties,images,forms,true,0,graphic_states))return RINPDF_UNSUPPORTED;
+  if(!rinpdf::renderer::render_rectangles_box_with_fonts(contents->data(),contents->size(),source_width,source_height,temporary.data(),(size_t)source_width*4,{box.x0,box.y0,box.x1,box.y1},*fonts,properties,images,forms,true,0,graphic_states))return RINPDF_UNSUPPORTED;
   for(unsigned y=0;y<height;++y){
    for(unsigned x=0;x<width;++x){
     unsigned sx=x,sy=y;
