@@ -45,6 +45,17 @@ bool ScopedPageXref::read(const uint8_t* data,size_t size,
  return read_object_xref(data,size,entries,compressed,trailer);
 }
 
+bool ScopedPageXref::View::open(const uint8_t* data,size_t size){
+ if(active_xref&&active_xref->data_==data&&active_xref->size_==size){
+  entries=active_xref->entries_;
+  compressed=active_xref->compressed_;
+  trailer=active_xref->trailer_;
+  return true;
+ }
+ if(!read_object_xref(data,size,owned_entries,owned_compressed,owned_trailer))return false;
+ entries=&owned_entries;compressed=&owned_compressed;trailer=&owned_trailer;
+ return true;
+}
 static const Value* get(const Value& v,const char* name){
  if(v.kind!=Value::Kind::Dictionary)return nullptr;
  auto it=v.dictionary.find(name);
@@ -1950,8 +1961,9 @@ struct Reader {
 };
 bool read_page_contents(const uint8_t *data,size_t size,size_t index,std::vector<uint8_t>& contents,size_t limit){
  contents.clear();if(!data||limit==0)return false;
- std::vector<XrefEntry> xref;std::vector<XrefStreamEntry> compressed;Value trailer;
- if(!ScopedPageXref::read(data,size,xref,compressed,trailer))return false;
+ ScopedPageXref::View index;
+ if(!index.open(data,size))return false;
+ const auto& xref=*index.entries;const auto& compressed=*index.compressed;const auto& trailer=*index.trailer;
  if(get(trailer,"Encrypt"))return false;
  const Value *root=get(trailer,"Root");if(!root)return false;
  Reader reader{data,size,xref,compressed,{}};Value catalog;
@@ -1963,8 +1975,9 @@ bool read_page_contents(const uint8_t *data,size_t size,size_t index,std::vector
 }
 bool read_page_box(const uint8_t *data,size_t size,size_t index,MediaBox& box){
  box={0,0,0,0};if(!data)return false;
- std::vector<XrefEntry> xref;std::vector<XrefStreamEntry> compressed;Value trailer;
- if(!ScopedPageXref::read(data,size,xref,compressed,trailer))return false;
+ ScopedPageXref::View index;
+ if(!index.open(data,size))return false;
+ const auto& xref=*index.entries;const auto& compressed=*index.compressed;const auto& trailer=*index.trailer;
  if(get(trailer,"Encrypt"))return false;
  const Value *root=get(trailer,"Root");if(!root)return false;
  Reader reader{data,size,xref,compressed,{}};Value catalog;
@@ -1978,8 +1991,9 @@ bool read_page_box(const uint8_t *data,size_t size,size_t index,MediaBox& box){
 bool read_page_fonts(const uint8_t* data,size_t size,size_t index,
  std::map<std::string,PageFont>& fonts){
  if(!data)return false;
- std::vector<XrefEntry> xref;std::vector<XrefStreamEntry> compressed;Value trailer;
- if(!ScopedPageXref::read(data,size,xref,compressed,trailer))return false;
+ ScopedPageXref::View index;
+ if(!index.open(data,size))return false;
+ const auto& xref=*index.entries;const auto& compressed=*index.compressed;const auto& trailer=*index.trailer;
  const Value* root=get(trailer,"Root");
  if(!root)return false;
  Reader reader{data,size,xref,compressed,{}};
@@ -2003,11 +2017,11 @@ bool read_page_fonts(const uint8_t* data,size_t size,size_t index,
 bool read_page_graphics_states(const uint8_t* data,size_t size,size_t index,
  PageGraphicsStates& states){
  if(!data)return false;
- std::vector<XrefEntry> xref;
- std::vector<XrefStreamEntry> compressed;
- Value trailer;
- if(!ScopedPageXref::read(data,size,xref,compressed,trailer)||
-    get(trailer,"Encrypt"))return false;
+ ScopedPageXref::View index;
+ if(!index.open(data,size))return false;
+ const auto& xref=*index.entries;const auto& compressed=*index.compressed;const auto& trailer=*index.trailer;
+ const auto& xref=*index.entries;const auto& compressed=*index.compressed;const auto& trailer=*index.trailer;
+ if(get(trailer,"Encrypt"))return false;
  const Value* root=get(trailer,"Root");
  if(!root)return false;
  Reader reader{data,size,xref,compressed,{}};
@@ -2026,11 +2040,11 @@ bool read_page_graphics_states(const uint8_t* data,size_t size,size_t index,
 bool read_page_properties(const uint8_t* data,size_t size,size_t index,
  PageProperties& properties){
  if(!data)return false;
- std::vector<XrefEntry> xref;
- std::vector<XrefStreamEntry> compressed;
- Value trailer;
- if(!ScopedPageXref::read(data,size,xref,compressed,trailer)||
-    get(trailer,"Encrypt"))return false;
+ ScopedPageXref::View index;
+ if(!index.open(data,size))return false;
+ const auto& xref=*index.entries;const auto& compressed=*index.compressed;const auto& trailer=*index.trailer;
+ const auto& xref=*index.entries;const auto& compressed=*index.compressed;const auto& trailer=*index.trailer;
+ if(get(trailer,"Encrypt"))return false;
  const Value* root=get(trailer,"Root");
  if(!root)return false;
  Reader reader{data,size,xref,compressed,{}};
@@ -2050,9 +2064,11 @@ bool read_page_properties(const uint8_t* data,size_t size,size_t index,
 bool read_page_images(const uint8_t* data,size_t size,size_t index,
  std::map<std::string,PageImage>& images){
  if(!data)return false;
- std::vector<XrefEntry> xref;std::vector<XrefStreamEntry> compressed;Value trailer;
- if(!ScopedPageXref::read(data,size,xref,compressed,trailer)||
-    get(trailer,"Encrypt"))return false;
+ ScopedPageXref::View index;
+ if(!index.open(data,size))return false;
+ const auto& xref=*index.entries;const auto& compressed=*index.compressed;const auto& trailer=*index.trailer;
+ const auto& xref=*index.entries;const auto& compressed=*index.compressed;const auto& trailer=*index.trailer;
+ if(get(trailer,"Encrypt"))return false;
  const Value* root=get(trailer,"Root");if(!root)return false;
  Reader reader{data,size,xref,compressed,{}};
  Value catalog;
@@ -2070,11 +2086,11 @@ bool read_page_color_spaces(const uint8_t* data,size_t size,size_t index,
  std::map<std::string,std::string>& aliases,
  std::map<std::string,SeparationColorSpace>& separations){
  if(!data)return false;
- std::vector<XrefEntry> xref;
- std::vector<XrefStreamEntry> compressed;
- Value trailer;
- if(!ScopedPageXref::read(data,size,xref,compressed,trailer)||
-    get(trailer,"Encrypt"))return false;
+ ScopedPageXref::View index;
+ if(!index.open(data,size))return false;
+ const auto& xref=*index.entries;const auto& compressed=*index.compressed;const auto& trailer=*index.trailer;
+ const auto& xref=*index.entries;const auto& compressed=*index.compressed;const auto& trailer=*index.trailer;
+ if(get(trailer,"Encrypt"))return false;
  const Value* root=get(trailer,"Root");
  if(!root)return false;
  Reader reader{data,size,xref,compressed,{}};
@@ -2097,9 +2113,11 @@ bool read_page_color_spaces(const uint8_t* data,size_t size,size_t index,
 bool read_page_forms(const uint8_t* data,size_t size,size_t index,
  std::map<std::string,PageForm>& forms){
  if(!data)return false;
- std::vector<XrefEntry> xref;std::vector<XrefStreamEntry> compressed;Value trailer;
- if(!ScopedPageXref::read(data,size,xref,compressed,trailer)||get(trailer,"Encrypt"))
-  return false;
+ ScopedPageXref::View index;
+ if(!index.open(data,size))return false;
+ const auto& xref=*index.entries;const auto& compressed=*index.compressed;const auto& trailer=*index.trailer;
+ const auto& xref=*index.entries;const auto& compressed=*index.compressed;const auto& trailer=*index.trailer;
+ if(get(trailer,"Encrypt"))return false;
  const Value* root=get(trailer,"Root");if(!root)return false;
  Reader reader{data,size,xref,compressed,{}};
  Value catalog;
