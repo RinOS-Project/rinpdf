@@ -2020,7 +2020,6 @@ bool read_page_graphics_states(const uint8_t* data,size_t size,size_t index,
  ScopedPageXref::View index;
  if(!index.open(data,size))return false;
  const auto& xref=*index.entries;const auto& compressed=*index.compressed;const auto& trailer=*index.trailer;
- const auto& xref=*index.entries;const auto& compressed=*index.compressed;const auto& trailer=*index.trailer;
  if(get(trailer,"Encrypt"))return false;
  const Value* root=get(trailer,"Root");
  if(!root)return false;
@@ -2042,7 +2041,6 @@ bool read_page_properties(const uint8_t* data,size_t size,size_t index,
  if(!data)return false;
  ScopedPageXref::View index;
  if(!index.open(data,size))return false;
- const auto& xref=*index.entries;const auto& compressed=*index.compressed;const auto& trailer=*index.trailer;
  const auto& xref=*index.entries;const auto& compressed=*index.compressed;const auto& trailer=*index.trailer;
  if(get(trailer,"Encrypt"))return false;
  const Value* root=get(trailer,"Root");
@@ -2067,7 +2065,6 @@ bool read_page_images(const uint8_t* data,size_t size,size_t index,
  ScopedPageXref::View index;
  if(!index.open(data,size))return false;
  const auto& xref=*index.entries;const auto& compressed=*index.compressed;const auto& trailer=*index.trailer;
- const auto& xref=*index.entries;const auto& compressed=*index.compressed;const auto& trailer=*index.trailer;
  if(get(trailer,"Encrypt"))return false;
  const Value* root=get(trailer,"Root");if(!root)return false;
  Reader reader{data,size,xref,compressed,{}};
@@ -2088,7 +2085,6 @@ bool read_page_color_spaces(const uint8_t* data,size_t size,size_t index,
  if(!data)return false;
  ScopedPageXref::View index;
  if(!index.open(data,size))return false;
- const auto& xref=*index.entries;const auto& compressed=*index.compressed;const auto& trailer=*index.trailer;
  const auto& xref=*index.entries;const auto& compressed=*index.compressed;const auto& trailer=*index.trailer;
  if(get(trailer,"Encrypt"))return false;
  const Value* root=get(trailer,"Root");
@@ -2115,7 +2111,6 @@ bool read_page_forms(const uint8_t* data,size_t size,size_t index,
  if(!data)return false;
  ScopedPageXref::View index;
  if(!index.open(data,size))return false;
- const auto& xref=*index.entries;const auto& compressed=*index.compressed;const auto& trailer=*index.trailer;
  const auto& xref=*index.entries;const auto& compressed=*index.compressed;const auto& trailer=*index.trailer;
  if(get(trailer,"Encrypt"))return false;
  const Value* root=get(trailer,"Root");if(!root)return false;
