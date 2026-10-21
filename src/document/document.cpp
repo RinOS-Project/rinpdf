@@ -21,6 +21,7 @@
 #include <memory>
 #include <span>
 #include <mutex>
+#include <atomic>
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -72,6 +73,9 @@ struct rinpdf_document {
  mutable size_t cached_page_count=0;
  mutable bool page_count_valid=false;
  mutable size_t render_cache_budget=64*1024*1024;
+ mutable std::atomic<uint64_t> cache_hits{0};
+ mutable std::atomic<uint64_t> cache_misses{0};
+ mutable std::atomic<uint64_t> cache_evictions{0};
  mutable std::mutex page_lock_mutex;
  mutable std::map<size_t,std::shared_ptr<std::mutex>> page_locks;
  mutable std::mutex property_mutex;
@@ -277,7 +281,8 @@ bool trim_one_locked(rinpdf_document& d){
   if(cache.ages.empty())return false;
   auto it=std::min_element(cache.ages.begin(),cache.ages.end(),
     [](const auto& a,const auto& b){return a.second<b.second;});
-  cache.entries.erase(it->first);cache.ages.erase(it);return true;
+  cache.entries.erase(it->first);cache.ages.erase(it);
+  d.cache_evictions.fetch_add(1,std::memory_order_relaxed);return true;
  };
  if(trim(d.image_cache))return true;
  if(trim(d.form_cache))return true;
@@ -290,11 +295,15 @@ bool trim_one_locked(rinpdf_document& d){
    d.content_cache_bytes-=cached->second->size();
    d.content_cache.erase(cached);
   }
-  d.content_access.erase(it);return true;
+  d.content_access.erase(it);
+  d.cache_evictions.fetch_add(1,std::memory_order_relaxed);return true;
  }
  if(trim(d.graphics_cache))return true;
  if(trim(d.property_cache))return true;
- if(!d.geometry_cache.empty()){d.geometry_cache.erase(d.geometry_cache.begin());return true;}
+ if(!d.geometry_cache.empty()){
+  d.geometry_cache.erase(d.geometry_cache.begin());
+  d.cache_evictions.fetch_add(1,std::memory_order_relaxed);return true;
+ }
  return false;
 }
 size_t trim_locked(rinpdf_document& d,size_t target){
@@ -327,6 +336,21 @@ extern "C" rinpdf_status rinpdf_document_trim_render_caches(
  std::scoped_lock lock(doc->content_mutex,doc->font_mutex,doc->image_mutex,
   doc->form_mutex,doc->graphics_mutex,doc->property_mutex,doc->geometry_mutex);
  trim_locked(*doc,target);
+ return RINPDF_OK;
+}
+extern "C" rinpdf_status rinpdf_document_cache_metrics(
+ const rinpdf_document* doc,rinpdf_cache_metrics* metrics){
+ if(!doc||!metrics)return RINPDF_INVALID_ARGUMENT;
+ metrics->hits=doc->cache_hits.load(std::memory_order_relaxed);
+ metrics->misses=doc->cache_misses.load(std::memory_order_relaxed);
+ metrics->evictions=doc->cache_evictions.load(std::memory_order_relaxed);
+ return RINPDF_OK;
+}
+extern "C" rinpdf_status rinpdf_document_reset_cache_metrics(rinpdf_document* doc){
+ if(!doc)return RINPDF_INVALID_ARGUMENT;
+ doc->cache_hits.store(0,std::memory_order_relaxed);
+ doc->cache_misses.store(0,std::memory_order_relaxed);
+ doc->cache_evictions.store(0,std::memory_order_relaxed);
  return RINPDF_OK;
 }
 extern "C" rinpdf_status rinpdf_document_version(const rinpdf_document *d,unsigned *major,unsigned *minor){
@@ -431,10 +455,12 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
    auto it=doc->content_cache.find(index);
    if(it!=doc->content_cache.end()){
     contents=it->second;
+    doc->cache_hits.fetch_add(1,std::memory_order_relaxed);
     doc->content_access[index]=++doc->content_clock;
    }
   }
   if(!contents){
+   doc->cache_misses.fetch_add(1,std::memory_order_relaxed);
    auto decoded=std::make_shared<std::vector<uint8_t>>();
    if(!rinpdf::parser::read_page_contents(doc->data(),doc->size(),index,*decoded))
     return RINPDF_UNSUPPORTED;
@@ -476,6 +502,8 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
   {
    std::lock_guard<std::mutex> lock(doc->font_mutex);
    fonts=doc->font_cache.find(index);
+   if(fonts)doc->cache_hits.fetch_add(1,std::memory_order_relaxed);
+   else doc->cache_misses.fetch_add(1,std::memory_order_relaxed);
   }
   if(!fonts){
    std::map<std::string,rinpdf::parser::PageFont> page_fonts;
@@ -500,6 +528,8 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
   {
    std::lock_guard<std::mutex> lock(doc->property_mutex);
    properties=doc->property_cache.find(index);
+   if(properties)doc->cache_hits.fetch_add(1,std::memory_order_relaxed);
+   else doc->cache_misses.fetch_add(1,std::memory_order_relaxed);
   }
   if(!properties){
    auto decoded=std::make_shared<rinpdf::parser::PageProperties>();
@@ -518,6 +548,8 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
   {
    std::lock_guard<std::mutex> lock(doc->image_mutex);
    images=doc->image_cache.find(index);
+   if(images)doc->cache_hits.fetch_add(1,std::memory_order_relaxed);
+   else doc->cache_misses.fetch_add(1,std::memory_order_relaxed);
   }
   if(!images){
    auto decoded=std::make_shared<rinpdf::renderer::ImageResources>();
@@ -536,6 +568,8 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
   {
    std::lock_guard<std::mutex> lock(doc->form_mutex);
    forms=doc->form_cache.find(index);
+   if(forms)doc->cache_hits.fetch_add(1,std::memory_order_relaxed);
+   else doc->cache_misses.fetch_add(1,std::memory_order_relaxed);
   }
   if(!forms){
    auto decoded=std::make_shared<rinpdf::renderer::FormResources>();
@@ -554,6 +588,8 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
   {
    std::lock_guard<std::mutex> lock(doc->graphics_mutex);
    graphic_states=doc->graphics_cache.find(index);
+   if(graphic_states)doc->cache_hits.fetch_add(1,std::memory_order_relaxed);
+   else doc->cache_misses.fetch_add(1,std::memory_order_relaxed);
   }
   if(!graphic_states){
    auto decoded=std::make_shared<rinpdf::parser::PageGraphicsStates>();
