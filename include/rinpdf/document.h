@@ -23,6 +23,17 @@ rinpdf_status rinpdf_document_set_content_cache_budget(rinpdf_document *doc,
  size_t budget_bytes);
 rinpdf_status rinpdf_document_clear_content_cache(rinpdf_document *doc);
 rinpdf_status rinpdf_document_clear_render_caches(rinpdf_document *doc);
+typedef struct rinpdf_render_cache_counts {
+ size_t content_pages;
+ size_t font_pages;
+ size_t image_pages;
+ size_t form_pages;
+ size_t graphics_pages;
+ size_t property_pages;
+ size_t geometry_pages;
+} rinpdf_render_cache_counts;
+rinpdf_status rinpdf_document_render_cache_counts(const rinpdf_document *doc,
+ rinpdf_render_cache_counts *counts);
 #ifdef __cplusplus
 }
 #endif
