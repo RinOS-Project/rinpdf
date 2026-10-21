@@ -454,11 +454,51 @@ bool prepare(Input& doc,bool serialize_objects=true,bool walk_full_tree=true){
 }
 }
 namespace rinpdf {
+class PdfOutput {
+ FILE* file_;
+ std::string memory_;
+ size_t written_=0;
+ bool good_=true;
+public:
+ explicit PdfOutput(FILE* file):file_(file){}
+ bool append(const char* data,size_t length){
+  if(!good_||length>SIZE_MAX-written_)return good_=false;
+  if(file_){
+   if(length&&std::fwrite(data,1,length,file_)!=length)return good_=false;
+  }else memory_.append(data,length);
+  written_+=length;
+  return true;
+ }
+ bool append(const std::string& text){return append(text.data(),text.size());}
+ size_t position()const{return written_;}
+ bool good()const{return good_;}
+ rinpdf_status release(uint8_t** result,size_t* size){
+  if(!good_)return RINPDF_IO_ERROR;
+  if(file_)return RINPDF_OK;
+  uint8_t* output=(uint8_t*)std::malloc(memory_.size());
+  if(!output)return RINPDF_OUT_OF_MEMORY;
+  std::memcpy(output,memory_.data(),memory_.size());
+  *result=output;*size=memory_.size();return RINPDF_OK;
+ }
+};
+rinpdf_status compose_selected_pdf_stream(
+ const uint8_t* const* bytes,const size_t* lengths,size_t document_count,
+ const size_t* document_indices,const size_t* page_indices,
+ const rinpdf_page_box_override* geometry,size_t count,FILE* destination,
+ uint8_t** out,size_t* size);
 
 rinpdf_status compose_selected_pdf_bytes(
  const uint8_t* const* bytes,const size_t* lengths,size_t document_count,
  const size_t* document_indices,const size_t* page_indices,
  const rinpdf_page_box_override* geometry,size_t count,uint8_t** out,size_t* size){
+ return compose_selected_pdf_stream(bytes,lengths,document_count,document_indices,
+   page_indices,geometry,count,nullptr,out,size);
+}
+rinpdf_status compose_selected_pdf_stream(
+ const uint8_t* const* bytes,const size_t* lengths,size_t document_count,
+ const size_t* document_indices,const size_t* page_indices,
+ const rinpdf_page_box_override* geometry,size_t count,FILE* destination,
+ uint8_t** out,size_t* size){
  if(!out||!size)return RINPDF_INVALID_ARGUMENT;
  *out=nullptr;*size=0;
  if(!bytes||!lengths||!document_indices||!page_indices||!document_count||
@@ -516,11 +556,12 @@ rinpdf_status compose_selected_pdf_bytes(
   const size_t first_compact_page=allocated;
   if(count>1000000-allocated)return RINPDF_UNSUPPORTED;
   allocated+=count;
-  std::string pdf="%PDF-1.7\n%\xE2\xE3\xCF\xD3\n";
+  PdfOutput pdf(destination);
+  pdf.append("%PDF-1.7\n%\xE2\xE3\xCF\xD3\n",15);
   std::vector<size_t> positions(allocated,0);
   auto add=[&](size_t id,const std::string& body){
-   positions[id]=pdf.size();
-   pdf+=std::to_string(id)+" 0 obj\n"+body+"\nendobj\n";
+   positions[id]=pdf.position();
+   pdf.append(std::to_string(id)+" 0 obj\n"+body+"\nendobj\n");
   };
   add(1,"<< /Type /Catalog /Pages 2 0 R >>");
   std::string kids="[ ";
@@ -545,10 +586,10 @@ rinpdf_status compose_selected_pdf_bytes(
     if(!encode(value,serialized))return RINPDF_UNSUPPORTED;
     if(doc.stream_starts[id]){
      const size_t object_id=mapping.at(id+doc.offset);
-     positions[object_id]=pdf.size();
-     pdf+=std::to_string(object_id)+" 0 obj\n"+serialized+"\nstream\n";
+     positions[object_id]=pdf.position();
+     pdf.append(std::to_string(object_id)+" 0 obj\n"+serialized+"\nstream\n");
      pdf.append((const char*)doc.bytes+doc.stream_starts[id],doc.stream_lengths[id]);
-     pdf+="\nendstream\nendobj\n";
+     pdf.append("\nendstream\nendobj\n",18);
     }else add(mapping.at(id+doc.offset),serialized+doc.tails[id]);
    }
   for(size_t i=0;i<count;++i){
@@ -562,21 +603,17 @@ rinpdf_status compose_selected_pdf_bytes(
    if(!encode(page,serialized))return RINPDF_UNSUPPORTED;
    add(first_compact_page+i,serialized);
   }
-  const size_t xref=pdf.size();
-  pdf+="xref\n0 "+std::to_string(positions.size())+"\n0000000000 65535 f \n";
+  const size_t xref=pdf.position();
+  pdf.append("xref\n0 "+std::to_string(positions.size())+"\n0000000000 65535 f \n");
   char line[40];
   for(size_t i=1;i<positions.size();++i){
    if(positions[i]>9999999999ULL)return RINPDF_UNSUPPORTED;
    std::snprintf(line,sizeof(line),"%010zu 00000 %c \n",positions[i],
-      positions[i]?'n':'f');pdf+=line;
+      positions[i]?'n':'f');pdf.append(line);
   }
-  pdf+="trailer\n<< /Size "+std::to_string(positions.size())+
+  pdf.append("trailer\n<< /Size "+std::to_string(positions.size())+
     " /Root 1 0 R >>\nstartxref\n"+std::to_string(xref)+"\n%%EOF\n";
-  uint8_t* result=(uint8_t*)std::malloc(pdf.size());
-  if(!result)return RINPDF_OUT_OF_MEMORY;
-  std::memcpy(result,pdf.data(),pdf.size());
-  *out=result;*size=pdf.size();
-  return RINPDF_OK;
+  return pdf.release(out,size);
  }catch(const std::bad_alloc&){return RINPDF_OUT_OF_MEMORY;}
 }
 
