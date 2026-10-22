@@ -74,16 +74,41 @@ bool ScopedPageXref::has_scope(const uint8_t* data,size_t size){
  return active_xref&&active_xref->data_==data&&active_xref->size_==size;
 }
 bool ScopedPageXref::get_cached_path(const uint8_t* data,size_t size,size_t target){
- return active_xref&&active_xref->data_==data&&active_xref->size_==size&&
-  active_xref->path_attempted_&&active_xref->path_target_==target&&
-  !active_xref->page_path_.empty();
+ if(!has_scope(data,size))return false;
+ if(active_xref->path_attempted_&&active_xref->path_target_==target)
+  return !active_xref->page_path_.empty();
+ if(!active_xref->shared_counts_)return false;
+ std::lock_guard<std::mutex> lock(active_xref->shared_counts_->mutex);
+ const auto it=active_xref->shared_counts_->paths.find(target);
+ if(it==active_xref->shared_counts_->paths.end())return false;
+ active_xref->page_path_=it->second;
+ active_xref->path_target_=target;
+ active_xref->path_attempted_=true;
+ active_xref->shared_counts_->path_ages[target]=
+  ++active_xref->shared_counts_->path_clock;
+ return !active_xref->page_path_.empty();
 }
 void ScopedPageXref::store_path(const uint8_t* data,size_t size,size_t target,
  const std::set<std::pair<int64_t,int64_t>>& path){
- if(!active_xref||active_xref->data_!=data||active_xref->size_!=size)return;
+ if(!has_scope(data,size)||path.empty())return;
  active_xref->path_attempted_=true;
  active_xref->path_target_=target;
  active_xref->page_path_=path;
+ if(!active_xref->shared_counts_)return;
+ std::lock_guard<std::mutex> lock(active_xref->shared_counts_->mutex);
+ auto& cache=*active_xref->shared_counts_;
+ // Keep at most 128 paths and 64 reference nodes per path.
+ if(path.size()>64)return;
+ if(cache.paths.find(target)==cache.paths.end()&&cache.paths.size()>=128){
+  const auto oldest=std::min_element(cache.path_ages.begin(),cache.path_ages.end(),
+   [](const auto& a,const auto& b){return a.second<b.second;});
+  if(oldest!=cache.path_ages.end()){
+   cache.paths.erase(oldest->first);
+   cache.path_ages.erase(oldest);
+  }
+ }
+ cache.paths[target]=path;
+ cache.path_ages[target]=++cache.path_clock;
 }
 bool ScopedPageXref::path_contains(const uint8_t* data,size_t size,size_t target,
  const Value& ref){
