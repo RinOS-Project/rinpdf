@@ -115,6 +115,21 @@ static bool box_value(const Value& value,MediaBox& box){
 }
 struct Reader {
  const uint8_t *data;size_t size;const std::vector<XrefEntry>& xref;const std::vector<XrefStreamEntry>& compressed;
+ bool skip_preceding_subtree(const Value& ref,size_t& current,size_t target) const {
+  // A scoped ancestry index already maintains the target's logical position.
+  if(ScopedPageXref::get_cached_path(data,size,target)||current>target||
+     ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
+  Value node;
+  if(!object(ref,node))return false;
+  const Value* kind=get(node,"Type");
+  const Value* count=get(node,"Count");
+  if(!kind||kind->kind!=Value::Kind::Name||kind->text!="Pages"||
+     !count||count->kind!=Value::Kind::Integer||count->integer<=0)return false;
+  const uint64_t pages=static_cast<uint64_t>(count->integer);
+  if(pages>static_cast<uint64_t>(target-current))return false;
+  current+=static_cast<size_t>(pages);
+  return true;
+ }
  void prepare_path(const Value& root,size_t target,size_t& current) const {
   if(!ScopedPageXref::has_scope(data,size))return;
   if(ScopedPageXref::get_cached_path(data,size,target)){current=target;return;}
@@ -1085,7 +1100,7 @@ struct Reader {
   const Value* kids=get(node,"Kids");
   if(!kids||kids->kind!=Value::Kind::Array){active.erase(id);return false;}
   for(const Value& child:kids->array){
-   if(!walk_images(child,depth+1,current,target,active,inherited,output)){
+   if(!skip_preceding_subtree(child,current,target) && !walk_images(child,depth+1,current,target,active,inherited,output)){
     active.erase(id);return false;
    }
   }
@@ -1707,7 +1722,7 @@ struct Reader {
   const Value* kids=get(node,"Kids");
   if(!kids||kids->kind!=Value::Kind::Array){active.erase(id);return false;}
   for(const Value& child:kids->array)
-   if(!walk_color_spaces(child,depth+1,current,target,active,inherited,
+   if(!skip_preceding_subtree(child,current,target) && !walk_color_spaces(child,depth+1,current,target,active,inherited,
                          aliases,separations)){
     active.erase(id);return false;
    }
@@ -1774,7 +1789,7 @@ struct Reader {
   const Value* kids=get(node,"Kids");
   if(!kids||kids->kind!=Value::Kind::Array){active.erase(id);return false;}
   for(const Value& child:kids->array){
-   if(!walk_forms(child,depth+1,current,target,active,inherited,output)){
+   if(!skip_preceding_subtree(child,current,target) && !walk_forms(child,depth+1,current,target,active,inherited,output)){
     active.erase(id);return false;
    }
   }
@@ -1860,7 +1875,7 @@ struct Reader {
    active.erase(id);return false;
   }
   for(const Value& child:children->array)
-   if(!walk_graphics_states(child,depth+1,current,target,active,inherited,output)){
+   if(!skip_preceding_subtree(child,current,target) && !walk_graphics_states(child,depth+1,current,target,active,inherited,output)){
     active.erase(id);return false;
    }
   active.erase(id);return true;
@@ -1921,7 +1936,7 @@ struct Reader {
   const Value* kids=get(node,"Kids");
   if(!kids||kids->kind!=Value::Kind::Array){active.erase(id);return false;}
   for(const auto& child:kids->array)
-   if(!walk_properties(child,depth+1,current,target,active,inherited,output)){
+   if(!skip_preceding_subtree(child,current,target) && !walk_properties(child,depth+1,current,target,active,inherited,output)){
     active.erase(id);return false;
    }
   active.erase(id);return true;
@@ -1981,7 +1996,7 @@ struct Reader {
   const Value* kids=get(node,"Kids");
   if(!kids||kids->kind!=Value::Kind::Array){active.erase(id);return false;}
   for(const Value& child:kids->array)
-   if(!walk_fonts(child,depth+1,current,target,active,inherited,output,catalog_language)){
+   if(!skip_preceding_subtree(child,current,target) && !walk_fonts(child,depth+1,current,target,active,inherited,output,catalog_language)){
     active.erase(id);return false;
    }
   active.erase(id);return true;
@@ -2026,7 +2041,7 @@ struct Reader {
   const Value *kids=get(node,"Kids");
   if(!kids||kids->kind!=Value::Kind::Array){active.erase(id);return false;}
   for(const Value& child:kids->array){
-   if(!walk_box(child,depth+1,current,target,active,inherited,inherited_crop,inherited_rotation,output)){active.erase(id);return false;}
+   if(!skip_preceding_subtree(child,current,target) && !walk_box(child,depth+1,current,target,active,inherited,inherited_crop,inherited_rotation,output)){active.erase(id);return false;}
   }
   active.erase(id);return true;
  }
@@ -2062,7 +2077,7 @@ struct Reader {
   const Value *kids=get(node,"Kids");
   if(!kids||kids->kind!=Value::Kind::Array){active.erase(id);return false;}
   for(const Value& child:kids->array){
-   if(!walk(child,depth+1,current,target,active,result,limit)){active.erase(id);return false;}
+   if(!skip_preceding_subtree(child,current,target) && !walk(child,depth+1,current,target,active,result,limit)){active.erase(id);return false;}
   }
   active.erase(id);return true;
  }
