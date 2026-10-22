@@ -45,6 +45,9 @@ bool ScopedPageXref::read(const uint8_t* data,size_t size,
  return read_object_xref(data,size,entries,compressed,trailer);
 }
 
+bool ScopedPageXref::has_scope(const uint8_t* data,size_t size){
+ return active_xref&&active_xref->data_==data&&active_xref->size_==size;
+}
 bool ScopedPageXref::get_cached_path(const uint8_t* data,size_t size,size_t target){
  return active_xref&&active_xref->data_==data&&active_xref->size_==size&&
   active_xref->path_attempted_&&active_xref->path_target_==target&&
@@ -113,6 +116,7 @@ static bool box_value(const Value& value,MediaBox& box){
 struct Reader {
  const uint8_t *data;size_t size;const std::vector<XrefEntry>& xref;const std::vector<XrefStreamEntry>& compressed;
  void prepare_path(const Value& root,size_t target,size_t& current) const {
+  if(!ScopedPageXref::has_scope(data,size))return;
   if(ScopedPageXref::get_cached_path(data,size,target)){current=target;return;}
   std::set<std::pair<int64_t,int64_t>> active,path;
   size_t count=0,visited=0;
