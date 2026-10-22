@@ -110,11 +110,12 @@ void ScopedPageXref::store_path(const uint8_t* data,size_t size,size_t target,
  auto existing=cache.paths.find(target);
  if(existing!=cache.paths.end()){
   auto copy=path;
+  auto position=cache.path_positions.find(target);
+  // Commit the replacement only after its new value has been allocated.
   const size_t prior=VerifiedPageCounts::path_weight(existing->second.size());
   existing->second.swap(copy);
   cache.resident_bytes=cache.resident_bytes-prior+
    VerifiedPageCounts::path_weight(existing->second.size());
-  auto position=cache.path_positions.find(target);
   if(position!=cache.path_positions.end()){
    auto node=cache.path_oldest_first.extract(position->second);
    node.key()={++cache.path_clock,target};
