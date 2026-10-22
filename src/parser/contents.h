@@ -17,6 +17,7 @@ struct VerifiedPageCounts {
  std::map<std::pair<int64_t,int64_t>,size_t> counts;
  std::map<size_t,std::set<std::pair<int64_t,int64_t>>> paths;
  std::map<size_t,uint64_t> path_ages;
+ std::map<std::pair<uint64_t,size_t>,size_t> path_oldest_first;
  uint64_t path_clock=0;
  size_t resident_bytes=0;
  static constexpr size_t count_weight=sizeof(std::pair<int64_t,int64_t>)+sizeof(size_t)+48;
