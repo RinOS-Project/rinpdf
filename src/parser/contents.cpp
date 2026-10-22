@@ -45,6 +45,24 @@ bool ScopedPageXref::read(const uint8_t* data,size_t size,
  return read_object_xref(data,size,entries,compressed,trailer);
 }
 
+bool ScopedPageXref::get_cached_path(const uint8_t* data,size_t size,size_t target){
+ return active_xref&&active_xref->data_==data&&active_xref->size_==size&&
+  active_xref->path_attempted_&&active_xref->path_target_==target&&
+  !active_xref->page_path_.empty();
+}
+void ScopedPageXref::store_path(const uint8_t* data,size_t size,size_t target,
+ const std::set<std::pair<int64_t,int64_t>>& path){
+ if(!active_xref||active_xref->data_!=data||active_xref->size_!=size)return;
+ active_xref->path_attempted_=true;
+ active_xref->path_target_=target;
+ active_xref->page_path_=path;
+}
+bool ScopedPageXref::path_contains(const uint8_t* data,size_t size,size_t target,
+ const Value& ref){
+ if(!get_cached_path(data,size,target))return true;
+ if(ref.kind!=Value::Kind::Reference)return false;
+ return active_xref->page_path_.count({ref.integer,int64_t(ref.generation)})!=0;
+}
 bool ScopedPageXref::resolve(const uint8_t* data,size_t size,
  const std::vector<XrefEntry>& entries,
  const std::vector<XrefStreamEntry>& compressed,const Value& ref,
@@ -94,6 +112,42 @@ static bool box_value(const Value& value,MediaBox& box){
 }
 struct Reader {
  const uint8_t *data;size_t size;const std::vector<XrefEntry>& xref;const std::vector<XrefStreamEntry>& compressed;
+ void prepare_path(const Value& root,size_t target,size_t& current) const {
+  if(ScopedPageXref::get_cached_path(data,size,target)){current=target;return;}
+  std::set<std::pair<int64_t,int64_t>> active,path;
+  size_t count=0,visited=0;
+  std::function<bool(const Value&,unsigned)> visit=[&](const Value& ref,unsigned depth){
+   if(depth>64||++visited>100000||ref.kind!=Value::Kind::Reference||ref.integer<=0)
+    return false;
+   const auto key=std::make_pair(ref.integer,int64_t(ref.generation));
+   if(!active.insert(key).second)return false;
+   Value node;
+   if(!object(ref,node))return false;
+   const Value* kind=get(node,"Type");
+   if(!kind||kind->kind!=Value::Kind::Name)return false;
+   bool selected=false;
+   if(kind->text=="Page"){
+    selected=(count==target);
+    ++count;
+   }else if(kind->text=="Pages"){
+    const Value* kids=get(node,"Kids");
+    if(!kids||kids->kind!=Value::Kind::Array)return false;
+    for(const Value& child:kids->array){
+     if(!visit(child,depth+1))return false;
+    }
+    // Child paths are recorded separately; parent is added below.
+    selected=!path.empty();
+   }else return false;
+   if(selected)path.insert(key);
+   active.erase(key);
+   return true;
+  };
+  if(visit(root,0)&&count>target&&!path.empty()){
+   ScopedPageXref::store_path(data,size,target,path);
+   current=target;
+  }
+ }
+
  mutable std::map<size_t,Value> compressed_cache;
  mutable std::map<std::tuple<int64_t,int64_t,unsigned>,PdfFunction> compiled_function_cache;
  mutable std::map<std::tuple<int64_t,int64_t,unsigned,unsigned>,std::array<double,4>> calculator_result_cache;
