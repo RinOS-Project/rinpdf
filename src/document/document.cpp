@@ -358,18 +358,11 @@ bool trim_one_locked(rinpdf_document& d){
  return true;
 }
 size_t trim_locked(rinpdf_document& d,size_t target){
- // Estimate once before a trim pass. Recompute only after batches
- // instead of rescanning every font/image/form after each eviction.
+ // Resource bytes are maintained on insertion/eviction; avoid batch
+ // over-eviction now that full nested resource scans are unnecessary.
  size_t current=render_cache_estimate_locked(d);
- while(current>target){
-  bool removed=false;
-  for(unsigned batch=0;batch<16;++batch){
-   if(!trim_one_locked(d))break;
-   removed=true;
-  }
-  if(!removed)break;
+ while(current>target&&trim_one_locked(d))
   current=render_cache_estimate_locked(d);
- }
  return current;
 }
 }
