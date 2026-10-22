@@ -79,7 +79,8 @@ struct PageLru {
   size_t limit,size_t weight){
   auto it=entries.find(page);
   if(it!=entries.end()){touch(page);return it->second;}
-  if(entries.size()>=limit)evict_oldest();
+  // Allocate the new entry and its indexes before evicting an old page.
+  // A failed allocation must leave the previously cached entries intact.
   entries.emplace(page,value);
   try{
    weights.emplace(page,weight);
@@ -90,6 +91,7 @@ struct PageLru {
    weights.erase(page);entries.erase(page);throw;
   }
   resident_bytes+=weight;
+  if(entries.size()>limit)evict_oldest();
   return value;
  }
 };
