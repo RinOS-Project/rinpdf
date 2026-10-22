@@ -67,7 +67,8 @@ void ScopedPageXref::store_count(const uint8_t* data,size_t size,
  if(active_xref->shared_counts_){
   std::lock_guard<std::mutex> lock(active_xref->shared_counts_->mutex);
   if(active_xref->shared_counts_->counts.size()<100000)
-   active_xref->shared_counts_->counts.emplace(key,count);
+   if(active_xref->shared_counts_->counts.emplace(key,count).second)
+    active_xref->shared_counts_->resident_bytes+=VerifiedPageCounts::count_weight;
  }
 }
 bool ScopedPageXref::has_scope(const uint8_t* data,size_t size){
@@ -103,11 +104,19 @@ void ScopedPageXref::store_path(const uint8_t* data,size_t size,size_t target,
   const auto oldest=std::min_element(cache.path_ages.begin(),cache.path_ages.end(),
    [](const auto& a,const auto& b){return a.second<b.second;});
   if(oldest!=cache.path_ages.end()){
-   cache.paths.erase(oldest->first);
+   const auto old_path=cache.paths.find(oldest->first);
+   if(old_path!=cache.paths.end()){
+    cache.resident_bytes-=VerifiedPageCounts::path_weight(old_path->second.size());
+    cache.paths.erase(old_path);
+   }
    cache.path_ages.erase(oldest);
   }
  }
+ auto existing=cache.paths.find(target);
+ if(existing!=cache.paths.end())
+  cache.resident_bytes-=VerifiedPageCounts::path_weight(existing->second.size());
  cache.paths[target]=path;
+ cache.resident_bytes+=VerifiedPageCounts::path_weight(path.size());
  cache.path_ages[target]=++cache.path_clock;
 }
 bool ScopedPageXref::path_contains(const uint8_t* data,size_t size,size_t target,
