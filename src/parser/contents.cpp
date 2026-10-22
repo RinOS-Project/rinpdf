@@ -1959,6 +1959,17 @@ struct Reader {
   active.erase(id);return true;
  }
 };
+// Centralized catalog validation for all page resource readers.
+static bool resolve_page_catalog(const Reader& reader,const Value& trailer,
+ Value& catalog,const Value*& pages){
+ const Value* root=get(trailer,"Root");
+ if(!root||get(trailer,"Encrypt"))return false;
+ if(!reader.object(*root,catalog))return false;
+ const Value* type=get(catalog,"Type");
+ pages=get(catalog,"Pages");
+ return type&&type->kind==Value::Kind::Name&&
+  type->text=="Catalog"&&pages;
+}
 bool read_page_contents(const uint8_t *data,size_t size,size_t index,std::vector<uint8_t>& contents,size_t limit){
  contents.clear();if(!data||limit==0)return false;
  ScopedPageXref::View view;
