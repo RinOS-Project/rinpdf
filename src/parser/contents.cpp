@@ -27,9 +27,10 @@ thread_local const ScopedPageXref* active_xref=nullptr;
 }
 ScopedPageXref::ScopedPageXref(const uint8_t* data,size_t size,
  const std::vector<XrefEntry>& entries,
- const std::vector<XrefStreamEntry>& compressed,const Value& trailer)
+ const std::vector<XrefStreamEntry>& compressed,const Value& trailer,
+ VerifiedPageCounts* shared_counts)
  :previous_(active_xref),data_(data),size_(size),entries_(&entries),
-  compressed_(&compressed),trailer_(&trailer){
+  compressed_(&compressed),trailer_(&trailer),shared_counts_(shared_counts){
  active_xref=this;
 }
 ScopedPageXref::~ScopedPageXref(){active_xref=previous_;}
@@ -48,17 +49,26 @@ bool ScopedPageXref::read(const uint8_t* data,size_t size,
 bool ScopedPageXref::cached_count(const uint8_t* data,size_t size,
  const Value& ref,size_t& count){
  if(!has_scope(data,size)||ref.kind!=Value::Kind::Reference)return false;
- const auto it=active_xref->verified_counts_.find(
-  {ref.integer,int64_t(ref.generation)});
- if(it==active_xref->verified_counts_.end())return false;
+ const auto key=std::make_pair(ref.integer,int64_t(ref.generation));
+ const auto local=active_xref->verified_counts_.find(key);
+ if(local!=active_xref->verified_counts_.end()){count=local->second;return true;}
+ if(!active_xref->shared_counts_)return false;
+ std::lock_guard<std::mutex> lock(active_xref->shared_counts_->mutex);
+ const auto it=active_xref->shared_counts_->counts.find(key);
+ if(it==active_xref->shared_counts_->counts.end())return false;
  count=it->second;return true;
 }
 void ScopedPageXref::store_count(const uint8_t* data,size_t size,
  const Value& ref,size_t count){
  if(!has_scope(data,size)||ref.kind!=Value::Kind::Reference)return;
+ const auto key=std::make_pair(ref.integer,int64_t(ref.generation));
  if(active_xref->verified_counts_.size()<100000)
-  active_xref->verified_counts_.emplace(
-   std::make_pair(ref.integer,int64_t(ref.generation)),count);
+  active_xref->verified_counts_.emplace(key,count);
+ if(active_xref->shared_counts_){
+  std::lock_guard<std::mutex> lock(active_xref->shared_counts_->mutex);
+  if(active_xref->shared_counts_->counts.size()<100000)
+   active_xref->shared_counts_->counts.emplace(key,count);
+ }
 }
 bool ScopedPageXref::has_scope(const uint8_t* data,size_t size){
  return active_xref&&active_xref->data_==data&&active_xref->size_==size;
