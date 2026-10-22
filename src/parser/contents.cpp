@@ -105,33 +105,44 @@ void ScopedPageXref::store_path(const uint8_t* data,size_t size,size_t target,
  auto& cache=*active_xref->shared_counts_;
  // Keep at most 128 paths and 64 reference nodes per path.
  if(path.size()>64)return;
- if(cache.paths.find(target)==cache.paths.end()&&cache.paths.size()>=128){
-  if(!cache.path_oldest_first.empty()){
-   const size_t victim=cache.path_oldest_first.begin()->second;
-   cache.path_oldest_first.erase(cache.path_oldest_first.begin());
-   const auto old_path=cache.paths.find(victim);
-   if(old_path!=cache.paths.end()){
-    cache.resident_bytes-=VerifiedPageCounts::path_weight(old_path->second.size());
-    cache.paths.erase(old_path);
-   }
-   cache.path_positions.erase(victim);
-  }
- }
+ // Update an existing path with copy-and-swap semantics. Build the
+ // replacement first, then update indexes before evicting another entry.
  auto existing=cache.paths.find(target);
- if(existing!=cache.paths.end())
-  cache.resident_bytes-=VerifiedPageCounts::path_weight(existing->second.size());
- cache.paths[target]=path;
- cache.resident_bytes+=VerifiedPageCounts::path_weight(path.size());
- auto position=cache.path_positions.find(target);
- const auto stamp=++cache.path_clock;
- if(position!=cache.path_positions.end()){
-  auto node=cache.path_oldest_first.extract(position->second);
-  node.key()={stamp,target};
-  position->second=cache.path_oldest_first.insert(std::move(node)).position;
- }else{
-  auto ordered=cache.path_oldest_first.emplace(std::make_pair(stamp,target),target).first;
+ if(existing!=cache.paths.end()){
+  auto copy=path;
+  const size_t prior=VerifiedPageCounts::path_weight(existing->second.size());
+  existing->second.swap(copy);
+  cache.resident_bytes=cache.resident_bytes-prior+
+   VerifiedPageCounts::path_weight(existing->second.size());
+  auto position=cache.path_positions.find(target);
+  if(position!=cache.path_positions.end()){
+   auto node=cache.path_oldest_first.extract(position->second);
+   node.key()={++cache.path_clock,target};
+   position->second=cache.path_oldest_first.insert(std::move(node)).position;
+  }
+  return;
+ }
+ auto inserted=cache.paths.emplace(target,path);
+ try{
+  const uint64_t stamp=++cache.path_clock;
+  auto ordered=cache.path_oldest_first.emplace(
+   std::make_pair(stamp,target),target).first;
   try{cache.path_positions.emplace(target,ordered);}
   catch(...){cache.path_oldest_first.erase(ordered);throw;}
+ }catch(...){
+  cache.paths.erase(inserted.first);
+  throw;
+ }
+ cache.resident_bytes+=VerifiedPageCounts::path_weight(path.size());
+ if(cache.paths.size()>128&&!cache.path_oldest_first.empty()){
+  const size_t victim=cache.path_oldest_first.begin()->second;
+  cache.path_oldest_first.erase(cache.path_oldest_first.begin());
+  const auto old_path=cache.paths.find(victim);
+  if(old_path!=cache.paths.end()){
+   cache.resident_bytes-=VerifiedPageCounts::path_weight(old_path->second.size());
+   cache.paths.erase(old_path);
+  }
+  cache.path_positions.erase(victim);
  }
 }
 bool ScopedPageXref::path_contains(const uint8_t* data,size_t size,size_t target,
