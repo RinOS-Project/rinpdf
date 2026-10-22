@@ -263,10 +263,15 @@ extern "C" rinpdf_status rinpdf_document_clear_render_caches(rinpdf_document* do
    doc->form_mutex,doc->graphics_mutex,doc->property_mutex,doc->geometry_mutex);
   doc->content_cache.clear();doc->content_access.clear();doc->content_cache_bytes=0;
   doc->font_cache.entries.clear();doc->font_cache.ages.clear();
+  doc->font_cache.weights.clear();doc->font_cache.resident_bytes=0;
   doc->image_cache.entries.clear();doc->image_cache.ages.clear();
+  doc->image_cache.weights.clear();doc->image_cache.resident_bytes=0;
   doc->form_cache.entries.clear();doc->form_cache.ages.clear();
+  doc->form_cache.weights.clear();doc->form_cache.resident_bytes=0;
   doc->graphics_cache.entries.clear();doc->graphics_cache.ages.clear();
+  doc->graphics_cache.weights.clear();doc->graphics_cache.resident_bytes=0;
   doc->property_cache.entries.clear();doc->property_cache.ages.clear();
+  doc->property_cache.weights.clear();doc->property_cache.resident_bytes=0;
   doc->geometry_cache.clear();
  }
  {
@@ -281,29 +286,11 @@ extern "C" rinpdf_status rinpdf_document_clear_render_caches(rinpdf_document* do
 namespace {
 size_t render_cache_estimate_locked(const rinpdf_document& d){
  size_t bytes=d.content_cache_bytes;
- for(const auto& [page,fonts]:d.font_cache.entries){
-  bytes+=sizeof(*fonts);
-  for(const auto& [name,font]:*fonts)
-   bytes+=name.size()+sizeof(font)+font.embedded_truetype.size();
- }
- for(const auto& [page,images]:d.image_cache.entries){
-  bytes+=sizeof(*images);
-  for(const auto& [name,image]:*images)
-   bytes+=name.size()+sizeof(image)+image.pixels.size()+
-     image.alpha.size()+image.cmyk_pixels.size();
- }
- for(const auto& [page,forms]:d.form_cache.entries){
-  bytes+=sizeof(*forms);
-  for(const auto& [name,form]:*forms)
-   bytes+=name.size()+sizeof(form)+form.content.size();
- }
- for(const auto& [page,graphics]:d.graphics_cache.entries)
-  bytes+=sizeof(*graphics)+graphics->size()*128;
- for(const auto& [page,properties]:d.property_cache.entries){
-  bytes+=sizeof(*properties);
-  for(const auto& [key,value]:*properties)
-   bytes+=key.size()+sizeof(value)+value.language.size()+value.actual_text.size();
- }
+ bytes+=d.font_cache.resident_bytes;
+ bytes+=d.image_cache.resident_bytes;
+ bytes+=d.form_cache.resident_bytes;
+ bytes+=d.graphics_cache.resident_bytes;
+ bytes+=d.property_cache.resident_bytes;
  bytes+=d.geometry_cache.size()*sizeof(rinpdf_page_geometry);
  {
   std::lock_guard<std::mutex> guard(d.verified_page_counts.mutex);
@@ -346,6 +333,11 @@ bool trim_one_locked(rinpdf_document& d){
   auto it=std::min_element(cache.ages.begin(),cache.ages.end(),
    [](const auto& a,const auto& b){return a.second<b.second;});
   if(it==cache.ages.end())return;
+  auto weight=cache.weights.find(it->first);
+  if(weight!=cache.weights.end()){
+   cache.resident_bytes-=weight->second;
+   cache.weights.erase(weight);
+  }
   cache.entries.erase(it->first);cache.ages.erase(it);
  };
  if(category==0){
