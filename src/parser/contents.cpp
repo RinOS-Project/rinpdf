@@ -45,6 +45,21 @@ bool ScopedPageXref::read(const uint8_t* data,size_t size,
  return read_object_xref(data,size,entries,compressed,trailer);
 }
 
+bool ScopedPageXref::cached_count(const uint8_t* data,size_t size,
+ const Value& ref,size_t& count){
+ if(!has_scope(data,size)||ref.kind!=Value::Kind::Reference)return false;
+ const auto it=active_xref->verified_counts_.find(
+  {ref.integer,int64_t(ref.generation)});
+ if(it==active_xref->verified_counts_.end())return false;
+ count=it->second;return true;
+}
+void ScopedPageXref::store_count(const uint8_t* data,size_t size,
+ const Value& ref,size_t count){
+ if(!has_scope(data,size)||ref.kind!=Value::Kind::Reference)return;
+ if(active_xref->verified_counts_.size()<100000)
+  active_xref->verified_counts_.emplace(
+   std::make_pair(ref.integer,int64_t(ref.generation)),count);
+}
 bool ScopedPageXref::has_scope(const uint8_t* data,size_t size){
  return active_xref&&active_xref->data_==data&&active_xref->size_==size;
 }
@@ -116,6 +131,7 @@ static bool box_value(const Value& value,MediaBox& box){
 struct Reader {
  const uint8_t *data;size_t size;const std::vector<XrefEntry>& xref;const std::vector<XrefStreamEntry>& compressed;
  bool verified_subtree_count(const Value& ref,size_t& total) const {
+  if(ScopedPageXref::cached_count(data,size,ref,total))return true;
   std::set<std::pair<int64_t,int64_t>> visiting;
   size_t visited=0;
   std::function<bool(const Value&,unsigned,size_t&)> walk_count=
@@ -128,7 +144,11 @@ struct Reader {
     if(!object(item,node))return false;
     const Value* kind=get(node,"Type");
     if(!kind||kind->kind!=Value::Kind::Name)return false;
-    if(kind->text=="Page"){out=1;visiting.erase(key);return true;}
+    if(kind->text=="Page"){
+     out=1;visiting.erase(key);
+     ScopedPageXref::store_count(data,size,item,out);
+     return true;
+    }
     if(kind->text!="Pages")return false;
     const Value* children=get(node,"Kids");
     const Value* declared=get(node,"Count");
@@ -142,7 +162,9 @@ struct Reader {
      sum+=n;
     }
     if(uint64_t(declared->integer)!=uint64_t(sum))return false;
-    out=sum;visiting.erase(key);return true;
+    out=sum;visiting.erase(key);
+    ScopedPageXref::store_count(data,size,item,out);
+    return true;
    };
   return walk_count(ref,0,total);
  }
