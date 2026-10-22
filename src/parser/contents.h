@@ -17,6 +17,7 @@ class ScopedPageXref {
  const std::vector<XrefEntry>* entries_;
  const std::vector<XrefStreamEntry>* compressed_;
  const Value* trailer_;
+ mutable std::map<std::pair<int64_t,int64_t>,Value> objects_;
 public:
  ScopedPageXref(const uint8_t* data,size_t size,
   const std::vector<XrefEntry>& entries,
@@ -31,6 +32,10 @@ public:
   const Value* trailer=nullptr;
   bool open(const uint8_t* data,size_t size);
  };
+ static bool resolve(const uint8_t* data,size_t size,
+  const std::vector<XrefEntry>& entries,
+  const std::vector<XrefStreamEntry>& compressed,const Value& ref,
+  Value& out,std::map<size_t,Value>* compressed_cache);
  static bool read(const uint8_t* data,size_t size,
   std::vector<XrefEntry>& entries,
   std::vector<XrefStreamEntry>& compressed,Value& trailer);
