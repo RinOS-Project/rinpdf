@@ -36,6 +36,7 @@ public:
   const Value* trailer=nullptr;
   bool open(const uint8_t* data,size_t size);
  };
+ static bool has_scope(const uint8_t* data,size_t size);
  static bool path_contains(const uint8_t* data,size_t size,size_t target,const Value& ref);
  static bool get_cached_path(const uint8_t* data,size_t size,size_t target);
  static void store_path(const uint8_t* data,size_t size,size_t target,
