@@ -279,6 +279,7 @@ extern "C" rinpdf_status rinpdf_document_clear_render_caches(rinpdf_document* do
   doc->verified_page_counts.paths.clear();
   doc->verified_page_counts.path_ages.clear();
   doc->verified_page_counts.counts.clear();
+  doc->verified_page_counts.resident_bytes=0;
  }
  return RINPDF_OK;
 }
@@ -294,10 +295,7 @@ size_t render_cache_estimate_locked(const rinpdf_document& d){
  bytes+=d.geometry_cache.size()*sizeof(rinpdf_page_geometry);
  {
   std::lock_guard<std::mutex> guard(d.verified_page_counts.mutex);
-  using Key=std::pair<int64_t,int64_t>;
-  bytes+=d.verified_page_counts.counts.size()*(sizeof(Key)+sizeof(size_t)+48);
-  for(const auto& [page,path]:d.verified_page_counts.paths)
-   bytes+=sizeof(page)+path.size()*(sizeof(Key)+48)+48;
+  bytes+=d.verified_page_counts.resident_bytes;
  }
  return bytes;
 }
@@ -323,8 +321,16 @@ bool trim_one_locked(rinpdf_document& d){
   if(!shared.path_ages.empty()){
    auto it=std::min_element(shared.path_ages.begin(),shared.path_ages.end(),
     [](const auto& a,const auto& b){return a.second<b.second;});
-   shared.paths.erase(it->first);shared.path_ages.erase(it);
-  }else if(!shared.counts.empty())shared.counts.erase(shared.counts.begin());
+   const auto path=shared.paths.find(it->first);
+   if(path!=shared.paths.end()){
+    shared.resident_bytes-=rinpdf::parser::VerifiedPageCounts::path_weight(path->second.size());
+    shared.paths.erase(path);
+   }
+   shared.path_ages.erase(it);
+  }else if(!shared.counts.empty()){
+   shared.counts.erase(shared.counts.begin());
+   shared.resident_bytes-=rinpdf::parser::VerifiedPageCounts::count_weight;
+  }
   else return false;
   d.cache_evictions.fetch_add(1,std::memory_order_relaxed);
   return true;
