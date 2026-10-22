@@ -4,6 +4,7 @@
 #include <vector>
 #include <map>
 #include <set>
+#include <mutex>
 #include <string>
 #include "tounicode.h"
 #include "xref_stream.h"
@@ -11,6 +12,10 @@
 namespace rinpdf::parser {
 // Scoped per-thread view of an immutable document xref cache. The scope
 // never outlives the owning document and is restored after nested calls.
+struct VerifiedPageCounts {
+ mutable std::mutex mutex;
+ std::map<std::pair<int64_t,int64_t>,size_t> counts;
+};
 class ScopedPageXref {
  const ScopedPageXref* previous_;
  const uint8_t* data_;
@@ -22,11 +27,13 @@ class ScopedPageXref {
  mutable bool path_attempted_=false;
  mutable size_t path_target_=0;
  mutable std::set<std::pair<int64_t,int64_t>> page_path_;
+ VerifiedPageCounts* shared_counts_=nullptr;
  mutable std::map<std::pair<int64_t,int64_t>,size_t> verified_counts_;
 public:
  ScopedPageXref(const uint8_t* data,size_t size,
   const std::vector<XrefEntry>& entries,
-  const std::vector<XrefStreamEntry>& compressed,const Value& trailer);
+  const std::vector<XrefStreamEntry>& compressed,const Value& trailer,
+  VerifiedPageCounts* shared_counts=nullptr);
  ~ScopedPageXref();
  struct View {
   std::vector<XrefEntry> owned_entries;
