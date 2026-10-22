@@ -73,6 +73,7 @@ struct rinpdf_document {
  mutable std::vector<rinpdf::parser::XrefEntry> cached_xref;
  mutable std::vector<rinpdf::parser::XrefStreamEntry> cached_compressed;
  mutable rinpdf::parser::Value cached_trailer;
+ mutable rinpdf::parser::VerifiedPageCounts verified_page_counts;
  mutable std::once_flag page_count_once;
  mutable size_t cached_page_count=0;
  mutable bool page_count_valid=false;
@@ -406,7 +407,8 @@ extern "C" rinpdf_status rinpdf_document_xref_statistics(
  try{
   std::call_once(doc->xref_once,[doc]{
    doc->xref_valid=rinpdf::parser::read_object_xref(doc->data(),doc->size(),
-    doc->cached_xref,doc->cached_compressed,doc->cached_trailer);
+    doc->cached_xref,doc->cached_compressed,doc->cached_trailer,
+    &doc->verified_page_counts);
    if(doc->xref_valid){
     for(const auto& item:doc->cached_xref)
      if(item.in_use)++doc->cached_ordinary_objects;
