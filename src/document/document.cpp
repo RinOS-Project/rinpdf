@@ -305,7 +305,7 @@ extern "C" rinpdf_status rinpdf_document_clear_render_caches(rinpdf_document* do
  {
   std::lock_guard<std::mutex> lock(doc->verified_page_counts.mutex);
   doc->verified_page_counts.paths.clear();
-  doc->verified_page_counts.path_ages.clear();
+  doc->verified_page_counts.path_positions.clear();
   doc->verified_page_counts.path_oldest_first.clear();
   doc->verified_page_counts.counts.clear();
   doc->verified_page_counts.resident_bytes=0;
@@ -359,7 +359,7 @@ bool trim_one_locked(rinpdf_document& d){
     shared.resident_bytes-=rinpdf::parser::VerifiedPageCounts::path_weight(path->second.size());
     shared.paths.erase(path);
    }
-   shared.path_ages.erase(victim);
+   shared.path_positions.erase(victim);
   }else if(!shared.counts.empty()){
    shared.counts.erase(shared.counts.begin());
    shared.resident_bytes-=rinpdf::parser::VerifiedPageCounts::count_weight;
