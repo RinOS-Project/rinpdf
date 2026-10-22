@@ -150,6 +150,9 @@ struct Reader {
        item.integer<=0)return false;
     const auto key=std::make_pair(item.integer,int64_t(item.generation));
     if(!visiting.insert(key).second)return false;
+    if(ScopedPageXref::cached_count(data,size,item,out)){
+     visiting.erase(key);return true;
+    }
     Value node;
     if(!object(item,node))return false;
     const Value* kind=get(node,"Type");
