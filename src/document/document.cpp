@@ -298,6 +298,13 @@ size_t render_cache_estimate_locked(const rinpdf_document& d){
    bytes+=key.size()+sizeof(value)+value.language.size()+value.actual_text.size();
  }
  bytes+=d.geometry_cache.size()*sizeof(rinpdf_page_geometry);
+ {
+  std::lock_guard<std::mutex> guard(d.verified_page_counts.mutex);
+  using Key=std::pair<int64_t,int64_t>;
+  bytes+=d.verified_page_counts.counts.size()*(sizeof(Key)+sizeof(size_t)+48);
+  for(const auto& [page,path]:d.verified_page_counts.paths)
+   bytes+=sizeof(page)+path.size()*(sizeof(Key)+48)+48;
+ }
  return bytes;
 }
 bool trim_one_locked(rinpdf_document& d){
@@ -314,7 +321,20 @@ bool trim_one_locked(rinpdf_document& d){
  inspect(d.form_cache.ages,3);
  inspect(d.graphics_cache.ages,4);
  inspect(d.property_cache.ages,5);
- if(category<0)return false;
+ // Tree paths have their own clock and are trimmed when resource caches
+ // are empty; timestamps are not comparable to the render clock.
+ if(category<0){
+  std::lock_guard<std::mutex> guard(d.verified_page_counts.mutex);
+  auto& shared=d.verified_page_counts;
+  if(!shared.path_ages.empty()){
+   auto it=std::min_element(shared.path_ages.begin(),shared.path_ages.end(),
+    [](const auto& a,const auto& b){return a.second<b.second;});
+   shared.paths.erase(it->first);shared.path_ages.erase(it);
+  }else if(!shared.counts.empty())shared.counts.erase(shared.counts.begin());
+  else return false;
+  d.cache_evictions.fetch_add(1,std::memory_order_relaxed);
+  return true;
+ }
  auto erase_oldest=[&](auto& cache){
   auto it=std::min_element(cache.ages.begin(),cache.ages.end(),
    [](const auto& a,const auto& b){return a.second<b.second;});
