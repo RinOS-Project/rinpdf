@@ -85,8 +85,10 @@ bool ScopedPageXref::get_cached_path(const uint8_t* data,size_t size,size_t targ
  active_xref->page_path_=it->second;
  active_xref->path_target_=target;
  active_xref->path_attempted_=true;
- active_xref->shared_counts_->path_ages[target]=
-  ++active_xref->shared_counts_->path_clock;
+ // Existing map node is updated in place: no allocation on cache hits.
+ auto age=active_xref->shared_counts_->path_ages.find(target);
+ if(age!=active_xref->shared_counts_->path_ages.end())
+  age->second=++active_xref->shared_counts_->path_clock;
  return !active_xref->page_path_.empty();
 }
 void ScopedPageXref::store_path(const uint8_t* data,size_t size,size_t target,
