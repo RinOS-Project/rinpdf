@@ -40,6 +40,8 @@ template<class T>
 struct PageLru {
  std::map<size_t,std::shared_ptr<const T>> entries;
  std::map<size_t,size_t> ages;
+ std::map<size_t,size_t> weights;
+ size_t resident_bytes=0;
  std::atomic<uint64_t>* shared_clock=nullptr;
  uint64_t tick(){return shared_clock?shared_clock->fetch_add(1,std::memory_order_relaxed)+1:0;}
  std::shared_ptr<const T> find(size_t page) {
@@ -48,15 +50,19 @@ struct PageLru {
   ages[page]=tick();
   return it->second;
  }
- std::shared_ptr<const T> insert(size_t page,std::shared_ptr<const T> value,size_t limit){
+ std::shared_ptr<const T> insert(size_t page,std::shared_ptr<const T> value,size_t limit,size_t weight){
   auto it=entries.find(page);
   if(it!=entries.end()){ages[page]=tick();return it->second;}
   if(entries.size()>=limit && !ages.empty()){
    auto oldest=std::min_element(ages.begin(),ages.end(),
     [](const auto& a,const auto& b){return a.second<b.second;});
+   auto old_weight=weights.find(oldest->first);
+   if(old_weight!=weights.end()){resident_bytes-=old_weight->second;weights.erase(old_weight);}
    entries.erase(oldest->first);ages.erase(oldest);
   }
   entries.emplace(page,value);
+  try {weights.emplace(page,weight);}catch(...){entries.erase(page);throw;}
+  resident_bytes+=weight;
   ages[page]=tick();
   return value;
  }
@@ -597,7 +603,7 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
    fonts=decoded;
    if(font_bytes<=4*1024*1024){
     std::lock_guard<std::mutex> lock(doc->font_mutex);
-    fonts=doc->font_cache.insert(index,decoded,32);
+    fonts=doc->font_cache.insert(index,decoded,32,sizeof(*decoded)+font_bytes);
    }
   }
   std::shared_ptr<const rinpdf::parser::PageProperties> properties;
@@ -617,7 +623,7 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
     bytes+=key.size()+value.language.size()+value.actual_text.size();
    if(bytes<=256*1024){
     std::lock_guard<std::mutex> lock(doc->property_mutex);
-    properties=doc->property_cache.insert(index,decoded,128);
+    properties=doc->property_cache.insert(index,decoded,128,sizeof(*decoded)+bytes);
    }
   }
   std::shared_ptr<const rinpdf::renderer::ImageResources> images;
@@ -637,7 +643,7 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
    images=decoded;
    if(bytes<=8*1024*1024){
     std::lock_guard<std::mutex> lock(doc->image_mutex);
-    images=doc->image_cache.insert(index,decoded,16);
+    images=doc->image_cache.insert(index,decoded,16,sizeof(*decoded)+bytes);
    }
   }
   std::shared_ptr<const rinpdf::renderer::FormResources> forms;
@@ -657,7 +663,7 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
    for(const auto& [name,form]:*decoded)content_bytes+=form.content.size();
    if(content_bytes<=4*1024*1024){
     std::lock_guard<std::mutex> lock(doc->form_mutex);
-    forms=doc->form_cache.insert(index,decoded,16);
+    forms=doc->form_cache.insert(index,decoded,16,sizeof(*decoded)+content_bytes);
    }
   }
   std::shared_ptr<const rinpdf::parser::PageGraphicsStates> graphic_states;
@@ -673,7 +679,7 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
     return RINPDF_UNSUPPORTED;
    graphic_states=decoded;
    std::lock_guard<std::mutex> lock(doc->graphics_mutex);
-   graphic_states=doc->graphics_cache.insert(index,decoded,128);
+   graphic_states=doc->graphics_cache.insert(index,decoded,128,decoded->size()*128+sizeof(*decoded));
   }
   // Parsed resource handles remain alive via shared_ptr after this unlock.
   // Only first-time parsing is serialized; pixel rendering can run in parallel.
