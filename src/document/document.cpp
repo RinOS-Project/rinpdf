@@ -234,10 +234,10 @@ extern "C" rinpdf_status rinpdf_document_set_content_cache_budget(
  if(!doc)return RINPDF_INVALID_ARGUMENT;
  std::lock_guard<std::mutex> lock(doc->content_mutex);
  doc->content_cache_budget=budget;
- while(doc->content_cache_bytes>budget && !doc->content_access.empty()){
-  auto oldest=std::min_element(doc->content_access.begin(),doc->content_access.end(),
-   [](const auto& a,const auto& b){return a.second<b.second;});
-  auto it=doc->content_cache.find(oldest->first);
+ while(doc->content_cache_bytes>budget && !doc->content_oldest_first.empty()){
+  const size_t oldest_page=doc->content_oldest_first.begin()->second;
+  doc->content_oldest_first.erase(doc->content_oldest_first.begin());
+  auto it=doc->content_cache.find(oldest_page);
   if(it!=doc->content_cache.end()){
    doc->content_cache_bytes-=it->second->size();
    doc->content_cache.erase(it);
@@ -251,6 +251,7 @@ extern "C" rinpdf_status rinpdf_document_clear_content_cache(rinpdf_document* do
  std::lock_guard<std::mutex> lock(doc->content_mutex);
  doc->content_cache.clear();
  doc->content_access.clear();
+ doc->content_oldest_first.clear();
  doc->content_cache_bytes=0;
  return RINPDF_OK;
 }
