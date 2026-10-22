@@ -482,6 +482,7 @@ extern "C" rinpdf_status rinpdf_document_xref_statistics(
 }
 extern "C" rinpdf_status rinpdf_document_page_count(const rinpdf_document *d,size_t *count){
  if(!d||!count)return RINPDF_INVALID_ARGUMENT;
+ try{
  std::call_once(d->page_count_once,[d]{
   size_t result=0;
   std::call_once(d->xref_once,[d]{
@@ -501,6 +502,7 @@ extern "C" rinpdf_status rinpdf_document_page_count(const rinpdf_document *d,siz
  });
  if(!d->page_count_valid)return RINPDF_UNSUPPORTED;
  *count=d->cached_page_count;return RINPDF_OK;
+ }catch(const std::bad_alloc&){return RINPDF_OUT_OF_MEMORY;}
 }
 
 extern "C" rinpdf_status rinpdf_document_page_geometry(
