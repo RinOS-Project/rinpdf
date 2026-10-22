@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <vector>
 #include <map>
+#include <set>
 #include <string>
 #include "tounicode.h"
 #include "xref_stream.h"
@@ -18,6 +19,9 @@ class ScopedPageXref {
  const std::vector<XrefStreamEntry>* compressed_;
  const Value* trailer_;
  mutable std::map<std::pair<int64_t,int64_t>,Value> objects_;
+ mutable bool path_attempted_=false;
+ mutable size_t path_target_=0;
+ mutable std::set<std::pair<int64_t,int64_t>> page_path_;
 public:
  ScopedPageXref(const uint8_t* data,size_t size,
   const std::vector<XrefEntry>& entries,
@@ -32,6 +36,10 @@ public:
   const Value* trailer=nullptr;
   bool open(const uint8_t* data,size_t size);
  };
+ static bool path_contains(const uint8_t* data,size_t size,size_t target,const Value& ref);
+ static bool get_cached_path(const uint8_t* data,size_t size,size_t target);
+ static void store_path(const uint8_t* data,size_t size,size_t target,
+  const std::set<std::pair<int64_t,int64_t>>& path);
  static bool resolve(const uint8_t* data,size_t size,
   const std::vector<XrefEntry>& entries,
   const std::vector<XrefStreamEntry>& compressed,const Value& ref,
