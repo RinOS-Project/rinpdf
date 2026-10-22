@@ -22,6 +22,7 @@ class ScopedPageXref {
  mutable bool path_attempted_=false;
  mutable size_t path_target_=0;
  mutable std::set<std::pair<int64_t,int64_t>> page_path_;
+ mutable std::map<std::pair<int64_t,int64_t>,size_t> verified_counts_;
 public:
  ScopedPageXref(const uint8_t* data,size_t size,
   const std::vector<XrefEntry>& entries,
@@ -36,6 +37,10 @@ public:
   const Value* trailer=nullptr;
   bool open(const uint8_t* data,size_t size);
  };
+ static bool cached_count(const uint8_t* data,size_t size,
+  const Value& ref,size_t& count);
+ static void store_count(const uint8_t* data,size_t size,
+  const Value& ref,size_t count);
  static bool has_scope(const uint8_t* data,size_t size);
  static bool path_contains(const uint8_t* data,size_t size,size_t target,const Value& ref);
  static bool get_cached_path(const uint8_t* data,size_t size,size_t target);
