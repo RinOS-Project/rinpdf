@@ -120,6 +120,7 @@ struct rinpdf_document {
  mutable size_t content_cache_bytes=0;
  mutable size_t content_cache_budget=16*1024*1024;
  mutable std::map<size_t,size_t> content_access;
+ mutable std::map<std::pair<uint64_t,size_t>,size_t> content_oldest_first;
 
  mutable std::mutex geometry_mutex;
  mutable std::map<size_t,rinpdf_page_geometry> geometry_cache;
@@ -241,7 +242,7 @@ extern "C" rinpdf_status rinpdf_document_set_content_cache_budget(
    doc->content_cache_bytes-=it->second->size();
    doc->content_cache.erase(it);
   }
-  doc->content_access.erase(oldest);
+  doc->content_access.erase(oldest_page);
  }
  return RINPDF_OK;
 }
@@ -273,7 +274,7 @@ extern "C" rinpdf_status rinpdf_document_clear_render_caches(rinpdf_document* do
  {
   std::scoped_lock lock(doc->content_mutex,doc->font_mutex,doc->image_mutex,
    doc->form_mutex,doc->graphics_mutex,doc->property_mutex,doc->geometry_mutex);
-  doc->content_cache.clear();doc->content_access.clear();doc->content_cache_bytes=0;
+  doc->content_cache.clear();doc->content_access.clear();doc->content_oldest_first.clear();doc->content_cache_bytes=0;
   doc->font_cache.entries.clear();doc->font_cache.ages.clear();
   doc->font_cache.weights.clear();doc->font_cache.oldest_first.clear();doc->font_cache.resident_bytes=0;
   doc->image_cache.entries.clear();doc->image_cache.ages.clear();
@@ -320,8 +321,10 @@ bool trim_one_locked(rinpdf_document& d){
    oldest=cache.oldest_first.begin()->first.first;category=kind;
   }
  };
- for(const auto& [page,stamp]:d.content_access)
-  if(stamp<oldest){oldest=stamp;category=0;}
+ if(!d.content_oldest_first.empty() &&
+    d.content_oldest_first.begin()->first.first<oldest){
+  oldest=d.content_oldest_first.begin()->first.first;category=0;
+ }
  inspect(d.font_cache,1);
  inspect(d.image_cache,2);
  inspect(d.form_cache,3);
@@ -351,14 +354,14 @@ bool trim_one_locked(rinpdf_document& d){
  }
  auto erase_oldest=[&](auto& cache){cache.evict_oldest();};
  if(category==0){
-  auto it=std::min_element(d.content_access.begin(),d.content_access.end(),
-   [](const auto& a,const auto& b){return a.second<b.second;});
-  auto entry=d.content_cache.find(it->first);
+  const size_t oldest_page=d.content_oldest_first.begin()->second;
+  d.content_oldest_first.erase(d.content_oldest_first.begin());
+  auto entry=d.content_cache.find(oldest_page);
   if(entry!=d.content_cache.end()){
    d.content_cache_bytes-=entry->second->size();
    d.content_cache.erase(entry);
   }
-  d.content_access.erase(it);
+  d.content_access.erase(oldest_page);
  }else if(category==1)erase_oldest(d.font_cache);
  else if(category==2)erase_oldest(d.image_cache);
  else if(category==3)erase_oldest(d.form_cache);
@@ -533,7 +536,14 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
    if(it!=doc->content_cache.end()){
     contents=it->second;
     doc->cache_hits.fetch_add(1,std::memory_order_relaxed);
-    doc->content_access[index]=doc->global_cache_clock.fetch_add(1,std::memory_order_relaxed)+1;
+    {
+     auto prior=doc->content_access.find(index);
+     if(prior!=doc->content_access.end())
+      doc->content_oldest_first.erase({prior->second,index});
+     const auto stamp=doc->global_cache_clock.fetch_add(1,std::memory_order_relaxed)+1;
+     doc->content_access[index]=stamp;
+     doc->content_oldest_first.emplace(std::make_pair(stamp,index),index);
+    }
    }
   }
   if(!contents){
@@ -548,16 +558,21 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
     auto existing=doc->content_cache.find(index);
     if(existing!=doc->content_cache.end()){
      contents=existing->second;
-     doc->content_access[index]=doc->global_cache_clock.fetch_add(1,std::memory_order_relaxed)+1;
+     {
+     auto prior=doc->content_access.find(index);
+     if(prior!=doc->content_access.end())
+      doc->content_oldest_first.erase({prior->second,index});
+     const auto stamp=doc->global_cache_clock.fetch_add(1,std::memory_order_relaxed)+1;
+     doc->content_access[index]=stamp;
+     doc->content_oldest_first.emplace(std::make_pair(stamp,index),index);
+    }
     }else{
      while((doc->content_cache.size()>=64 ||
            doc->content_cache_bytes>doc->content_cache_budget-decoded->size()) &&
            !doc->content_access.empty()){
-      const auto oldest=std::min_element(doc->content_access.begin(),
-       doc->content_access.end(),[](const auto& a,const auto& b){
-        return a.second<b.second;
-       });
-      auto victim=doc->content_cache.find(oldest->first);
+      const size_t oldest_page=doc->content_oldest_first.begin()->second;
+      doc->content_oldest_first.erase(doc->content_oldest_first.begin());
+      auto victim=doc->content_cache.find(oldest_page);
       if(victim!=doc->content_cache.end()){
        doc->content_cache_bytes-=victim->second->size();
        doc->content_cache.erase(victim);
@@ -565,7 +580,14 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
       doc->content_access.erase(oldest);
      }
      doc->content_cache.emplace(index,decoded);
-     doc->content_access[index]=doc->global_cache_clock.fetch_add(1,std::memory_order_relaxed)+1;
+     {
+     auto prior=doc->content_access.find(index);
+     if(prior!=doc->content_access.end())
+      doc->content_oldest_first.erase({prior->second,index});
+     const auto stamp=doc->global_cache_clock.fetch_add(1,std::memory_order_relaxed)+1;
+     doc->content_access[index]=stamp;
+     doc->content_oldest_first.emplace(std::make_pair(stamp,index),index);
+    }
      doc->content_cache_bytes+=decoded->size();
     }
     }
