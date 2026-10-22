@@ -15,6 +15,9 @@ namespace rinpdf::parser {
 struct VerifiedPageCounts {
  mutable std::mutex mutex;
  std::map<std::pair<int64_t,int64_t>,size_t> counts;
+ std::map<size_t,std::set<std::pair<int64_t,int64_t>>> paths;
+ std::map<size_t,uint64_t> path_ages;
+ uint64_t path_clock=0;
 };
 class ScopedPageXref {
  const ScopedPageXref* previous_;
