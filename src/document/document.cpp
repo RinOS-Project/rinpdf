@@ -40,30 +40,42 @@ template<class T>
 struct PageLru {
  std::map<size_t,std::shared_ptr<const T>> entries;
  std::map<size_t,size_t> ages;
+ std::map<std::pair<uint64_t,size_t>,size_t> oldest_first;
  std::map<size_t,size_t> weights;
  size_t resident_bytes=0;
  std::atomic<uint64_t>* shared_clock=nullptr;
  uint64_t tick(){return shared_clock?shared_clock->fetch_add(1,std::memory_order_relaxed)+1:0;}
+ void touch(size_t page){
+  auto it=ages.find(page);
+  if(it!=ages.end())oldest_first.erase({it->second,page});
+  const uint64_t stamp=tick();
+  ages[page]=stamp;
+  oldest_first.emplace(std::make_pair(stamp,page),page);
+ }
+ bool evict_oldest(){
+  if(oldest_first.empty())return false;
+  const size_t page=oldest_first.begin()->second;
+  oldest_first.erase(oldest_first.begin());
+  ages.erase(page);
+  auto w=weights.find(page);
+  if(w!=weights.end()){resident_bytes-=w->second;weights.erase(w);}
+  entries.erase(page);
+  return true;
+ }
  std::shared_ptr<const T> find(size_t page) {
   auto it=entries.find(page);
   if(it==entries.end())return {};
-  ages[page]=tick();
+  touch(page);
   return it->second;
  }
  std::shared_ptr<const T> insert(size_t page,std::shared_ptr<const T> value,size_t limit,size_t weight){
   auto it=entries.find(page);
-  if(it!=entries.end()){ages[page]=tick();return it->second;}
-  if(entries.size()>=limit && !ages.empty()){
-   auto oldest=std::min_element(ages.begin(),ages.end(),
-    [](const auto& a,const auto& b){return a.second<b.second;});
-   auto old_weight=weights.find(oldest->first);
-   if(old_weight!=weights.end()){resident_bytes-=old_weight->second;weights.erase(old_weight);}
-   entries.erase(oldest->first);ages.erase(oldest);
-  }
+  if(it!=entries.end()){touch(page);return it->second;}
+  if(entries.size()>=limit)evict_oldest();
   entries.emplace(page,value);
   try {weights.emplace(page,weight);}catch(...){entries.erase(page);throw;}
   resident_bytes+=weight;
-  ages[page]=tick();
+  touch(page);
   return value;
  }
 };
@@ -263,15 +275,15 @@ extern "C" rinpdf_status rinpdf_document_clear_render_caches(rinpdf_document* do
    doc->form_mutex,doc->graphics_mutex,doc->property_mutex,doc->geometry_mutex);
   doc->content_cache.clear();doc->content_access.clear();doc->content_cache_bytes=0;
   doc->font_cache.entries.clear();doc->font_cache.ages.clear();
-  doc->font_cache.weights.clear();doc->font_cache.resident_bytes=0;
+  doc->font_cache.weights.clear();doc->font_cache.oldest_first.clear();doc->font_cache.resident_bytes=0;
   doc->image_cache.entries.clear();doc->image_cache.ages.clear();
-  doc->image_cache.weights.clear();doc->image_cache.resident_bytes=0;
+  doc->image_cache.weights.clear();doc->image_cache.oldest_first.clear();doc->image_cache.resident_bytes=0;
   doc->form_cache.entries.clear();doc->form_cache.ages.clear();
-  doc->form_cache.weights.clear();doc->form_cache.resident_bytes=0;
+  doc->form_cache.weights.clear();doc->form_cache.oldest_first.clear();doc->form_cache.resident_bytes=0;
   doc->graphics_cache.entries.clear();doc->graphics_cache.ages.clear();
-  doc->graphics_cache.weights.clear();doc->graphics_cache.resident_bytes=0;
+  doc->graphics_cache.weights.clear();doc->graphics_cache.oldest_first.clear();doc->graphics_cache.resident_bytes=0;
   doc->property_cache.entries.clear();doc->property_cache.ages.clear();
-  doc->property_cache.weights.clear();doc->property_cache.resident_bytes=0;
+  doc->property_cache.weights.clear();doc->property_cache.oldest_first.clear();doc->property_cache.resident_bytes=0;
   doc->geometry_cache.clear();
  }
  {
@@ -303,16 +315,18 @@ bool trim_one_locked(rinpdf_document& d){
  // Compare the oldest access timestamps from every resource category.
  uint64_t oldest=UINT64_MAX;
  int category=-1;
- auto inspect=[&](const auto& ages,int kind){
-  for(const auto& [page,stamp]:ages)
-   if(stamp<oldest){oldest=stamp;category=kind;}
+ auto inspect=[&](const auto& cache,int kind){
+  if(!cache.oldest_first.empty()&&cache.oldest_first.begin()->first.first<oldest){
+   oldest=cache.oldest_first.begin()->first.first;category=kind;
+  }
  };
- inspect(d.content_access,0);
- inspect(d.font_cache.ages,1);
- inspect(d.image_cache.ages,2);
- inspect(d.form_cache.ages,3);
- inspect(d.graphics_cache.ages,4);
- inspect(d.property_cache.ages,5);
+ for(const auto& [page,stamp]:d.content_access)
+  if(stamp<oldest){oldest=stamp;category=0;}
+ inspect(d.font_cache,1);
+ inspect(d.image_cache,2);
+ inspect(d.form_cache,3);
+ inspect(d.graphics_cache,4);
+ inspect(d.property_cache,5);
  // Tree paths have their own clock and are trimmed when resource caches
  // are empty; timestamps are not comparable to the render clock.
  if(category<0){
@@ -335,17 +349,7 @@ bool trim_one_locked(rinpdf_document& d){
   d.cache_evictions.fetch_add(1,std::memory_order_relaxed);
   return true;
  }
- auto erase_oldest=[&](auto& cache){
-  auto it=std::min_element(cache.ages.begin(),cache.ages.end(),
-   [](const auto& a,const auto& b){return a.second<b.second;});
-  if(it==cache.ages.end())return;
-  auto weight=cache.weights.find(it->first);
-  if(weight!=cache.weights.end()){
-   cache.resident_bytes-=weight->second;
-   cache.weights.erase(weight);
-  }
-  cache.entries.erase(it->first);cache.ages.erase(it);
- };
+ auto erase_oldest=[&](auto& cache){cache.evict_oldest();};
  if(category==0){
   auto it=std::min_element(d.content_access.begin(),d.content_access.end(),
    [](const auto& a,const auto& b){return a.second<b.second;});
