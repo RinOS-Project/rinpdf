@@ -263,6 +263,11 @@ extern "C" rinpdf_status rinpdf_document_clear_render_caches(rinpdf_document* do
   doc->property_cache.entries.clear();doc->property_cache.ages.clear();
   doc->geometry_cache.clear();
  }
+ {
+  std::lock_guard<std::mutex> lock(doc->verified_page_counts.mutex);
+  doc->verified_page_counts.paths.clear();
+  doc->verified_page_counts.path_ages.clear();
+ }
  return RINPDF_OK;
 }
 
