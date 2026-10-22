@@ -47,10 +47,20 @@ struct PageLru {
  uint64_t tick(){return shared_clock?shared_clock->fetch_add(1,std::memory_order_relaxed)+1:0;}
  void touch(size_t page){
   auto it=ages.find(page);
-  if(it!=ages.end())oldest_first.erase({it->second,page});
   const uint64_t stamp=tick();
-  ages[page]=stamp;
-  oldest_first.emplace(std::make_pair(stamp,page),page);
+  if(it!=ages.end()){
+   // Re-key the existing tree node without allocating a replacement.
+   auto ordered=oldest_first.find({it->second,page});
+   if(ordered!=oldest_first.end()){
+    auto node=oldest_first.extract(ordered);
+    node.key()={stamp,page};
+    oldest_first.insert(std::move(node));
+   }else oldest_first.emplace(std::make_pair(stamp,page),page);
+   it->second=stamp;
+  }else{
+   oldest_first.emplace(std::make_pair(stamp,page),page);
+   ages.emplace(page,stamp);
+  }
  }
  bool evict_oldest(){
   if(oldest_first.empty())return false;
