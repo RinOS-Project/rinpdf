@@ -1976,11 +1976,9 @@ bool read_page_contents(const uint8_t *data,size_t size,size_t index,std::vector
  if(!view.open(data,size))return false;
  const auto& xref=*view.entries;const auto& compressed=*view.compressed;const auto& trailer=*view.trailer;
  if(get(trailer,"Encrypt"))return false;
- const Value *root=get(trailer,"Root");if(!root)return false;
- Reader reader{data,size,xref,compressed,{}};Value catalog;
- if(!reader.object(*root,catalog))return false;
- const Value *type=get(catalog,"Type"),*pages=get(catalog,"Pages");
- if(!type||type->kind!=Value::Kind::Name||type->text!="Catalog"||!pages)return false;
+ Reader reader{data,size,xref,compressed,{}};
+ Value catalog;const Value* pages=nullptr;
+ if(!resolve_page_catalog(reader,trailer,catalog,pages))return false;
  std::set<size_t> active;size_t current=0;
  return reader.walk(*pages,0,current,index,active,contents,limit)&&index<current;
 }
@@ -1990,11 +1988,9 @@ bool read_page_box(const uint8_t *data,size_t size,size_t index,MediaBox& box){
  if(!view.open(data,size))return false;
  const auto& xref=*view.entries;const auto& compressed=*view.compressed;const auto& trailer=*view.trailer;
  if(get(trailer,"Encrypt"))return false;
- const Value *root=get(trailer,"Root");if(!root)return false;
- Reader reader{data,size,xref,compressed,{}};Value catalog;
- if(!reader.object(*root,catalog))return false;
- const Value *type=get(catalog,"Type"),*pages=get(catalog,"Pages");
- if(!type||type->kind!=Value::Kind::Name||type->text!="Catalog"||!pages)return false;
+ Reader reader{data,size,xref,compressed,{}};
+ Value catalog;const Value* pages=nullptr;
+ if(!resolve_page_catalog(reader,trailer,catalog,pages))return false;
  std::set<size_t> active;size_t current=0;
  return reader.walk_box(*pages,0,current,index,active,nullptr,nullptr,0,box)&&index<current;
 }
@@ -2005,13 +2001,9 @@ bool read_page_fonts(const uint8_t* data,size_t size,size_t index,
  ScopedPageXref::View view;
  if(!view.open(data,size))return false;
  const auto& xref=*view.entries;const auto& compressed=*view.compressed;const auto& trailer=*view.trailer;
- const Value* root=get(trailer,"Root");
- if(!root)return false;
  Reader reader{data,size,xref,compressed,{}};
- Value catalog;
- if(!reader.object(*root,catalog))return false;
- const Value* type=get(catalog,"Type"),*pages=get(catalog,"Pages");
- if(!type||type->kind!=Value::Kind::Name||type->text!="Catalog"||!pages)return false;
+ Value catalog;const Value* pages=nullptr;
+ if(!resolve_page_catalog(reader,trailer,catalog,pages))return false;
  std::map<std::string,PageFont> result;
  size_t current=0;std::set<size_t> active;
  std::string document_language;
@@ -2032,14 +2024,9 @@ bool read_page_graphics_states(const uint8_t* data,size_t size,size_t index,
  if(!view.open(data,size))return false;
  const auto& xref=*view.entries;const auto& compressed=*view.compressed;const auto& trailer=*view.trailer;
  if(get(trailer,"Encrypt"))return false;
- const Value* root=get(trailer,"Root");
- if(!root)return false;
  Reader reader{data,size,xref,compressed,{}};
- Value catalog;
- if(!reader.object(*root,catalog))return false;
- const Value* type=get(catalog,"Type"),*pages=get(catalog,"Pages");
- if(!type||type->kind!=Value::Kind::Name||
-    type->text!="Catalog"||!pages)return false;
+ Value catalog;const Value* pages=nullptr;
+ if(!resolve_page_catalog(reader,trailer,catalog,pages))return false;
  size_t current=0;std::set<size_t> active;
  PageGraphicsStates found;
  if(!reader.walk_graphics_states(*pages,0,current,index,active,nullptr,found)||
@@ -2054,14 +2041,9 @@ bool read_page_properties(const uint8_t* data,size_t size,size_t index,
  if(!view.open(data,size))return false;
  const auto& xref=*view.entries;const auto& compressed=*view.compressed;const auto& trailer=*view.trailer;
  if(get(trailer,"Encrypt"))return false;
- const Value* root=get(trailer,"Root");
- if(!root)return false;
  Reader reader{data,size,xref,compressed,{}};
- Value catalog;
- if(!reader.object(*root,catalog))return false;
- const Value* type=get(catalog,"Type"),*pages=get(catalog,"Pages");
- if(!type||type->kind!=Value::Kind::Name||
-    type->text!="Catalog"||!pages)return false;
+ Value catalog;const Value* pages=nullptr;
+ if(!resolve_page_catalog(reader,trailer,catalog,pages))return false;
  size_t current=0;
  std::set<size_t> active;
  PageProperties result;
@@ -2077,12 +2059,9 @@ bool read_page_images(const uint8_t* data,size_t size,size_t index,
  if(!view.open(data,size))return false;
  const auto& xref=*view.entries;const auto& compressed=*view.compressed;const auto& trailer=*view.trailer;
  if(get(trailer,"Encrypt"))return false;
- const Value* root=get(trailer,"Root");if(!root)return false;
  Reader reader{data,size,xref,compressed,{}};
- Value catalog;
- if(!reader.object(*root,catalog))return false;
- const Value* type=get(catalog,"Type"),*pages=get(catalog,"Pages");
- if(!type||type->kind!=Value::Kind::Name||type->text!="Catalog"||!pages)return false;
+ Value catalog;const Value* pages=nullptr;
+ if(!resolve_page_catalog(reader,trailer,catalog,pages))return false;
  size_t current=0;std::set<size_t> active;
  std::map<std::string,PageImage> result;
  if(!reader.walk_images(*pages,0,current,index,active,nullptr,result)||
@@ -2098,14 +2077,9 @@ bool read_page_color_spaces(const uint8_t* data,size_t size,size_t index,
  if(!view.open(data,size))return false;
  const auto& xref=*view.entries;const auto& compressed=*view.compressed;const auto& trailer=*view.trailer;
  if(get(trailer,"Encrypt"))return false;
- const Value* root=get(trailer,"Root");
- if(!root)return false;
  Reader reader{data,size,xref,compressed,{}};
- Value catalog;
- if(!reader.object(*root,catalog))return false;
- const Value* type=get(catalog,"Type"),*pages=get(catalog,"Pages");
- if(!type||type->kind!=Value::Kind::Name||
-    type->text!="Catalog"||!pages)return false;
+ Value catalog;const Value* pages=nullptr;
+ if(!resolve_page_catalog(reader,trailer,catalog,pages))return false;
  size_t current=0;
  std::set<size_t> active;
  std::map<std::string,std::string> named;
@@ -2124,13 +2098,9 @@ bool read_page_forms(const uint8_t* data,size_t size,size_t index,
  if(!view.open(data,size))return false;
  const auto& xref=*view.entries;const auto& compressed=*view.compressed;const auto& trailer=*view.trailer;
  if(get(trailer,"Encrypt"))return false;
- const Value* root=get(trailer,"Root");if(!root)return false;
  Reader reader{data,size,xref,compressed,{}};
- Value catalog;
- if(!reader.object(*root,catalog))return false;
- const Value* type=get(catalog,"Type"),*pages=get(catalog,"Pages");
- if(!type||type->kind!=Value::Kind::Name||type->text!="Catalog"||!pages)
-  return false;
+ Value catalog;const Value* pages=nullptr;
+ if(!resolve_page_catalog(reader,trailer,catalog,pages))return false;
  size_t current=0;std::set<size_t> active;
  std::map<std::string,PageForm> result;
  if(!reader.walk_forms(*pages,0,current,index,active,nullptr,result)||
