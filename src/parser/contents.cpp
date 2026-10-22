@@ -115,8 +115,38 @@ static bool box_value(const Value& value,MediaBox& box){
 }
 struct Reader {
  const uint8_t *data;size_t size;const std::vector<XrefEntry>& xref;const std::vector<XrefStreamEntry>& compressed;
+ bool verified_subtree_count(const Value& ref,size_t& total) const {
+  std::set<std::pair<int64_t,int64_t>> visiting;
+  size_t visited=0;
+  std::function<bool(const Value&,unsigned,size_t&)> walk_count=
+   [&](const Value& item,unsigned depth,size_t& out)->bool{
+    if(depth>64||++visited>100000||item.kind!=Value::Kind::Reference||
+       item.integer<=0)return false;
+    const auto key=std::make_pair(item.integer,int64_t(item.generation));
+    if(!visiting.insert(key).second)return false;
+    Value node;
+    if(!object(item,node))return false;
+    const Value* kind=get(node,"Type");
+    if(!kind||kind->kind!=Value::Kind::Name)return false;
+    if(kind->text=="Page"){out=1;visiting.erase(key);return true;}
+    if(kind->text!="Pages")return false;
+    const Value* children=get(node,"Kids");
+    const Value* declared=get(node,"Count");
+    if(!children||children->kind!=Value::Kind::Array||
+       !declared||declared->kind!=Value::Kind::Integer||
+       declared->integer<=0)return false;
+    size_t sum=0;
+    for(const Value& child:children->array){
+     size_t n=0;
+     if(!walk_count(child,depth+1,n)||n>SIZE_MAX-sum)return false;
+     sum+=n;
+    }
+    if(uint64_t(declared->integer)!=uint64_t(sum))return false;
+    out=sum;visiting.erase(key);return true;
+   };
+  return walk_count(ref,0,total);
+ }
  bool skip_preceding_subtree(const Value& ref,size_t& current,size_t target) const {
-  // A scoped ancestry index already maintains the target's logical position.
   if(ScopedPageXref::get_cached_path(data,size,target)||current>target||
      ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
   Value node;
@@ -125,9 +155,11 @@ struct Reader {
   const Value* count=get(node,"Count");
   if(!kind||kind->kind!=Value::Kind::Name||kind->text!="Pages"||
      !count||count->kind!=Value::Kind::Integer||count->integer<=0)return false;
-  const uint64_t pages=static_cast<uint64_t>(count->integer);
-  if(pages>static_cast<uint64_t>(target-current))return false;
-  current+=static_cast<size_t>(pages);
+  const uint64_t pages=uint64_t(count->integer);
+  if(pages>uint64_t(target-current))return false;
+  size_t verified=0;
+  if(!verified_subtree_count(ref,verified)||verified!=size_t(pages))return false;
+  current+=verified;
   return true;
  }
  void prepare_path(const Value& root,size_t target,size_t& current) const {
@@ -153,25 +185,11 @@ struct Reader {
     if(!kids||kids->kind!=Value::Kind::Array)return false;
     const size_t path_before=path.size();
     for(const Value& child:kids->array){
-     // /Count gives the number of leaf pages in a Pages subtree.
-     // Skip siblings strictly preceding the requested page without
-     // walking all their descendants. Unusable counts fall back to
-     // the full recursive validation path.
-     if(child.kind==Value::Kind::Reference&&child.integer>0&&count<=target){
-      Value child_node;
-      if(object(child,child_node)){
-       const Value* child_kind=get(child_node,"Type");
-       const Value* child_count=get(child_node,"Count");
-       if(child_kind&&child_kind->kind==Value::Kind::Name&&
-          child_kind->text=="Pages"&&child_count&&
-          child_count->kind==Value::Kind::Integer&&child_count->integer>0){
-        const auto n=static_cast<uint64_t>(child_count->integer);
-        if(n<=static_cast<uint64_t>(target-count)){
-         count+=static_cast<size_t>(n);
-         continue;
-        }
-       }
-      }
+     size_t verified=0;
+     if(count<=target&&verified_subtree_count(child,verified)&&
+        verified<=target-count){
+      count+=verified;
+      continue;
      }
      if(!visit(child,depth+1))return false;
      // Once the target leaf has been found, no later sibling can
