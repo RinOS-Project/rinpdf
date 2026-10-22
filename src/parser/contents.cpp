@@ -132,11 +132,11 @@ struct Reader {
    }else if(kind->text=="Pages"){
     const Value* kids=get(node,"Kids");
     if(!kids||kids->kind!=Value::Kind::Array)return false;
+    const size_t path_before=path.size();
     for(const Value& child:kids->array){
      if(!visit(child,depth+1))return false;
     }
-    // Child paths are recorded separately; parent is added below.
-    selected=!path.empty();
+    selected=path.size()>path_before;
    }else return false;
    if(selected)path.insert(key);
    active.erase(key);
@@ -1011,6 +1011,7 @@ struct Reader {
   std::set<size_t>& active,const Value* inherited,
   std::map<std::string,PageImage>& output) const {
   if(depth>64||ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
+  if(!ScopedPageXref::path_contains(data,size,target,ref))return true;
   const size_t id=static_cast<size_t>(ref.integer);
   if(!active.insert(id).second)return false;
   Value node,resources_owned;
@@ -1594,6 +1595,7 @@ struct Reader {
   std::map<std::string,std::string>& aliases,
   std::map<std::string,SeparationColorSpace>& separations) const {
   if(depth>64||ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
+  if(!ScopedPageXref::path_contains(data,size,target,ref))return true;
   const size_t id=size_t(ref.integer);
   if(!active.insert(id).second)return false;
   Value node,owned;
@@ -1688,6 +1690,7 @@ struct Reader {
   std::set<size_t>& active,const Value* inherited,
   std::map<std::string,PageForm>& output) const {
   if(depth>64||ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
+  if(!ScopedPageXref::path_contains(data,size,target,ref))return true;
   const size_t id=size_t(ref.integer);
   if(!active.insert(id).second)return false;
   Value node,owned;
@@ -1753,6 +1756,7 @@ struct Reader {
  bool walk_graphics_states(const Value& ref,size_t depth,size_t& current,size_t target,
   std::set<size_t>& active,const Value* inherited,PageGraphicsStates& output) const {
   if(depth>64||ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
+  if(!ScopedPageXref::path_contains(data,size,target,ref))return true;
   const size_t id=size_t(ref.integer);
   if(!active.insert(id).second)return false;
   Value node,owned;
@@ -1837,6 +1841,7 @@ struct Reader {
  bool walk_properties(const Value& ref,size_t depth,size_t& current,size_t target,
   std::set<size_t>& active,const Value* inherited,PageProperties& output) const {
   if(depth>64||ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
+  if(!ScopedPageXref::path_contains(data,size,target,ref))return true;
   const size_t id=static_cast<size_t>(ref.integer);
   if(!active.insert(id).second)return false;
   Value node,owned_resources;
@@ -1899,6 +1904,7 @@ struct Reader {
   std::map<std::string,PageFont>& output,
   const std::string& catalog_language) const {
   if(depth>64||ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
+  if(!ScopedPageXref::path_contains(data,size,target,ref))return true;
   const size_t id=static_cast<size_t>(ref.integer);
   if(!active.insert(id).second)return false;
   Value node;
@@ -1956,6 +1962,7 @@ struct Reader {
  bool walk_box(const Value& ref,size_t depth,size_t& current,size_t target,
                std::set<size_t>& active,const MediaBox* inherited,const MediaBox* inherited_crop,unsigned inherited_rotation,MediaBox& output) const {
   if(depth>64||ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
+  if(!ScopedPageXref::path_contains(data,size,target,ref))return true;
   size_t id=(size_t)ref.integer;
   if(!active.insert(id).second)return false;
   Value node;
@@ -1999,6 +2006,7 @@ struct Reader {
  bool walk(const Value& ref,size_t depth,size_t& current,size_t target,
            std::set<size_t>& active,std::vector<uint8_t>& result,size_t limit) const {
   if(depth>64||ref.kind!=Value::Kind::Reference||ref.integer<=0)return false;
+  if(!ScopedPageXref::path_contains(data,size,target,ref))return true;
   size_t id=(size_t)ref.integer;
   if(!active.insert(id).second)return false;
   Value node;
@@ -2052,7 +2060,7 @@ bool read_page_contents(const uint8_t *data,size_t size,size_t index,std::vector
  Reader reader{data,size,xref,compressed,{}};
  Value catalog;const Value* pages=nullptr;
  if(!resolve_page_catalog(reader,trailer,catalog,pages))return false;
- std::set<size_t> active;size_t current=0;
+ std::set<size_t> active;size_t current=0;reader.prepare_path(*pages,index,current);
  return reader.walk(*pages,0,current,index,active,contents,limit)&&index<current;
 }
 bool read_page_box(const uint8_t *data,size_t size,size_t index,MediaBox& box){
@@ -2064,7 +2072,7 @@ bool read_page_box(const uint8_t *data,size_t size,size_t index,MediaBox& box){
  Reader reader{data,size,xref,compressed,{}};
  Value catalog;const Value* pages=nullptr;
  if(!resolve_page_catalog(reader,trailer,catalog,pages))return false;
- std::set<size_t> active;size_t current=0;
+ std::set<size_t> active;size_t current=0;reader.prepare_path(*pages,index,current);
  return reader.walk_box(*pages,0,current,index,active,nullptr,nullptr,0,box)&&index<current;
 }
 
@@ -2078,7 +2086,7 @@ bool read_page_fonts(const uint8_t* data,size_t size,size_t index,
  Value catalog;const Value* pages=nullptr;
  if(!resolve_page_catalog(reader,trailer,catalog,pages))return false;
  std::map<std::string,PageFont> result;
- size_t current=0;std::set<size_t> active;
+ size_t current=0;reader.prepare_path(*pages,index,current);std::set<size_t> active;
  std::string document_language;
  if(const Value* lang=get(catalog,"Lang")){
   if(lang->kind!=Value::Kind::String||lang->text.size()>64)return false;
@@ -2100,7 +2108,7 @@ bool read_page_graphics_states(const uint8_t* data,size_t size,size_t index,
  Reader reader{data,size,xref,compressed,{}};
  Value catalog;const Value* pages=nullptr;
  if(!resolve_page_catalog(reader,trailer,catalog,pages))return false;
- size_t current=0;std::set<size_t> active;
+ size_t current=0;reader.prepare_path(*pages,index,current);std::set<size_t> active;
  PageGraphicsStates found;
  if(!reader.walk_graphics_states(*pages,0,current,index,active,nullptr,found)||
     index>=current)return false;
@@ -2117,7 +2125,7 @@ bool read_page_properties(const uint8_t* data,size_t size,size_t index,
  Reader reader{data,size,xref,compressed,{}};
  Value catalog;const Value* pages=nullptr;
  if(!resolve_page_catalog(reader,trailer,catalog,pages))return false;
- size_t current=0;
+ size_t current=0;reader.prepare_path(*pages,index,current);
  std::set<size_t> active;
  PageProperties result;
  if(!reader.walk_properties(*pages,0,current,index,active,nullptr,result)||
@@ -2135,7 +2143,7 @@ bool read_page_images(const uint8_t* data,size_t size,size_t index,
  Reader reader{data,size,xref,compressed,{}};
  Value catalog;const Value* pages=nullptr;
  if(!resolve_page_catalog(reader,trailer,catalog,pages))return false;
- size_t current=0;std::set<size_t> active;
+ size_t current=0;reader.prepare_path(*pages,index,current);std::set<size_t> active;
  std::map<std::string,PageImage> result;
  if(!reader.walk_images(*pages,0,current,index,active,nullptr,result)||
     index>=current)return false;
@@ -2153,7 +2161,7 @@ bool read_page_color_spaces(const uint8_t* data,size_t size,size_t index,
  Reader reader{data,size,xref,compressed,{}};
  Value catalog;const Value* pages=nullptr;
  if(!resolve_page_catalog(reader,trailer,catalog,pages))return false;
- size_t current=0;
+ size_t current=0;reader.prepare_path(*pages,index,current);
  std::set<size_t> active;
  std::map<std::string,std::string> named;
  std::map<std::string,SeparationColorSpace> tint;
@@ -2174,7 +2182,7 @@ bool read_page_forms(const uint8_t* data,size_t size,size_t index,
  Reader reader{data,size,xref,compressed,{}};
  Value catalog;const Value* pages=nullptr;
  if(!resolve_page_catalog(reader,trailer,catalog,pages))return false;
- size_t current=0;std::set<size_t> active;
+ size_t current=0;reader.prepare_path(*pages,index,current);std::set<size_t> active;
  std::map<std::string,PageForm> result;
  if(!reader.walk_forms(*pages,0,current,index,active,nullptr,result)||
     index>=current)return false;
