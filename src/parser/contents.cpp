@@ -45,6 +45,25 @@ bool ScopedPageXref::read(const uint8_t* data,size_t size,
  return read_object_xref(data,size,entries,compressed,trailer);
 }
 
+bool ScopedPageXref::resolve(const uint8_t* data,size_t size,
+ const std::vector<XrefEntry>& entries,
+ const std::vector<XrefStreamEntry>& compressed,const Value& ref,
+ Value& out,std::map<size_t,Value>* compressed_cache){
+ if(active_xref&&active_xref->data_==data&&active_xref->size_==size&&
+    active_xref->entries_==&entries&&active_xref->compressed_==&compressed&&
+    ref.kind==Value::Kind::Reference&&ref.integer>0){
+  const auto key=std::make_pair(ref.integer,int64_t(ref.generation));
+  const auto it=active_xref->objects_.find(key);
+  if(it!=active_xref->objects_.end()){out=it->second;return true;}
+  if(!resolve_reference_value(data,size,entries,compressed,ref,out,compressed_cache))
+   return false;
+  // Bound per-render memoization; unbounded dictionaries are not retained.
+  if(active_xref->objects_.size()<2048)
+   active_xref->objects_.emplace(key,out);
+  return true;
+ }
+ return resolve_reference_value(data,size,entries,compressed,ref,out,compressed_cache);
+}
 bool ScopedPageXref::View::open(const uint8_t* data,size_t size){
  if(active_xref&&active_xref->data_==data&&active_xref->size_==size){
   entries=active_xref->entries_;
@@ -88,7 +107,7 @@ struct Reader {
   return true;
  }
  bool object(const Value& ref,Value& out) const {
-  return resolve_reference_value(data,size,xref,compressed,ref,out,&compressed_cache);
+  return ScopedPageXref::resolve(data,size,xref,compressed,ref,out,&compressed_cache);
  }
  bool stream(const Value& ref,std::vector<uint8_t>& bytes,size_t limit) const {
   const XrefEntry *e=nullptr;if(!entry(ref,e))return false;
