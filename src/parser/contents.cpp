@@ -1099,6 +1099,7 @@ struct Reader {
   if(type->text!="Pages"){active.erase(id);return false;}
   const Value* kids=get(node,"Kids");
   if(!kids||kids->kind!=Value::Kind::Array){active.erase(id);return false;}
+  if(current>target){active.erase(id);return true;}
   for(const Value& child:kids->array){
    if(!skip_preceding_subtree(child,current,target) && !walk_images(child,depth+1,current,target,active,inherited,output)){
     active.erase(id);return false;
@@ -1721,6 +1722,7 @@ struct Reader {
   if(type->text!="Pages"){active.erase(id);return false;}
   const Value* kids=get(node,"Kids");
   if(!kids||kids->kind!=Value::Kind::Array){active.erase(id);return false;}
+  if(current>target){active.erase(id);return true;}
   for(const Value& child:kids->array)
    if(!skip_preceding_subtree(child,current,target) && !walk_color_spaces(child,depth+1,current,target,active,inherited,
                          aliases,separations)){
@@ -1788,6 +1790,7 @@ struct Reader {
   if(type->text!="Pages"){active.erase(id);return false;}
   const Value* kids=get(node,"Kids");
   if(!kids||kids->kind!=Value::Kind::Array){active.erase(id);return false;}
+  if(current>target){active.erase(id);return true;}
   for(const Value& child:kids->array){
    if(!skip_preceding_subtree(child,current,target) && !walk_forms(child,depth+1,current,target,active,inherited,output)){
     active.erase(id);return false;
@@ -1874,6 +1877,7 @@ struct Reader {
   if(!children||children->kind!=Value::Kind::Array){
    active.erase(id);return false;
   }
+  if(current>target){active.erase(id);return true;}
   for(const Value& child:children->array)
    if(!skip_preceding_subtree(child,current,target) && !walk_graphics_states(child,depth+1,current,target,active,inherited,output)){
     active.erase(id);return false;
@@ -1935,6 +1939,7 @@ struct Reader {
   if(type->text!="Pages"){active.erase(id);return false;}
   const Value* kids=get(node,"Kids");
   if(!kids||kids->kind!=Value::Kind::Array){active.erase(id);return false;}
+  if(current>target){active.erase(id);return true;}
   for(const auto& child:kids->array)
    if(!skip_preceding_subtree(child,current,target) && !walk_properties(child,depth+1,current,target,active,inherited,output)){
     active.erase(id);return false;
@@ -1995,6 +2000,7 @@ struct Reader {
   if(type->text!="Pages"){active.erase(id);return false;}
   const Value* kids=get(node,"Kids");
   if(!kids||kids->kind!=Value::Kind::Array){active.erase(id);return false;}
+  if(current>target){active.erase(id);return true;}
   for(const Value& child:kids->array)
    if(!skip_preceding_subtree(child,current,target) && !walk_fonts(child,depth+1,current,target,active,inherited,output,catalog_language)){
     active.erase(id);return false;
@@ -2040,6 +2046,7 @@ struct Reader {
   if(type->text!="Pages"){active.erase(id);return false;}
   const Value *kids=get(node,"Kids");
   if(!kids||kids->kind!=Value::Kind::Array){active.erase(id);return false;}
+  if(current>target){active.erase(id);return true;}
   for(const Value& child:kids->array){
    if(!skip_preceding_subtree(child,current,target) && !walk_box(child,depth+1,current,target,active,inherited,inherited_crop,inherited_rotation,output)){active.erase(id);return false;}
   }
@@ -2076,6 +2083,7 @@ struct Reader {
   if(type->text!="Pages"){active.erase(id);return false;}
   const Value *kids=get(node,"Kids");
   if(!kids||kids->kind!=Value::Kind::Array){active.erase(id);return false;}
+  if(current>target){active.erase(id);return true;}
   for(const Value& child:kids->array){
    if(!skip_preceding_subtree(child,current,target) && !walk(child,depth+1,current,target,active,result,limit)){active.erase(id);return false;}
   }
