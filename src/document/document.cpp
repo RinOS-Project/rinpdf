@@ -302,6 +302,7 @@ extern "C" rinpdf_status rinpdf_document_clear_render_caches(rinpdf_document* do
   std::lock_guard<std::mutex> lock(doc->verified_page_counts.mutex);
   doc->verified_page_counts.paths.clear();
   doc->verified_page_counts.path_ages.clear();
+  doc->verified_page_counts.path_oldest_first.clear();
   doc->verified_page_counts.counts.clear();
   doc->verified_page_counts.resident_bytes=0;
  }
@@ -346,15 +347,15 @@ bool trim_one_locked(rinpdf_document& d){
  if(category<0){
   std::lock_guard<std::mutex> guard(d.verified_page_counts.mutex);
   auto& shared=d.verified_page_counts;
-  if(!shared.path_ages.empty()){
-   auto it=std::min_element(shared.path_ages.begin(),shared.path_ages.end(),
-    [](const auto& a,const auto& b){return a.second<b.second;});
-   const auto path=shared.paths.find(it->first);
+  if(!shared.path_oldest_first.empty()){
+   const size_t victim=shared.path_oldest_first.begin()->second;
+   shared.path_oldest_first.erase(shared.path_oldest_first.begin());
+   const auto path=shared.paths.find(victim);
    if(path!=shared.paths.end()){
     shared.resident_bytes-=rinpdf::parser::VerifiedPageCounts::path_weight(path->second.size());
     shared.paths.erase(path);
    }
-   shared.path_ages.erase(it);
+   shared.path_ages.erase(victim);
   }else if(!shared.counts.empty()){
    shared.counts.erase(shared.counts.begin());
    shared.resident_bytes-=rinpdf::parser::VerifiedPageCounts::count_weight;
