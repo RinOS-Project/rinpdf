@@ -81,7 +81,8 @@ struct PageLru {
   if(it!=entries.end()){touch(page);return it->second;}
   // Allocate the new entry and its indexes before evicting an old page.
   // A failed allocation must leave the previously cached entries intact.
-  entries.emplace(page,value);
+  auto [inserted,created]=entries.emplace(page,value);
+  if(!created)return inserted->second;
   try{
    weights.emplace(page,weight);
    touch(page);
