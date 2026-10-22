@@ -18,6 +18,9 @@ struct VerifiedPageCounts {
  std::map<size_t,std::set<std::pair<int64_t,int64_t>>> paths;
  std::map<size_t,uint64_t> path_ages;
  uint64_t path_clock=0;
+ size_t resident_bytes=0;
+ static constexpr size_t count_weight=sizeof(std::pair<int64_t,int64_t>)+sizeof(size_t)+48;
+ static size_t path_weight(size_t length){return sizeof(size_t)+length*(sizeof(std::pair<int64_t,int64_t>)+48)+48;}
 };
 class ScopedPageXref {
  const ScopedPageXref* previous_;
