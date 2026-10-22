@@ -38,54 +38,58 @@
 #endif
 template<class T>
 struct PageLru {
+ using Order=std::map<std::pair<uint64_t,size_t>,size_t>;
  std::map<size_t,std::shared_ptr<const T>> entries;
- std::map<size_t,size_t> ages;
- std::map<std::pair<uint64_t,size_t>,size_t> oldest_first;
+ Order oldest_first;
+ // Page -> ordered node iterator, no duplicate timestamp storage.
+ std::map<size_t,typename Order::iterator> positions;
  std::map<size_t,size_t> weights;
  size_t resident_bytes=0;
  std::atomic<uint64_t>* shared_clock=nullptr;
  uint64_t tick(){return shared_clock?shared_clock->fetch_add(1,std::memory_order_relaxed)+1:0;}
  void touch(size_t page){
-  auto it=ages.find(page);
   const uint64_t stamp=tick();
-  if(it!=ages.end()){
-   // Re-key the existing tree node without allocating a replacement.
-   auto ordered=oldest_first.find({it->second,page});
-   if(ordered!=oldest_first.end()){
-    auto node=oldest_first.extract(ordered);
-    node.key()={stamp,page};
-    oldest_first.insert(std::move(node));
-   }else oldest_first.emplace(std::make_pair(stamp,page),page);
-   it->second=stamp;
+  auto it=positions.find(page);
+  if(it!=positions.end()){
+   auto node=oldest_first.extract(it->second);
+   node.key()={stamp,page};
+   it->second=oldest_first.insert(std::move(node)).position;
   }else{
-   oldest_first.emplace(std::make_pair(stamp,page),page);
-   ages.emplace(page,stamp);
+   auto pos=oldest_first.emplace(std::make_pair(stamp,page),page).first;
+   try{positions.emplace(page,pos);}
+   catch(...){oldest_first.erase(pos);throw;}
   }
  }
  bool evict_oldest(){
   if(oldest_first.empty())return false;
   const size_t page=oldest_first.begin()->second;
+  positions.erase(page);
   oldest_first.erase(oldest_first.begin());
-  ages.erase(page);
   auto w=weights.find(page);
   if(w!=weights.end()){resident_bytes-=w->second;weights.erase(w);}
   entries.erase(page);
   return true;
  }
- std::shared_ptr<const T> find(size_t page) {
+ std::shared_ptr<const T> find(size_t page){
   auto it=entries.find(page);
   if(it==entries.end())return {};
-  touch(page);
-  return it->second;
+  touch(page);return it->second;
  }
- std::shared_ptr<const T> insert(size_t page,std::shared_ptr<const T> value,size_t limit,size_t weight){
+ std::shared_ptr<const T> insert(size_t page,std::shared_ptr<const T> value,
+  size_t limit,size_t weight){
   auto it=entries.find(page);
   if(it!=entries.end()){touch(page);return it->second;}
   if(entries.size()>=limit)evict_oldest();
   entries.emplace(page,value);
-  try {weights.emplace(page,weight);}catch(...){entries.erase(page);throw;}
+  try{
+   weights.emplace(page,weight);
+   touch(page);
+  }catch(...){
+   auto pos=positions.find(page);
+   if(pos!=positions.end()){oldest_first.erase(pos->second);positions.erase(pos);}
+   weights.erase(page);entries.erase(page);throw;
+  }
   resident_bytes+=weight;
-  touch(page);
   return value;
  }
 };
@@ -286,15 +290,15 @@ extern "C" rinpdf_status rinpdf_document_clear_render_caches(rinpdf_document* do
   std::scoped_lock lock(doc->content_mutex,doc->font_mutex,doc->image_mutex,
    doc->form_mutex,doc->graphics_mutex,doc->property_mutex,doc->geometry_mutex);
   doc->content_cache.clear();doc->content_access.clear();doc->content_oldest_first.clear();doc->content_cache_bytes=0;
-  doc->font_cache.entries.clear();doc->font_cache.ages.clear();
+  doc->font_cache.entries.clear();doc->font_cache.positions.clear();
   doc->font_cache.weights.clear();doc->font_cache.oldest_first.clear();doc->font_cache.resident_bytes=0;
-  doc->image_cache.entries.clear();doc->image_cache.ages.clear();
+  doc->image_cache.entries.clear();doc->image_cache.positions.clear();
   doc->image_cache.weights.clear();doc->image_cache.oldest_first.clear();doc->image_cache.resident_bytes=0;
-  doc->form_cache.entries.clear();doc->form_cache.ages.clear();
+  doc->form_cache.entries.clear();doc->form_cache.positions.clear();
   doc->form_cache.weights.clear();doc->form_cache.oldest_first.clear();doc->form_cache.resident_bytes=0;
-  doc->graphics_cache.entries.clear();doc->graphics_cache.ages.clear();
+  doc->graphics_cache.entries.clear();doc->graphics_cache.positions.clear();
   doc->graphics_cache.weights.clear();doc->graphics_cache.oldest_first.clear();doc->graphics_cache.resident_bytes=0;
-  doc->property_cache.entries.clear();doc->property_cache.ages.clear();
+  doc->property_cache.entries.clear();doc->property_cache.positions.clear();
   doc->property_cache.weights.clear();doc->property_cache.oldest_first.clear();doc->property_cache.resident_bytes=0;
   doc->geometry_cache.clear();
  }
