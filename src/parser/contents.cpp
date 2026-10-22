@@ -138,7 +138,30 @@ struct Reader {
     if(!kids||kids->kind!=Value::Kind::Array)return false;
     const size_t path_before=path.size();
     for(const Value& child:kids->array){
+     // /Count gives the number of leaf pages in a Pages subtree.
+     // Skip siblings strictly preceding the requested page without
+     // walking all their descendants. Unusable counts fall back to
+     // the full recursive validation path.
+     if(child.kind==Value::Kind::Reference&&child.integer>0&&count<=target){
+      Value child_node;
+      if(object(child,child_node)){
+       const Value* child_kind=get(child_node,"Type");
+       const Value* child_count=get(child_node,"Count");
+       if(child_kind&&child_kind->kind==Value::Kind::Name&&
+          child_kind->text=="Pages"&&child_count&&
+          child_count->kind==Value::Kind::Integer&&child_count->integer>0){
+        const auto n=static_cast<uint64_t>(child_count->integer);
+        if(n<=static_cast<uint64_t>(target-count)){
+         count+=static_cast<size_t>(n);
+         continue;
+        }
+       }
+      }
+     }
      if(!visit(child,depth+1))return false;
+     // Once the target leaf has been found, no later sibling can
+     // contribute to its ancestry.
+     if(path.size()>path_before)break;
     }
     selected=path.size()>path_before;
    }else return false;
