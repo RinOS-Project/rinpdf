@@ -546,6 +546,23 @@ extern "C" rinpdf_status rinpdf_document_page_geometry(
  }catch(const std::bad_alloc&){return RINPDF_OUT_OF_MEMORY;}
 }
 
+extern "C" rinpdf_status rinpdf_document_page_physical_size(
+ const rinpdf_document* doc,size_t index,double* width,double* height,double* unit){
+ if(!doc||!width||!height||!unit)return RINPDF_INVALID_ARGUMENT;
+ try{
+  rinpdf::parser::MediaBox box{};
+  if(!rinpdf::parser::read_page_box(doc->data(),doc->size(),index,box))
+   return RINPDF_UNSUPPORTED;
+  double w=(box.x1-box.x0)*box.user_unit;
+  double h=(box.y1-box.y0)*box.user_unit;
+  if(box.rotation==90||box.rotation==270)std::swap(w,h);
+  if(!std::isfinite(w)||!std::isfinite(h)||w<=0||h<=0)
+   return RINPDF_UNSUPPORTED;
+  *width=w;*height=h;*unit=box.user_unit;
+  return RINPDF_OK;
+ }catch(const std::bad_alloc&){return RINPDF_OUT_OF_MEMORY;}
+}
+
 namespace {
 size_t trim_locked(rinpdf_document& doc,size_t target);
 }
