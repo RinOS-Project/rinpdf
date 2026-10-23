@@ -2153,7 +2153,12 @@ if(!skip_preceding_subtree(child,current,target) && !walk_fonts(child,depth+1,cu
    inherited=&own;
   }
   const Value *rotate=get(node,"Rotate");
+  Value resolved_rotate;
   if(rotate){
+   if(rotate->kind==Value::Kind::Reference){
+    if(!object(*rotate,resolved_rotate)){active.erase(id);return false;}
+    rotate=&resolved_rotate;
+   }
    if(rotate->kind!=Value::Kind::Integer||rotate->integer%90!=0){active.erase(id);return false;}
    long long angle=rotate->integer%360;
    if(angle<0)angle+=360;
