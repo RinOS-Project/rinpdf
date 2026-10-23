@@ -6,6 +6,19 @@ extern "C" {
 /* RGBA output, stride measured in bytes. Supports bounded vector paths, supported embedded TrueType glyphs, opaque 8-bit DeviceGray/DeviceRGB image XObjects, and bounded Form XObjects inheriting page resources (nested Forms up to depth 8, with nested Form XObjects and bounded Form-local Gray/RGB images, with restricted Form-local embedded TrueType fonts, but without transparency groups or full font resource support). Unsupported operators or formats return UNSUPPORTED. */
 rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t index,
  unsigned width,unsigned height,unsigned char *rgba,size_t stride);
+/* Calculate pixel dimensions for a target DPI. Uses effective CropBox,
+ * /Rotate and /UserUnit. Dimensions are rounded up and limited to
+ * the renderer's 16384-side / 16777216-pixel bounds.
+ */
+rinpdf_status rinpdf_render_page_size_for_dpi(const rinpdf_document *doc,
+ size_t page_index,double dpi,unsigned *width,unsigned *height);
+/* Render to a caller-owned RGBA buffer using DPI-derived dimensions.
+ * The buffer must have space for height rows of stride bytes.
+ * The resolved dimensions are returned on success.
+ */
+rinpdf_status rinpdf_render_page_at_dpi(const rinpdf_document *doc,
+ size_t page_index,double dpi,unsigned char *rgba,size_t stride,
+ unsigned *width,unsigned *height);
 #ifdef __cplusplus
 }
 #endif
