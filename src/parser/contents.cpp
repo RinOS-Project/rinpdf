@@ -192,8 +192,10 @@ static bool box_value(const Value& value,MediaBox& box){
  if(value.kind!=Value::Kind::Array||value.array.size()!=4)return false;
  double v[4];
  for(size_t i=0;i<4;++i){
-  if(value.array[i].kind!=Value::Kind::Integer)return false;
-  v[i]=(double)value.array[i].integer;
+  const Value& coordinate=value.array[i];
+  if(coordinate.kind==Value::Kind::Integer)v[i]=double(coordinate.integer);
+  else if(coordinate.kind==Value::Kind::Real)v[i]=coordinate.real;
+  else return false;
   if(!std::isfinite(v[i])||std::abs(v[i])>10000000)return false;
  }
  if(v[2]<=v[0]||v[3]<=v[1])return false;
