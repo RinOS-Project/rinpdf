@@ -2143,7 +2143,15 @@ if(!skip_preceding_subtree(child,current,target) && !walk_fonts(child,depth+1,cu
   if(!object(ref,node)){active.erase(id);return false;}
   MediaBox own{};
   const Value *media=get(node,"MediaBox");
-  if(media){if(!box_value(*media,own)){active.erase(id);return false;}inherited=&own;}
+  Value resolved_media;
+  if(media){
+   if(media->kind==Value::Kind::Reference){
+    if(!object(*media,resolved_media)){active.erase(id);return false;}
+    media=&resolved_media;
+   }
+   if(!box_value(*media,own)){active.erase(id);return false;}
+   inherited=&own;
+  }
   const Value *rotate=get(node,"Rotate");
   if(rotate){
    if(rotate->kind!=Value::Kind::Integer||rotate->integer%90!=0){active.erase(id);return false;}
@@ -2153,7 +2161,15 @@ if(!skip_preceding_subtree(child,current,target) && !walk_fonts(child,depth+1,cu
   }
   MediaBox own_crop{};
   const Value *crop=get(node,"CropBox");
-  if(crop){if(!box_value(*crop,own_crop)){active.erase(id);return false;}inherited_crop=&own_crop;}
+  Value resolved_crop;
+  if(crop){
+   if(crop->kind==Value::Kind::Reference){
+    if(!object(*crop,resolved_crop)){active.erase(id);return false;}
+    crop=&resolved_crop;
+   }
+   if(!box_value(*crop,own_crop)){active.erase(id);return false;}
+   inherited_crop=&own_crop;
+  }
   const Value *type=get(node,"Type");
   if(!type||type->kind!=Value::Kind::Name){active.erase(id);return false;}
   if(type->text=="Page"){
