@@ -19,6 +19,17 @@ rinpdf_status rinpdf_render_page_size_for_dpi(const rinpdf_document *doc,
 rinpdf_status rinpdf_render_page_at_dpi(const rinpdf_document *doc,
  size_t page_index,double dpi,unsigned char *rgba,size_t stride,
  unsigned *width,unsigned *height);
+/* Required bytes for an RGBA image with caller-selected stride.
+ * For a tightly packed image pass stride=0. No image allocation occurs.
+ */
+rinpdf_status rinpdf_render_page_buffer_size(unsigned width,unsigned height,
+ size_t stride,size_t *required_bytes);
+/* DPI render with explicit buffer capacity. Reject undersized buffers before
+ * any pixel writes. Output dimensions are set after a successful render.
+ */
+rinpdf_status rinpdf_render_page_at_dpi_sized(const rinpdf_document *doc,
+ size_t page_index,double dpi,unsigned char *rgba,size_t buffer_bytes,
+ size_t stride,unsigned *width,unsigned *height);
 #ifdef __cplusplus
 }
 #endif
