@@ -563,6 +563,37 @@ extern "C" rinpdf_status rinpdf_document_page_physical_size(
  }catch(const std::bad_alloc&){return RINPDF_OUT_OF_MEMORY;}
 }
 
+extern "C" rinpdf_status rinpdf_render_page_size_for_dpi(
+ const rinpdf_document* doc,size_t index,double dpi,unsigned* width,unsigned* height){
+ if(!doc||!width||!height||!std::isfinite(dpi)||dpi<=0)
+  return RINPDF_INVALID_ARGUMENT;
+ double points_w=0,points_h=0,unit=0;
+ const auto status=rinpdf_document_page_physical_size(
+  doc,index,&points_w,&points_h,&unit);
+ if(status!=RINPDF_OK)return status;
+ const double w=std::ceil(points_w*(dpi/72.0));
+ const double h=std::ceil(points_h*(dpi/72.0));
+ if(!std::isfinite(w)||!std::isfinite(h)||w<1||h<1||
+    w>16384||h>16384||w*h>16777216)
+  return RINPDF_UNSUPPORTED;
+ *width=static_cast<unsigned>(w);
+ *height=static_cast<unsigned>(h);
+ return RINPDF_OK;
+}
+extern "C" rinpdf_status rinpdf_render_page_at_dpi(
+ const rinpdf_document* doc,size_t index,double dpi,
+ unsigned char* rgba,size_t stride,unsigned* width,unsigned* height){
+ if(!doc||!rgba||!width||!height)return RINPDF_INVALID_ARGUMENT;
+ unsigned w=0,h=0;
+ auto status=rinpdf_render_page_size_for_dpi(doc,index,dpi,&w,&h);
+ if(status!=RINPDF_OK)return status;
+ if(stride<size_t(w)*4)return RINPDF_INVALID_ARGUMENT;
+ status=rinpdf_render_page(doc,index,w,h,rgba,stride);
+ if(status!=RINPDF_OK)return status;
+ *width=w;*height=h;
+ return RINPDF_OK;
+}
+
 namespace {
 size_t trim_locked(rinpdf_document& doc,size_t target);
 }
