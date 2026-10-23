@@ -594,6 +594,35 @@ extern "C" rinpdf_status rinpdf_render_page_at_dpi(
  return RINPDF_OK;
 }
 
+extern "C" rinpdf_status rinpdf_render_page_buffer_size(
+ unsigned width,unsigned height,size_t stride,size_t* required){
+ if(!required||!width||!height||width>16384||height>16384)
+  return RINPDF_INVALID_ARGUMENT;
+ if(size_t(width)*height>16777216)return RINPDF_UNSUPPORTED;
+ const size_t row=size_t(width)*4;
+ if(stride==0)stride=row;
+ if(stride<row)return RINPDF_INVALID_ARGUMENT;
+ // Last row only requires its actual pixels, not trailing padding.
+ if(size_t(height-1)>(SIZE_MAX-row)/stride)return RINPDF_UNSUPPORTED;
+ *required=size_t(height-1)*stride+row;
+ return RINPDF_OK;
+}
+extern "C" rinpdf_status rinpdf_render_page_at_dpi_sized(
+ const rinpdf_document* doc,size_t index,double dpi,
+ unsigned char* rgba,size_t capacity,size_t stride,unsigned* width,unsigned* height){
+ if(!doc||!rgba||!width||!height)return RINPDF_INVALID_ARGUMENT;
+ unsigned w=0,h=0;
+ auto status=rinpdf_render_page_size_for_dpi(doc,index,dpi,&w,&h);
+ if(status!=RINPDF_OK)return status;
+ const size_t effective_stride=stride?stride:size_t(w)*4;
+ size_t required=0;
+ status=rinpdf_render_page_buffer_size(w,h,effective_stride,&required);
+ if(status!=RINPDF_OK)return status;
+ if(capacity<required)return RINPDF_INVALID_ARGUMENT;
+ status=rinpdf_render_page(doc,index,w,h,rgba,effective_stride);
+ if(status!=RINPDF_OK)return status;
+ *width=w;*height=h;return RINPDF_OK;
+}
 namespace {
 size_t trim_locked(rinpdf_document& doc,size_t target);
 }
