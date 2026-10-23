@@ -2175,12 +2175,29 @@ if(!skip_preceding_subtree(child,current,target) && !walk_fonts(child,depth+1,cu
    if(!box_value(*crop,own_crop)){active.erase(id);return false;}
    inherited_crop=&own_crop;
   }
+  // /UserUnit is a page dictionary entry, not an inherited page-tree value.
+  // Keep content coordinates in PDF user space; physical sizing is a
+  // separate concern for callers.
+  double page_user_unit=1.0;
+  if(const Value* unit=get(node,"UserUnit")){
+   Value resolved_unit;
+   if(unit->kind==Value::Kind::Reference){
+    if(!object(*unit,resolved_unit)){active.erase(id);return false;}
+    unit=&resolved_unit;
+   }
+   if(unit->kind==Value::Kind::Integer)page_user_unit=double(unit->integer);
+   else if(unit->kind==Value::Kind::Real)page_user_unit=unit->real;
+   else {active.erase(id);return false;}
+   if(!std::isfinite(page_user_unit)||page_user_unit<=0||
+      page_user_unit>75000.0){active.erase(id);return false;}
+  }
   const Value *type=get(node,"Type");
   if(!type||type->kind!=Value::Kind::Name){active.erase(id);return false;}
   if(type->text=="Page"){
    if(current==target){if(!inherited){active.erase(id);return false;}
     output=*inherited;
     output.rotation=inherited_rotation;
+    output.user_unit=page_user_unit;
     if(inherited_crop){
      output.x0=std::max(output.x0,inherited_crop->x0);
      output.y0=std::max(output.y0,inherited_crop->y0);
