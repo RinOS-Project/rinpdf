@@ -172,6 +172,7 @@ extern "C" rinpdf_status rinpdf_document_open_memory(const uint8_t *data,size_t 
  catch(const std::bad_alloc&) {return RINPDF_OUT_OF_MEMORY;}
 }
 extern "C" rinpdf_status rinpdf_document_open_file(const char *path,rinpdf_document **out) {
+ try {
  if(!path||!out)return RINPDF_INVALID_ARGUMENT;
  *out=nullptr;
 #ifndef _WIN32
@@ -235,6 +236,8 @@ extern "C" rinpdf_status rinpdf_document_open_file(const char *path,rinpdf_docum
  doc->major=bytes[5]-'0';doc->minor=bytes[7]-'0';
  *out=doc;return RINPDF_OK;
 #endif
+
+ } catch(const std::bad_alloc&) {return RINPDF_OUT_OF_MEMORY;}
 }
 extern "C" void rinpdf_document_close(rinpdf_document *d){delete d;}
 extern "C" rinpdf_status rinpdf_document_content_cache_stats(
@@ -274,6 +277,7 @@ extern "C" rinpdf_status rinpdf_document_clear_content_cache(rinpdf_document* do
 }
 extern "C" rinpdf_status rinpdf_document_render_cache_counts(
  const rinpdf_document* doc,rinpdf_render_cache_counts* counts){
+ try {
  if(!doc||!counts)return RINPDF_INVALID_ARGUMENT;
  std::scoped_lock lock(doc->content_mutex,doc->font_mutex,doc->image_mutex,
   doc->form_mutex,doc->graphics_mutex,doc->property_mutex,doc->geometry_mutex);
@@ -285,8 +289,11 @@ extern "C" rinpdf_status rinpdf_document_render_cache_counts(
  counts->property_pages=doc->property_cache.entries.size();
  counts->geometry_pages=doc->geometry_cache.size();
  return RINPDF_OK;
+
+ } catch(const std::bad_alloc&) {return RINPDF_OUT_OF_MEMORY;}
 }
 extern "C" rinpdf_status rinpdf_document_clear_render_caches(rinpdf_document* doc){
+ try {
  if(!doc)return RINPDF_INVALID_ARGUMENT;
  // All cached resources use shared ownership so ongoing renders remain valid.
  {
@@ -314,6 +321,8 @@ extern "C" rinpdf_status rinpdf_document_clear_render_caches(rinpdf_document* do
   doc->verified_page_counts.resident_bytes=0;
  }
  return RINPDF_OK;
+
+ } catch(const std::bad_alloc&) {return RINPDF_OUT_OF_MEMORY;}
 }
 
 namespace {
@@ -400,28 +409,37 @@ size_t trim_locked(rinpdf_document& d,size_t target){
 }
 extern "C" rinpdf_status rinpdf_document_set_render_cache_budget(
  rinpdf_document* doc,size_t budget){
+ try {
  if(!doc)return RINPDF_INVALID_ARGUMENT;
  std::scoped_lock lock(doc->content_mutex,doc->font_mutex,doc->image_mutex,
   doc->form_mutex,doc->graphics_mutex,doc->property_mutex,doc->geometry_mutex);
  doc->render_cache_budget=budget;
  trim_locked(*doc,budget);
  return RINPDF_OK;
+
+ } catch(const std::bad_alloc&) {return RINPDF_OUT_OF_MEMORY;}
 }
 extern "C" rinpdf_status rinpdf_document_render_cache_usage(
  const rinpdf_document* doc,size_t* used,size_t* budget){
+ try {
  if(!doc||!used||!budget)return RINPDF_INVALID_ARGUMENT;
  std::scoped_lock lock(doc->content_mutex,doc->font_mutex,doc->image_mutex,
   doc->form_mutex,doc->graphics_mutex,doc->property_mutex,doc->geometry_mutex);
  *used=render_cache_estimate_locked(*doc);*budget=doc->render_cache_budget;
  return RINPDF_OK;
+
+ } catch(const std::bad_alloc&) {return RINPDF_OUT_OF_MEMORY;}
 }
 extern "C" rinpdf_status rinpdf_document_trim_render_caches(
  rinpdf_document* doc,size_t target){
+ try {
  if(!doc)return RINPDF_INVALID_ARGUMENT;
  std::scoped_lock lock(doc->content_mutex,doc->font_mutex,doc->image_mutex,
   doc->form_mutex,doc->graphics_mutex,doc->property_mutex,doc->geometry_mutex);
  trim_locked(*doc,target);
  return RINPDF_OK;
+
+ } catch(const std::bad_alloc&) {return RINPDF_OUT_OF_MEMORY;}
 }
 extern "C" rinpdf_status rinpdf_document_render_timings(
  const rinpdf_document* doc,rinpdf_render_timings* out){
