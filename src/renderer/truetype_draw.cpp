@@ -222,12 +222,17 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
       std::vector<CffPath> paths;
       if(!cff_flatten_commands(cached->second.cff_outline,cff_tolerance,paths))
        return false;
+      replacement.reserve(paths.size());
       for(const auto& contour:paths){
+       if(contour.empty())continue;
        std::vector<MaskPoint> path;
        path.reserve(contour.size());
-       for(const auto& pt:contour)
-        path.push_back({pt.x*scale,-pt.y*scale});
-       if(!path.empty())replacement.push_back(std::move(path));
+       for(const auto& pt:contour){
+        const double px=pt.x*scale,py=-pt.y*scale;
+        if(!std::isfinite(px)||!std::isfinite(py))return false;
+        path.push_back({px,py});
+       }
+       replacement.push_back(std::move(path));
       }
      }else if(!flatten_simple_glyph(glyph,em/units,0,0,0.15,replacement))
       return false;
