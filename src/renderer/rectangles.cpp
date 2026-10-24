@@ -2134,6 +2134,27 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
    if((size_t)width*height>1048576)return false;
 
    auto shapes=shapes_from_path();
+   // Reject fully offscreen fills before allocating a per-pixel coverage
+   // mask. Keep malformed/non-finite geometry on the validation path.
+   double left=std::numeric_limits<double>::infinity();
+   double top=left,right=-left,bottom=-left;
+   bool finite_bounds=true,has_points=false;
+   for(const auto& shape:shapes)
+    for(const auto& point:shape){
+     if(!std::isfinite(point.x)||!std::isfinite(point.y)){
+      finite_bounds=false;break;
+     }
+     has_points=true;
+     left=std::min(left,point.x);right=std::max(right,point.x);
+     top=std::min(top,point.y);bottom=std::max(bottom,point.y);
+    }
+   if(finite_bounds&&has_points&&
+      (right<-1.0||bottom<-1.0||left>double(width)+1.0||
+       top>double(height)+1.0)){
+    path.clear();polygons.clear();polygon_matrices.clear();
+    rect_matrices.clear();cubic_strokes.clear();
+    continue;
+   }
    std::vector<uint8_t> coverage;
    const FillRule rule=word=="f*"?FillRule::EvenOdd:FillRule::NonZero;
    const bool antialias=(size_t)width*height<=262144;
