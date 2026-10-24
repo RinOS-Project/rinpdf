@@ -67,6 +67,19 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
   std::map<uint16_t,uint64_t> recency;
   uint64_t clock=0;
  };
+ // Estimate retained allocations using capacities, not just element counts.
+ // The common node overhead is included for each map entry.
+ auto path_weight=[](const std::vector<std::vector<MaskPoint>>& paths){
+  size_t weight=paths.capacity()*sizeof(std::vector<MaskPoint>);
+  for(const auto& path:paths)weight+=path.capacity()*sizeof(MaskPoint);
+  return weight;
+ };
+ auto glyph_weight=[&](const CachedGlyph& g)->size_t{
+  return sizeof(CachedGlyph)+128+
+   g.outline.points.capacity()*sizeof(GlyphPoint)+
+   g.outline.contour_ends.capacity()*sizeof(uint16_t)+
+   g.cff_outline.capacity()*sizeof(CffSegment)+path_weight(g.flattened);
+ };
  thread_local LastFont last_font;
  std::map<uint16_t,CachedGlyph> transient_glyphs;
  // CFF retains scale-independent cubic commands. Device-dependent
@@ -141,12 +154,7 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
      }else if(!sfnt_glyph_outline(sfnt,glyph_id,decoded.outline))return false;
      // Keep transient decoding for large fonts. Bound retained glyph
      // outlines by count and estimated allocated payload.
-     const size_t estimated=sizeof(CachedGlyph)+
-      decoded.outline.points.size()*sizeof(GlyphPoint)+
-      decoded.outline.contour_ends.size()*sizeof(uint16_t)+128;
-     size_t cff_weight=0;
-     cff_weight=decoded.cff_outline.size()*sizeof(CffSegment);
-     const size_t full_estimated=estimated+cff_weight;
+     const size_t full_estimated=glyph_weight(decoded);
      if(retain&&full_estimated>4*1024*1024){
       // A single oversized outline must never occupy the retained font
       // cache. Keep it only for this render call.
@@ -167,12 +175,7 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
        if(oldest==last_font.recency.end())break;
        auto victim=last_font.glyphs.find(oldest->first);
        if(victim!=last_font.glyphs.end()){
-        size_t weight=sizeof(CachedGlyph)+128+
-         victim->second.outline.points.size()*sizeof(GlyphPoint)+
-         victim->second.outline.contour_ends.size()*sizeof(uint16_t);
-        weight+=victim->second.cff_outline.size()*sizeof(CffSegment);
-        for(const auto& contour:victim->second.flattened)
-         weight+=sizeof(contour)+contour.size()*sizeof(MaskPoint);
+        size_t weight=glyph_weight(victim->second);
         last_font.estimated_bytes-=std::min(last_font.estimated_bytes,weight);
         last_font.glyphs.erase(victim);
        }
@@ -236,12 +239,6 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
       }
      }else if(!flatten_simple_glyph(glyph,em/units,0,0,0.15,replacement))
       return false;
-     auto path_weight=[](const std::vector<std::vector<MaskPoint>>& paths){
-      size_t n=0;
-      for(const auto& path:paths)
-       n+=sizeof(path)+path.size()*sizeof(MaskPoint);
-      return n;
-     };
      if(persisted){
       const size_t prior=path_weight(cached->second.flattened);
       const size_t next=path_weight(replacement);
@@ -258,11 +255,7 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
        if(oldest==last_font.recency.end())break;
        auto victim=last_font.glyphs.find(oldest->first);
        if(victim!=last_font.glyphs.end()){
-        size_t weight=sizeof(CachedGlyph)+128+
-         victim->second.outline.points.size()*sizeof(GlyphPoint)+
-         victim->second.outline.contour_ends.size()*sizeof(uint16_t);
-        weight+=victim->second.cff_outline.size()*sizeof(CffSegment);
-        weight+=path_weight(victim->second.flattened);
+        size_t weight=glyph_weight(victim->second);
         last_font.estimated_bytes-=std::min(weight,last_font.estimated_bytes);
         last_font.glyphs.erase(victim);
        }
@@ -281,12 +274,7 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
      // Preserve the active paint in its owned copy, but do not retain an
      // oversized glyph between calls.
      const auto& stored=cached->second;
-     size_t weight=sizeof(CachedGlyph)+128+
-       stored.outline.points.size()*sizeof(GlyphPoint)+
-       stored.outline.contour_ends.size()*sizeof(uint16_t);
-     weight+=stored.cff_outline.size()*sizeof(CffSegment);
-     for(const auto& contour:stored.flattened)
-      weight+=sizeof(contour)+contour.size()*sizeof(MaskPoint);
+     size_t weight=glyph_weight(stored);
      // Move the oversized glyph into this call's transient cache so a
      // repeated glyph does not need its outline decoded again.
      transient_glyphs.insert_or_assign(glyph_id,std::move(cached->second));
