@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <list>
+#include <iterator>
 #include <map>
 #include <vector>
 namespace rinpdf::renderer {
