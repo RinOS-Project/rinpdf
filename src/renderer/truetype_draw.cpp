@@ -128,49 +128,57 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
    }
   }
  }
- // Every glyph is validated before writing output pixels.
- std::vector<uint8_t> layer(size_t(width)*height,0);
- for(const auto& paint:paints){
-  if(paint.paths.empty())continue;
-  // All glyph coordinates were validated above. Avoid allocating and
-  // rasterizing coverage for glyphs wholly outside the visible viewport.
-  double min_x=std::numeric_limits<double>::infinity();
-  double min_y=min_x,max_x=-min_x,max_y=-min_y;
-  bool points=false;
-  for(const auto& contour:paint.paths)for(const auto& p:contour){
-   points=true;
-   min_x=std::min(min_x,p.x);max_x=std::max(max_x,p.x);
-   min_y=std::min(min_y,p.y);max_y=std::max(max_y,p.y);
-  }
-  if(points&&(max_x<-1.0||max_y<-1.0||
-              min_x>double(width)+1.0||min_y>double(height)+1.0))
-   continue;
-  CoverageRegion coverage;
-  if(!rasterize_path_coverage_region_2x(paint.paths,width,height,
-                                        FillRule::NonZero,coverage))return false;
-  for(unsigned y=0;y<coverage.height;++y)
-   for(unsigned x=0;x<coverage.width;++x){
-    const unsigned src=coverage.pixels[size_t(y)*coverage.width+x];
-    const size_t index=size_t(y+coverage.y)*width+x+coverage.x;
-    const unsigned dst=layer[index];
-    layer[index]=uint8_t(src+(dst*(255-src)+127)/255);
+ // All outlines are validated before painting. Build a conservative
+ // union of their pixel bounds, clipped to the visible rectangle.
+ double min_x=std::numeric_limits<double>::infinity(),min_y=min_x;
+ double max_x=-min_x,max_y=-min_y;
+ for(const auto& paint:paints)
+  for(const auto& contour:paint.paths)
+   for(const auto& point:contour){
+    min_x=std::min(min_x,point.x);max_x=std::max(max_x,point.x);
+    min_y=std::min(min_y,point.y);max_y=std::max(max_y,point.y);
    }
- }
- // Iterate only the visible clip instead of scanning the entire glyph
- // layer and rejecting out-of-clip pixels individually.
- const unsigned x_begin=std::min(width,clip_x0);
- const unsigned x_end=std::min(width,clip_x1);
- const unsigned y_begin=std::min(height,clip_y0);
- const unsigned y_end=std::min(height,clip_y1);
- for(unsigned y=y_begin;y<y_end;++y)for(unsigned x=x_begin;x<x_end;++x){
-  unsigned alpha=layer[size_t(y)*width+x];
-  if(clip_mask)alpha=(alpha*(*clip_mask)[size_t(y)*width+x]+127)/255;
-  if(!alpha)continue;
-  auto* pixel=rgba+size_t(y)*stride+size_t(x)*4;
-  pixel[0]=uint8_t((alpha*red+(255-alpha)*pixel[0]+127)/255);
-  pixel[1]=uint8_t((alpha*green+(255-alpha)*pixel[1]+127)/255);
-  pixel[2]=uint8_t((alpha*blue+(255-alpha)*pixel[2]+127)/255);
-  pixel[3]=255;
+ if(min_x!=std::numeric_limits<double>::infinity()){
+  const unsigned x0=unsigned(std::clamp(std::floor(min_x)-1.0,0.0,double(width)));
+  const unsigned y0=unsigned(std::clamp(std::floor(min_y)-1.0,0.0,double(height)));
+  const unsigned x1=unsigned(std::clamp(std::ceil(max_x)+1.0,0.0,double(width)));
+  const unsigned y1=unsigned(std::clamp(std::ceil(max_y)+1.0,0.0,double(height)));
+  const unsigned left=std::max(x0,std::min(width,clip_x0));
+  const unsigned top=std::max(y0,std::min(height,clip_y0));
+  const unsigned right=std::min(x1,std::min(width,clip_x1));
+  const unsigned bottom=std::min(y1,std::min(height,clip_y1));
+  if(left<right&&top<bottom){
+   const unsigned layer_width=right-left,layer_height=bottom-top;
+   std::vector<uint8_t> layer(size_t(layer_width)*layer_height,0);
+   for(const auto& paint:paints){
+    if(paint.paths.empty())continue;
+    CoverageRegion coverage;
+    if(!rasterize_path_coverage_region_2x(paint.paths,width,height,
+                                          FillRule::NonZero,coverage))return false;
+    const unsigned cx0=std::max(left,coverage.x);
+    const unsigned cy0=std::max(top,coverage.y);
+    const unsigned cx1=std::min(right,coverage.x+coverage.width);
+    const unsigned cy1=std::min(bottom,coverage.y+coverage.height);
+    for(unsigned y=cy0;y<cy1;++y)
+     for(unsigned x=cx0;x<cx1;++x){
+      const unsigned src=coverage.pixels[size_t(y-coverage.y)*coverage.width+x-coverage.x];
+      const size_t i=size_t(y-top)*layer_width+x-left;
+      const unsigned dst=layer[i];
+      layer[i]=uint8_t(src+(dst*(255-src)+127)/255);
+     }
+   }
+   for(unsigned y=top;y<bottom;++y)
+    for(unsigned x=left;x<right;++x){
+     unsigned alpha=layer[size_t(y-top)*layer_width+x-left];
+     if(clip_mask)alpha=(alpha*(*clip_mask)[size_t(y)*width+x]+127)/255;
+     if(!alpha)continue;
+     auto* pixel=rgba+size_t(y)*stride+size_t(x)*4;
+     pixel[0]=uint8_t((alpha*red+(255-alpha)*pixel[0]+127)/255);
+     pixel[1]=uint8_t((alpha*green+(255-alpha)*pixel[1]+127)/255);
+     pixel[2]=uint8_t((alpha*blue+(255-alpha)*pixel[2]+127)/255);
+     pixel[3]=255;
+    }
+  }
  }
  if(vertical){
   const double y=baseline+cursor;
