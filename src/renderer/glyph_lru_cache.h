@@ -15,6 +15,8 @@ struct CachedFontGlyph {
  std::vector<std::vector<MaskPoint>> flattened;
  bool has_flattened=false;
  double flattened_em=0,flattened_tolerance=0;
+ std::list<uint16_t>::iterator lru_position{};
+ bool lru_linked=false;
 };
 class GlyphLruCache {
 public:
@@ -28,28 +30,19 @@ public:
   return it==glyphs_.end()?nullptr:&it->second;
  }
  void clear(){
-  glyphs_.clear();positions_.clear();oldest_first_.clear();
+  glyphs_.clear();oldest_first_.clear();
   estimated_bytes_=0;
  }
  void touch(uint16_t id){
-  if(glyphs_.find(id)==glyphs_.end())return;
-  auto it=positions_.find(id);
-  // A newly inserted glyph is the sole untracked resident entry.
-  if(it==positions_.end()&&glyphs_.size()==positions_.size()+1&&
-     oldest_first_.size()==positions_.size()){
+  auto it=glyphs_.find(id);
+  if(it==glyphs_.end())return;
+  auto& glyph=it->second;
+  if(!glyph.lru_linked){
    oldest_first_.push_back(id);
-   try{positions_.emplace(id,std::prev(oldest_first_.end()));}
-   catch(...){oldest_first_.pop_back();throw;}
-   return;
-  }
-  if(positions_.size()!=glyphs_.size()||
-     oldest_first_.size()!=glyphs_.size()||
-     it==positions_.end()){
-   rebuild_order();
-   it=positions_.find(id);
-  }
-  if(it!=positions_.end())
-   oldest_first_.splice(oldest_first_.end(),oldest_first_,it->second);
+   glyph.lru_position=std::prev(oldest_first_.end());
+   glyph.lru_linked=true;
+  }else oldest_first_.splice(oldest_first_.end(),oldest_first_,
+                             glyph.lru_position);
  }
  static size_t path_weight(const std::vector<std::vector<MaskPoint>>& paths){
   size_t n=paths.capacity()*sizeof(std::vector<MaskPoint>);
@@ -66,10 +59,6 @@ public:
   constexpr size_t budget=4*1024*1024;
   while(!glyphs_.empty()&&(glyphs_.size()>=max_count||
         extra>budget||estimated_bytes_>budget-extra)){
-   // A missing LRU node would otherwise silently leave the cache over
-   // budget. Rebuild the index from the authoritative glyph map.
-   if(oldest_first_.size()!=glyphs_.size()||
-      positions_.size()!=glyphs_.size())rebuild_order();
    auto oldest=oldest_first_.begin();
    if(oldest==oldest_first_.end())break;
    if(int(*oldest)==protected_id)++oldest;
@@ -82,7 +71,6 @@ public:
     if(weight>estimated_bytes_)refresh_weight();
     else estimated_bytes_-=weight;
    }
-   positions_.erase(id);
    oldest_first_.erase(oldest);
   }
  }
@@ -143,6 +131,7 @@ public:
   auto it=glyphs_.find(id);
   if(it==glyphs_.end()||target.find(id)!=target.end())return false;
   const size_t weight=glyph_weight(it->second);
+  const auto lru_pos=it->second.lru_position;
   auto node=glyphs_.extract(it);
   // If the destination comparator throws, restore the extracted node.
   // LRU bookkeeping and byte accounting have not changed yet.
@@ -158,11 +147,7 @@ public:
   }
   if(weight>estimated_bytes_)refresh_weight();
   else estimated_bytes_-=weight;
-  auto pos=positions_.find(id);
-  if(pos!=positions_.end()){
-   oldest_first_.erase(pos->second);
-   positions_.erase(pos);
-  }
+  oldest_first_.erase(lru_pos);
   return true;
  }
  void remove_accounted(uint16_t id){
@@ -171,12 +156,8 @@ public:
   erase(id);
  }
  void erase(uint16_t id){
-  auto pos=positions_.find(id);
-  if(pos!=positions_.end()){
-   oldest_first_.erase(pos->second);
-   positions_.erase(pos);
-  }
   if(auto it=glyphs_.find(id);it!=glyphs_.end()){
+   if(it->second.lru_linked)oldest_first_.erase(it->second.lru_position);
    const size_t weight=glyph_weight(it->second);
    glyphs_.erase(it);
    if(weight>estimated_bytes_)refresh_weight();
@@ -184,24 +165,6 @@ public:
   }
  }
 private:
- void rebuild_order(){
-  // Preserve usable recency order; append any glyphs missing from it.
-  // Build both structures locally before publishing either one.
-  std::list<uint16_t> order;
-  std::map<uint16_t,std::list<uint16_t>::iterator> positions;
-  auto append=[&](uint16_t id){
-   if(glyphs_.find(id)==glyphs_.end()||positions.find(id)!=positions.end())
-    return;
-   order.push_back(id);
-   try{positions.emplace(id,std::prev(order.end()));}
-   catch(...){order.pop_back();throw;}
-  };
-  for(uint16_t id:oldest_first_)append(id);
-  for(const auto& entry:glyphs_)append(entry.first);
-  oldest_first_.swap(order);
-  positions_.swap(positions);
-  refresh_weight();
- }
  void refresh_weight(){
   size_t total=0;
   for(const auto& entry:glyphs_){
@@ -215,6 +178,5 @@ private:
  std::map<uint16_t,CachedFontGlyph> glyphs_;
  size_t estimated_bytes_=0;
  std::list<uint16_t> oldest_first_;
- std::map<uint16_t,std::list<uint16_t>::iterator> positions_;
 };
 }
