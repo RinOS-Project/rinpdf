@@ -4,6 +4,7 @@
 #include "glyph_outline.h"
 #include "path_mask.h"
 #include "../parser/font_encoding.h"
+#include <algorithm>
 #include <cmath>
 #include <limits>
 #include <map>
@@ -59,6 +60,8 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
   std::vector<uint8_t> bytes;
   std::map<uint16_t,CachedGlyph> glyphs;
   size_t estimated_bytes=0;
+  std::map<uint16_t,uint64_t> recency;
+  uint64_t clock=0;
  };
  thread_local LastFont last_font;
  std::map<uint16_t,CachedGlyph> transient_glyphs;
@@ -70,6 +73,7 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
   last_font.bytes.swap(replacement);
   last_font.glyphs.clear();
   last_font.estimated_bytes=0;
+  last_font.recency.clear();last_font.clock=0;
  }
  auto& glyph_cache=retain?last_font.glyphs:transient_glyphs;
  struct Paint {std::vector<std::vector<MaskPoint>> paths;};
@@ -127,14 +131,38 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
      const size_t estimated=sizeof(CachedGlyph)+
       decoded.outline.points.size()*sizeof(GlyphPoint)+
       decoded.outline.contour_ends.size()*sizeof(uint16_t)+128;
-     if(retain&&(last_font.glyphs.size()>=512||
-        estimated>4*1024*1024-last_font.estimated_bytes)){
-      last_font.glyphs.clear();
-      last_font.estimated_bytes=0;
+     if(retain){
+      // Evict older entries before insertion. This glyph is not yet held
+      // by any reference, and the currently active glyph is never evicted.
+      while(!last_font.glyphs.empty()&&
+            (last_font.glyphs.size()>=512||
+             last_font.estimated_bytes>4*1024*1024-
+                std::min(estimated,size_t(4*1024*1024)))){
+       auto oldest=std::min_element(last_font.recency.begin(),
+        last_font.recency.end(),[](const auto& x,const auto& y){
+         return x.second<y.second;
+        });
+       if(oldest==last_font.recency.end())break;
+       auto victim=last_font.glyphs.find(oldest->first);
+       if(victim!=last_font.glyphs.end()){
+        size_t weight=sizeof(CachedGlyph)+128+
+         victim->second.outline.points.size()*sizeof(GlyphPoint)+
+         victim->second.outline.contour_ends.size()*sizeof(uint16_t);
+        for(const auto& contour:victim->second.flattened)
+         weight+=sizeof(contour)+contour.size()*sizeof(MaskPoint);
+        last_font.estimated_bytes-=std::min(last_font.estimated_bytes,weight);
+        last_font.glyphs.erase(victim);
+       }
+       last_font.recency.erase(oldest);
+      }
      }
      cached=glyph_cache.emplace(glyph_id,std::move(decoded)).first;
-     if(retain)last_font.estimated_bytes+=estimated;
+     if(retain){
+      last_font.estimated_bytes+=estimated;
+      last_font.recency[glyph_id]=++last_font.clock;
+     }
     }
+    if(retain)last_font.recency[glyph_id]=++last_font.clock;
     units=cached->second.units;advance=cached->second.advance;
     const SimpleGlyph& glyph=cached->second.outline;
     parser::CIDVerticalMetric vertical_metric;
