@@ -113,6 +113,23 @@ bool sfnt_cff_simple_outline(const SfntFont& font,uint16_t glyph,
      if(!line(horizontal?v:0,horizontal?0:v))return false;
      horizontal=!horizontal;
     }
+   }else if(op==26||op==27){
+    // vvcurveto/hhcurveto: an optional initial cross-axis
+    // displacement followed by one or more four-operand curves.
+    if(n<4||(n%4!=0&&n%4!=1))return false;
+    size_t i=0;
+    double cross=0;
+    if(n%4){cross=stack[i++];}
+    for(;i<n;i+=4){
+     if(op==26){
+      if(!curve(cross,stack[i],stack[i+1],stack[i+2],0,stack[i+3]))
+       return false;
+     }else{
+      if(!curve(stack[i],cross,stack[i+1],stack[i+2],stack[i+3],0))
+       return false;
+     }
+     cross=0;
+    }
    }else if(op==24){
     // rcurveline: one or more curves followed by a line.
     if(n<8||(n-2)%6)return false;
