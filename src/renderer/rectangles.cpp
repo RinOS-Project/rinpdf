@@ -759,8 +759,15 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
     const unsigned right=bound(std::ceil((xmax-box.x0)*sx),width);
     const unsigned top=bound(std::floor((box.y1-ymax)*sy),height);
     const unsigned bottom=bound(std::ceil((box.y1-ymin)*sy),height);
-    for(unsigned py=top;py<bottom;++py)for(unsigned px=left;px<right;++px){
-     if(px<clip.x0||px>=clip.x1||py<clip.y0||py>=clip.y1)continue;
+    // Intersect the image bounds with the active rectangular clip before
+    // iterating pixels. In a small viewport, the image may cover a huge
+    // offscreen area even though only a few pixels can be painted.
+    const unsigned paint_left=std::max(left,clip.x0);
+    const unsigned paint_right=std::min(right,clip.x1);
+    const unsigned paint_top=std::max(top,clip.y0);
+    const unsigned paint_bottom=std::min(bottom,clip.y1);
+    for(unsigned py=paint_top;py<paint_bottom;++py)
+     for(unsigned px=paint_left;px<paint_right;++px){
      if(clip_mask&&(*clip_mask)[size_t(py)*width+px]==0)continue;
      const double ux=box.x0+(px+0.5)/sx-e;
      const double uy=box.y1-(py+0.5)/sy-f;
