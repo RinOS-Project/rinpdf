@@ -56,14 +56,7 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
  // CFF retains scale-independent cubic commands. Device-dependent
  // flattened paths are regenerated for each CFF glyph paint.
  const bool retain=bytes.size()<=2*1024*1024;
- if(retain && last_font.bytes!=bytes){
-  // Construct the replacement first: allocation failures do not damage
-  // an existing cached font.
-  std::vector<uint8_t> replacement(bytes);
-  last_font.bytes.swap(replacement);
-  last_font.clear();
- }
- auto& glyph_cache=retain?last_font.glyphs:transient_glyphs;
+ if(retain&&!last_font.matches(bytes))last_font.reset_font(bytes);
  struct Paint {std::vector<std::vector<MaskPoint>> paths;};
  std::vector<Paint> paints;
  size_t glyph_count=0;
@@ -110,10 +103,10 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
           script,language))return false;
     }
     auto transient=transient_glyphs.find(glyph_id);
-    auto cached=transient!=transient_glyphs.end()?transient:glyph_cache.find(glyph_id);
-    const bool transient_hit=transient!=transient_glyphs.end();
-    bool transient_current=transient_hit;
-    if(!transient_hit&&cached==glyph_cache.end()){
+    bool transient_current=transient!=transient_glyphs.end();
+    CachedGlyph* cached=transient_current?&transient->second:
+       (retain?last_font.find(glyph_id):nullptr);
+    if(!cached){
      CachedGlyph decoded;
      if(!sfnt_horizontal_metrics(sfnt,glyph_id,decoded.units,decoded.advance))
       return false;
@@ -121,24 +114,19 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
       if(!sfnt_cff_outline_commands(sfnt,glyph_id,decoded.cff_outline))
        return false;
      }else if(!sfnt_glyph_outline(sfnt,glyph_id,decoded.outline))return false;
-     // Keep transient decoding for large fonts. Bound retained glyph
-     // outlines by count and estimated allocated payload.
-     const size_t full_estimated=GlyphLruCache::glyph_weight(decoded);
-     if(retain&&full_estimated>4*1024*1024){
-      // A single oversized outline must never occupy the retained font
-      // cache. Keep it only for this render call.
-      cached=transient_glyphs.emplace(glyph_id,std::move(decoded)).first;
-      transient_current=true;
+     const size_t weight=GlyphLruCache::glyph_weight(decoded);
+     if(retain&&weight<=4*1024*1024){
+      cached=last_font.insert(glyph_id,std::move(decoded));
+      if(!cached)return false;
      }else{
-     if(retain)cached=last_font.insert(glyph_id,std::move(decoded));
-     else cached=glyph_cache.emplace(glyph_id,std::move(decoded)).first;
-     if(cached==glyph_cache.end())return false;
+      cached=&transient_glyphs.emplace(glyph_id,std::move(decoded)).first->second;
+      transient_current=true;
      }
     }
     const bool persisted=retain&&!transient_current;
     if(persisted)last_font.touch(glyph_id);
-    units=cached->second.units;advance=cached->second.advance;
-    const SimpleGlyph& glyph=cached->second.outline;
+    units=cached->units;advance=cached->advance;
+    const SimpleGlyph& glyph=cached->outline;
     parser::CIDVerticalMetric vertical_metric;
     if(vertical&&!parser::cid_vertical_metric(*vertical_metrics,
        *cid_widths,cid,vertical_metric))return false;
@@ -163,13 +151,13 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
      if(!std::isfinite(pixel_per_unit))return false;
      cff_tolerance=std::min(8.0,0.25/std::max(pixel_per_unit,1e-12));
     }
-    if(!cached->second.has_flattened || cached->second.flattened_em!=em ||
-       (cff_font&&cached->second.flattened_tolerance!=cff_tolerance)){
+    if(!cached->has_flattened || cached->flattened_em!=em ||
+       (cff_font&&cached->flattened_tolerance!=cff_tolerance)){
      std::vector<std::vector<MaskPoint>> replacement;
      if(cff_font){
       const double scale=em/units;
       std::vector<CffPath> paths;
-      if(!cff_flatten_commands(cached->second.cff_outline,cff_tolerance,paths))
+      if(!cff_flatten_commands(cached->cff_outline,cff_tolerance,paths))
        return false;
       replacement.reserve(paths.size());
       for(const auto& contour:paths){
@@ -188,20 +176,20 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
      if(persisted)last_font.update_flattened(glyph_id,std::move(replacement),
                                               em,cff_tolerance);
      else{
-      cached->second.flattened=std::move(replacement);
-      cached->second.has_flattened=true;
-      cached->second.flattened_em=em;
-      cached->second.flattened_tolerance=cff_tolerance;
+      cached->flattened=std::move(replacement);
+      cached->has_flattened=true;
+      cached->flattened_em=em;
+      cached->flattened_tolerance=cff_tolerance;
      }
     }
-    paint.paths=cached->second.flattened;
+    paint.paths=cached->flattened;
     if(persisted&&last_font.over_budget()){
      // Preserve the active paint in its owned copy, but do not retain an
      // oversized glyph between calls.
      const auto& stored=cached->second;
      // Move the oversized glyph into this call's transient cache so a
      // repeated glyph does not need its outline decoded again.
-     transient_glyphs.insert_or_assign(glyph_id,std::move(cached->second));
+     transient_glyphs.insert_or_assign(glyph_id,std::move(*cached));
      last_font.remove_accounted(glyph_id);
     }
     for(auto& contour:paint.paths)for(auto& point:contour){
