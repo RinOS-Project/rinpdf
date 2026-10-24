@@ -633,7 +633,9 @@ extern "C" rinpdf_status rinpdf_render_page_at_dpi_sized(
 namespace {
 size_t trim_locked(rinpdf_document& doc,size_t target);
 }
-extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t index,unsigned width,unsigned height,unsigned char *rgba,size_t stride){
+static rinpdf_status render_page_internal(const rinpdf_document *doc,size_t index,
+ unsigned width,unsigned height,unsigned char *rgba,size_t stride,
+ unsigned full_width,unsigned full_height,unsigned tile_x,unsigned tile_y){
  if(!doc||!rgba||width==0||height==0||width>16384||height>16384||stride<(size_t)width*4)return RINPDF_INVALID_ARGUMENT;
  if((size_t)width*height>16777216)return RINPDF_UNSUPPORTED;
  size_t pages=0;
@@ -868,6 +870,8 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
   doc->preparation_ns.fetch_add(uint64_t(prep_elapsed),std::memory_order_relaxed);
   doc->prepared_calls.fetch_add(1,std::memory_order_relaxed);
   const unsigned rotation=box.rotation;
+  if((tile_x||tile_y||width!=full_width||height!=full_height) && rotation!=0)
+   return RINPDF_UNSUPPORTED;
   const unsigned source_width=(rotation==90||rotation==270)?height:width;
   const unsigned source_height=(rotation==90||rotation==270)?width:height;
   if(rotation==0){
@@ -875,7 +879,11 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
    // RGBA allocation and pixel copy.
    if(!rinpdf::renderer::render_rectangles_box_with_fonts(
       contents->data(),contents->size(),width,height,rgba,stride,
-      {box.x0,box.y0,box.x1,box.y1},*fonts,*properties,*images,*forms,
+      {box.x0+(box.x1-box.x0)*(double(tile_x)/double(full_width)),
+       box.y1-(box.y1-box.y0)*(double(tile_y+height)/double(full_height)),
+       box.x0+(box.x1-box.x0)*(double(tile_x+width)/double(full_width)),
+       box.y1-(box.y1-box.y0)*(double(tile_y)/double(full_height))},
+      *fonts,*properties,*images,*forms,
       true,0,*graphic_states))return RINPDF_UNSUPPORTED;
    const auto elapsed=std::chrono::duration_cast<std::chrono::nanoseconds>(
      std::chrono::steady_clock::now()-raster_start).count();
@@ -900,6 +908,29 @@ extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document *doc,size_t in
   doc->rendered_calls.fetch_add(1,std::memory_order_relaxed);
   return RINPDF_OK;
  }catch(const std::bad_alloc&){return RINPDF_OUT_OF_MEMORY;}
+}
+
+extern "C" rinpdf_status rinpdf_render_page(const rinpdf_document* doc,size_t index,
+ unsigned width,unsigned height,unsigned char* rgba,size_t stride){
+ return render_page_internal(doc,index,width,height,rgba,stride,width,height,0,0);
+}
+extern "C" rinpdf_status rinpdf_render_page_tile_sized(
+ const rinpdf_document* doc,size_t index,unsigned full_width,unsigned full_height,
+ unsigned x,unsigned y,unsigned tile_width,unsigned tile_height,
+ unsigned char* rgba,size_t capacity,size_t stride){
+ if(!doc||!rgba||!full_width||!full_height||!tile_width||!tile_height||
+    full_width>16384||full_height>16384||
+    size_t(full_width)*full_height>16777216||
+    x>=full_width||y>=full_height||
+    tile_width>full_width-x||tile_height>full_height-y)
+  return RINPDF_INVALID_ARGUMENT;
+ const size_t effective_stride=stride?stride:size_t(tile_width)*4;
+ size_t required=0;
+ auto status=rinpdf_render_page_buffer_size(tile_width,tile_height,effective_stride,&required);
+ if(status!=RINPDF_OK)return status;
+ if(capacity<required)return RINPDF_INVALID_ARGUMENT;
+ return render_page_internal(doc,index,tile_width,tile_height,rgba,effective_stride,
+  full_width,full_height,x,y);
 }
 
 namespace {
