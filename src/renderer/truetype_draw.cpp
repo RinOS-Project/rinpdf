@@ -131,6 +131,11 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
      const size_t estimated=sizeof(CachedGlyph)+
       decoded.outline.points.size()*sizeof(GlyphPoint)+
       decoded.outline.contour_ends.size()*sizeof(uint16_t)+128;
+     if(retain&&estimated>4*1024*1024){
+      // A single oversized outline must never occupy the retained font
+      // cache. Keep it only for this render call.
+      cached=transient_glyphs.emplace(glyph_id,std::move(decoded)).first;
+     }else{
      if(retain){
       // Evict older entries before insertion. This glyph is not yet held
       // by any reference, and the currently active glyph is never evicted.
@@ -161,8 +166,11 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
       last_font.estimated_bytes+=estimated;
       last_font.recency[glyph_id]=++last_font.clock;
      }
+     }
     }
-    if(retain)last_font.recency[glyph_id]=++last_font.clock;
+    const bool persisted=retain&&
+       last_font.glyphs.find(glyph_id)!=last_font.glyphs.end();
+    if(persisted)last_font.recency[glyph_id]=++last_font.clock;
     units=cached->second.units;advance=cached->second.advance;
     const SimpleGlyph& glyph=cached->second.outline;
     parser::CIDVerticalMetric vertical_metric;
@@ -186,7 +194,7 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
        n+=sizeof(path)+path.size()*sizeof(MaskPoint);
       return n;
      };
-     if(retain){
+     if(persisted){
       const size_t prior=path_weight(cached->second.flattened);
       const size_t next=path_weight(replacement);
       // Keep the currently used glyph alive while evicting older glyphs.
@@ -219,6 +227,13 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
      cached->second.flattened_em=em;
     }
     paint.paths=cached->second.flattened;
+    if(persisted&&last_font.estimated_bytes>4*1024*1024){
+     // Preserve the active paint in its owned copy, but do not retain an
+     // oversized glyph between calls.
+     last_font.estimated_bytes=0;
+     last_font.glyphs.clear();
+     last_font.recency.clear();
+    }
     for(auto& contour:paint.paths)for(auto& point:contour){
      const double local_x=point.x*matrix.horizontal_scale,local_y=-point.y;
      const double ux=origin_x+matrix.ta*local_x+matrix.tc*local_y;
