@@ -32,4 +32,12 @@ bool sfnt_horizontal_metrics(const SfntFont& font,uint16_t glyph_id,
 // Read a Unicode BMP cmap format 4, or format 12 for supplementary codepoints.
 // Returns false for malformed/unsupported mappings.
 bool sfnt_glyph_id(const SfntFont& font,uint32_t unicode,uint16_t& glyph);
+// Validate the CFF 1.0 INDEX chain and locate the CharStrings INDEX.
+// This does not decode Type 2 glyph outlines.
+struct CffCharStrings {
+ size_t offset=0;
+ size_t length=0;
+ uint16_t count=0;
+};
+bool sfnt_cff_charstrings(const SfntFont& font,CffCharStrings& out);
 }
