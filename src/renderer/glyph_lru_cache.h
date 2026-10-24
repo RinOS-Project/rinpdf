@@ -35,7 +35,12 @@ public:
   auto it=positions_.find(id);
   if(it==positions_.end()){
    oldest_first_.push_back(id);
-   positions_.emplace(id,std::prev(oldest_first_.end()));
+   try{
+    positions_.emplace(id,std::prev(oldest_first_.end()));
+   }catch(...){
+    oldest_first_.pop_back();
+    throw;
+   }
   }else oldest_first_.splice(oldest_first_.end(),oldest_first_,it->second);
  }
  static size_t path_weight(const std::vector<std::vector<MaskPoint>>& paths){
@@ -68,19 +73,33 @@ public:
    oldest_first_.erase(oldest);
   }
  }
- // Insert a decoded glyph with LRU and byte-accounting in one operation.
- // Returns end() if the single glyph cannot fit the retained cache.
- CachedFontGlyph* insert(uint16_t id,
-                                                     CachedFontGlyph glyph){
-  const size_t weight=glyph_weight(glyph);
-  if(weight>4*1024*1024)return nullptr;
-  evict_for(weight,512,-1);
-  auto inserted=glyphs_.emplace(id,std::move(glyph));
-  if(inserted.second){
-   estimated_bytes_+=weight;
+ // Prepare bookkeeping before insertion so allocation failure never
+ // evicts a valid entry or leaves a glyph without an LRU position.
+ CachedFontGlyph* insert(uint16_t id,CachedFontGlyph glyph){
+  auto existing=glyphs_.find(id);
+  if(existing!=glyphs_.end()){
+   touch(id);
+   return &existing->second;
   }
+  const size_t weight=glyph_weight(glyph);
+  constexpr size_t budget=4*1024*1024;
+  if(weight>budget)return nullptr;
   touch(id);
-  return &inserted.first->second;
+  try{
+   auto inserted=glyphs_.emplace(id,std::move(glyph));
+   if(!inserted.second)return &inserted.first->second;
+   estimated_bytes_+=weight;
+   // Evict only after insertion succeeds, never the inserted glyph.
+   evict_for(0,513,int(id));
+   return &inserted.first->second;
+  }catch(...){
+   auto pos=positions_.find(id);
+   if(pos!=positions_.end()){
+    oldest_first_.erase(pos->second);
+    positions_.erase(pos);
+   }
+   throw;
+  }
  }
  void update_flattened(uint16_t id,
        std::vector<std::vector<MaskPoint>> replacement,
@@ -89,13 +108,14 @@ public:
   if(it==glyphs_.end())return;
   const size_t prior=path_weight(it->second.flattened);
   const size_t next=path_weight(replacement);
-  if(next>prior)evict_for(next-prior,513,int(id));
-  estimated_bytes_-=std::min(estimated_bytes_,prior);
-  estimated_bytes_+=next;
-  it->second.flattened=std::move(replacement);
+  // Swap is noexcept; make the new allocation resident before eviction.
+  it->second.flattened.swap(replacement);
   it->second.has_flattened=true;
   it->second.flattened_em=em;
   it->second.flattened_tolerance=tolerance;
+  estimated_bytes_-=std::min(estimated_bytes_,prior);
+  estimated_bytes_+=next;
+  evict_for(0,513,int(id));
  }
  bool over_budget()const{return estimated_bytes_>4*1024*1024;}
  // Transfer the whole map node, including the allocated glyph payload.
