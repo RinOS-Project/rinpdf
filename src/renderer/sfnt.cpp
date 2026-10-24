@@ -1,5 +1,6 @@
 #include "sfnt.h"
 #include "cff_dict.h"
+#include "cff_index.h"
 #include <algorithm>
 #include <limits>
 #include <set>
@@ -273,55 +274,15 @@ bool sfnt_cff_charstrings(const SfntFont& font,CffCharStrings& out){
  const uint8_t* d=font.bytes+cff->offset;
  const size_t n=cff->length;
  if(d[0]!=1||d[2]<4||d[2]>n||d[3]<1||d[3]>4)return false;
- struct Index {size_t start=0,length=0;uint16_t count=0;};
- auto index=[&](size_t& cursor,Index& result)->bool{
-  if(cursor>n||n-cursor<2)return false;
-  const uint16_t count=uint16_t(d[cursor])<<8|d[cursor+1];
-  cursor+=2;
-  if(!count){result={cursor,0,0};return true;}
-  if(cursor>=n)return false;
-  const unsigned offsize=d[cursor++];
-  if(offsize<1||offsize>4||size_t(count)+1>(n-cursor)/offsize)return false;
-  auto offset=[&](size_t i)->uint32_t{
-   uint32_t v=0;
-   for(unsigned j=0;j<offsize;++j)v=(v<<8)|d[cursor+i*offsize+j];
-   return v;
-  };
-  if(offset(0)!=1)return false;
-  uint32_t prior=1;
-  for(size_t i=1;i<=count;++i){
-   const uint32_t next=offset(i);
-   if(next<prior)return false;
-   prior=next;
-  }
-  const size_t data_start=cursor+(size_t(count)+1)*offsize;
-  const size_t data_length=size_t(prior)-1;
-  if(data_start>n||data_length>n-data_start)return false;
-  result={data_start,data_length,count};
-  cursor=data_start+data_length;
-  return true;
- };
- size_t cursor=d[2];Index names,top,strings,subrs;
- if(!index(cursor,names)||!index(cursor,top)||!index(cursor,strings)||
-    !index(cursor,subrs)||names.count!=1||top.count!=1)return false;
- // Resolve the first Top DICT object rather than interpreting other INDEX data.
- size_t at=d[2];
- Index ignored;
- if(!index(at,ignored))return false;
- if(at>n||n-at<3||d[at]==0)return false;
- const unsigned os=d[at];
- if(os<1||os>4)return false;
- const size_t offsets=at+1;
- if(n-offsets<2*os)return false;
- uint32_t a=0,b=0;
- for(unsigned j=0;j<os;++j){
-  a=(a<<8)|d[offsets+j];
-  b=(b<<8)|d[offsets+os+j];
- }
- if(a!=1||b<a)return false;
- const size_t first=offsets+2*os;
- if(first>n||size_t(b-1)>n-first)return false;
- size_t pos=first,end=first+size_t(b-1);
+ size_t cursor=d[2];
+ CffIndex names,top,strings,subrs;
+ if(!cff_read_index(d,n,cursor,names)||
+    !cff_read_index(d,n,cursor,top)||
+    !cff_read_index(d,n,cursor,strings)||
+    !cff_read_index(d,n,cursor,subrs)||
+    names.count!=1||top.count!=1)return false;
+ size_t first=0,end=0;
+ if(!top.item(0,first,end))return false;
  bool found=false;int32_t char_offset=0;
  if(!cff_walk_dict(d,n,first,end,[&](unsigned op,
                      const std::vector<int32_t>& operands){
@@ -330,10 +291,10 @@ bool sfnt_cff_charstrings(const SfntFont& font,CffCharStrings& out){
   char_offset=operands[0];found=true;return true;
  }))return false;
  if(!found||char_offset<0||size_t(char_offset)>=n)return false;
- size_t char_cursor=size_t(char_offset);Index chars;
- if(!index(char_cursor,chars)||!chars.count||
+ size_t char_cursor=size_t(char_offset);CffIndex chars;
+ if(!cff_read_index(d,n,char_cursor,chars)||!chars.count||
     chars.count!=font.glyph_count)return false;
- out={chars.start,chars.length,size_t(char_offset),chars.count};
+ out={chars.payload,chars.end-chars.payload,size_t(char_offset),chars.count};
  return true;
 }
 
