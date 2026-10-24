@@ -14,6 +14,8 @@ bool sfnt_cff_simple_outline(const SfntFont& font,uint16_t glyph,
  double x=0,y=0;
  bool ended=false;
  size_t segments=0;
+ size_t stems=0;
+ bool path_started=false;
  auto coordinate=[&](double dx,double dy)->bool{
   x+=dx;y+=dy;
   return std::isfinite(x)&&std::isfinite(y)&&
@@ -21,6 +23,7 @@ bool sfnt_cff_simple_outline(const SfntFont& font,uint16_t glyph,
  };
  auto begin=[&](double dx,double dy)->bool{
   if(!coordinate(dx,dy)||paths.size()>=256)return false;
+  path_started=true;
   paths.push_back({{x,y}});
   return true;
  };
@@ -73,7 +76,17 @@ bool sfnt_cff_simple_outline(const SfntFont& font,uint16_t glyph,
     if(n!=0||pos!=length)return false;
     ended=true;break;
    }
-   if(op==21){
+   if(op==1||op==3||op==18||op==23){
+    // Stem hints do not affect unhinted outline geometry.
+    if(path_started||n%2||stems+n/2>96)return false;
+    stems+=n/2;
+   }else if(op==19||op==20){
+    if(path_started||n%2||stems+n/2>96)return false;
+    stems+=n/2;
+    const size_t mask_bytes=(stems+7)/8;
+    if(mask_bytes>length-pos)return false;
+    pos+=mask_bytes;
+   }else    if(op==21){
     if(n!=2||!begin(stack[0],stack[1]))return false;
    }else if(op==22||op==4){
     if(n!=1||!begin(op==22?stack[0]:0,op==4?stack[0]:0))return false;
@@ -87,6 +100,20 @@ bool sfnt_cff_simple_outline(const SfntFont& font,uint16_t glyph,
      if(!line(horizontal?v:0,horizontal?0:v))return false;
      horizontal=!horizontal;
     }
+   }else if(op==24){
+    // rcurveline: one or more curves followed by a line.
+    if(n<8||(n-2)%6)return false;
+    for(size_t i=0;i+8<=n;i+=6)
+     if(!curve(stack[i],stack[i+1],stack[i+2],stack[i+3],
+               stack[i+4],stack[i+5]))return false;
+    if(!line(stack[n-2],stack[n-1]))return false;
+   }else if(op==25){
+    // rlinecurve: one or more lines followed by a curve.
+    if(n<8||(n-6)%2)return false;
+    for(size_t i=0;i<n-6;i+=2)
+     if(!line(stack[i],stack[i+1]))return false;
+    if(!curve(stack[n-6],stack[n-5],stack[n-4],stack[n-3],
+              stack[n-2],stack[n-1]))return false;
    }else if(op==8){
     if(n<6||(n%6))return false;
     for(size_t i=0;i<n;i+=6)
