@@ -48,7 +48,7 @@ bool sfnt_glyph_id(const SfntFont& f,uint32_t code,uint16_t& glyph){
  uint16_t count=0;
  if(!u16(f.bytes,f.size,start+2,count)||count>256||
     size_t(count)>(end-start-4)/8)return false;
- for(unsigned pass=0;pass<4;++pass)for(unsigned i=0;i<count;++i){
+ for(unsigned pass=0;pass<5;++pass)for(unsigned i=0;i<count;++i){
   size_t rec=start+4+size_t(i)*8;
   uint16_t platform=0,encoding=0;
   uint32_t offset=0;
@@ -64,6 +64,7 @@ bool sfnt_glyph_id(const SfntFont& f,uint32_t code,uint16_t& glyph){
   if(pass==1&&format!=4)continue;
   if(pass==2&&format!=6)continue;
   if(pass==3&&format!=0)continue;
+  if(pass==4&&format!=13)continue;
   if(format==12){
    uint32_t length=0,groups=0;
    if(end-sub<16||!u32(f.bytes,f.size,sub+4,length)||
@@ -79,6 +80,22 @@ bool sfnt_glyph_id(const SfntFont& f,uint32_t code,uint16_t& glyph){
      if(id>=f.glyph_count)return false;
      glyph=static_cast<uint16_t>(id);return true;
     }
+   }
+  }else if(format==13){
+   // Unicode many-to-one mapping: each range maps to a single glyph ID.
+   uint32_t length=0,groups=0;
+   if(end-sub<16||!u32(f.bytes,f.size,sub+4,length)||
+      !u32(f.bytes,f.size,sub+12,groups)||length<16||
+      length>end-sub||groups>(length-16)/12||groups>100000)return false;
+   uint32_t previous_end=0;
+   for(uint32_t j=0;j<groups;++j){
+    const size_t pos=sub+16+size_t(j)*12;
+    uint32_t lo=0,hi=0,id=0;
+    if(!u32(f.bytes,f.size,pos,lo)||!u32(f.bytes,f.size,pos+4,hi)||
+       !u32(f.bytes,f.size,pos+8,id)||lo>hi||
+       (j&&lo<=previous_end)||id>=f.glyph_count)return false;
+    previous_end=hi;
+    if(code>=lo&&code<=hi){glyph=uint16_t(id);return true;}
    }
   }else if(format==6&&code<=65535){
    uint16_t length=0,first=0,entries=0;
