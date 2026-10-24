@@ -1474,6 +1474,13 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
     unsigned x_end=(unsigned)std::clamp(std::ceil(high_x),0.0,(double)width);
     unsigned y_begin=(unsigned)std::clamp(std::floor(low_y),0.0,(double)height);
     unsigned y_end=(unsigned)std::clamp(std::ceil(high_y),0.0,(double)height);
+    // Samples outside the current rectangular clip never reach the output.
+    // Bound the expensive inverse-transform and coverage checks up front.
+    x_begin=std::max(x_begin,clip.x0);
+    x_end=std::min(x_end,clip.x1);
+    y_begin=std::max(y_begin,clip.y0);
+    y_end=std::min(y_end,clip.y1);
+    if(x_begin>=x_end||y_begin>=y_end)return true;
     size_t work=(size_t)(x_end-x_begin)*(y_end-y_begin);
     if(work>16777216-stroke_work)return false;
     stroke_work+=work;
