@@ -50,8 +50,26 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
   SimpleGlyph outline;
   std::vector<std::vector<MaskPoint>> flattened;
   bool has_flattened=false;
+  double flattened_em=0;
  };
- std::map<uint16_t,CachedGlyph> glyph_cache;
+ // Per-thread last-font cache: exact byte comparison prevents collisions and
+ // owns the font bytes independently of PDF document and resource lifetime.
+ // Only small fonts are retained; large fonts use a transient per-call map.
+ struct LastFont {
+  std::vector<uint8_t> bytes;
+  std::map<uint16_t,CachedGlyph> glyphs;
+ };
+ thread_local LastFont last_font;
+ std::map<uint16_t,CachedGlyph> transient_glyphs;
+ const bool retain=bytes.size()<=2*1024*1024;
+ if(retain && last_font.bytes!=bytes){
+  // Construct the replacement first: allocation failures do not damage
+  // an existing cached font.
+  std::vector<uint8_t> replacement(bytes);
+  last_font.bytes.swap(replacement);
+  last_font.glyphs.clear();
+ }
+ auto& glyph_cache=retain?last_font.glyphs:transient_glyphs;
  struct Paint {std::vector<std::vector<MaskPoint>> paths;};
  std::vector<Paint> paints;
  size_t glyph_count=0;
@@ -116,10 +134,12 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
     Paint paint;
     // The font-space flattening tolerance and size are constant across
     // this call. Copy cached contours before applying per-glyph transforms.
-    if(!cached->second.has_flattened){
+    // Flattening depends on em, unlike the decoded sfnt glyph outline.
+    if(!cached->second.has_flattened || cached->second.flattened_em!=em){
      if(!flatten_simple_glyph(glyph,em/units,0,0,0.15,
                               cached->second.flattened))return false;
      cached->second.has_flattened=true;
+     cached->second.flattened_em=em;
     }
     paint.paths=cached->second.flattened;
     for(auto& contour:paint.paths)for(auto& point:contour){
