@@ -37,7 +37,10 @@ bool sfnt_glyph_id(const SfntFont& font,uint32_t unicode,uint16_t& glyph);
 struct CffCharStrings {
  size_t offset=0;
  size_t length=0;
+ size_t index_offset=0;
  uint16_t count=0;
 };
+bool sfnt_cff_glyph_program(const SfntFont& font,uint16_t glyph_id,
+ const uint8_t*& bytes,size_t& length);
 bool sfnt_cff_charstrings(const SfntFont& font,CffCharStrings& out);
 }
