@@ -142,9 +142,11 @@ bool sfnt_cff_outline_commands(const SfntFont& font,uint16_t glyph,
     continue;
    }
    if(op==11){
+    // A subroutine returns immediately. Bytes after return are not
+    // executed; requiring return to be the last byte rejects valid
+    // Type 2 subroutines with unreachable trailing instructions.
     if(frames.empty()||n>48)return false;
     const Frame previous=frames.back();frames.pop_back();
-    if(pos!=current_length)return false;
     current=previous.bytes;current_length=previous.length;
     pos=previous.pos;
     continue;
