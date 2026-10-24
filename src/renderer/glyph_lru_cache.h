@@ -62,6 +62,43 @@ public:
    oldest_first_.erase(oldest);
   }
  }
+ // Insert a decoded glyph with LRU and byte-accounting in one operation.
+ // Returns end() if the single glyph cannot fit the retained cache.
+ std::map<uint16_t,CachedFontGlyph>::iterator insert(uint16_t id,
+                                                     CachedFontGlyph glyph){
+  const size_t weight=glyph_weight(glyph);
+  if(weight>4*1024*1024)return glyphs.end();
+  evict_for(weight,512,-1);
+  auto inserted=glyphs.emplace(id,std::move(glyph));
+  if(inserted.second){
+   estimated_bytes+=weight;
+  }
+  touch(id);
+  return inserted.first;
+ }
+ void update_flattened(uint16_t id,
+       std::vector<std::vector<MaskPoint>> replacement,
+       double em,double tolerance){
+  auto it=glyphs.find(id);
+  if(it==glyphs.end())return;
+  const size_t prior=path_weight(it->second.flattened);
+  const size_t next=path_weight(replacement);
+  if(next>prior)evict_for(next-prior,513,int(id));
+  estimated_bytes-=std::min(estimated_bytes,prior);
+  estimated_bytes+=next;
+  it->second.flattened=std::move(replacement);
+  it->second.has_flattened=true;
+  it->second.flattened_em=em;
+  it->second.flattened_tolerance=tolerance;
+ }
+ bool over_budget()const{return estimated_bytes>4*1024*1024;}
+ void remove_accounted(uint16_t id){
+  auto it=glyphs.find(id);
+  if(it==glyphs.end())return;
+  const size_t weight=glyph_weight(it->second);
+  estimated_bytes-=std::min(estimated_bytes,weight);
+  erase(id);
+ }
  void erase(uint16_t id){
   auto pos=positions_.find(id);
   if(pos!=positions_.end()){
