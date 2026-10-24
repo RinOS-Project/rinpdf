@@ -1,4 +1,5 @@
 #include "sfnt.h"
+#include "cff_dict.h"
 #include <cstdint>
 #include <vector>
 namespace rinpdf::renderer {
@@ -111,47 +112,15 @@ static bool locate_fd(const SfntFont& font,uint16_t glyph,
     !index(cursor,first,end,count)||count!=1)return false;
  // Read CID operators 12 36 (FDArray) and 12 37 (FDSelect).
  int32_t array=-1,select=-1;
- std::vector<int32_t> args;
- for(size_t p=first;p<end;){
-  const unsigned op=d[p++];
-  if(op<=21){
-   if(op==12){
-    if(p>=end)return false;
-    const unsigned escaped=d[p++];
-    if(escaped==36||escaped==37){
-     if(args.size()!=1||args[0]<0)return false;
-     if(escaped==36)array=args[0];else select=args[0];
-    }
-   }
-   args.clear();continue;
+ if(!cff_walk_dict(d,n,first,end,[&](unsigned op,
+                    const std::vector<int32_t>& args){
+  if(op==0x100+36||op==0x100+37){
+   if(args.size()!=1||args[0]<0)return false;
+   if(op==0x100+36){if(array>=0)return false;array=args[0];}
+   else{if(select>=0)return false;select=args[0];}
   }
-  int32_t v=0;
-  if(op>=32&&op<=246)v=int32_t(op)-139;
-  else if(op>=247&&op<=250){
-   if(p>=end)return false;
-   v=(int32_t(op)-247)*256+d[p++]+108;
-  }else if(op>=251&&op<=254){
-   if(p>=end)return false;
-   v=-(int32_t(op)-251)*256-d[p++]-108;
-  }else if(op==28){
-   if(end-p<2)return false;
-   v=int16_t(u16(p));p+=2;
-  }else if(op==29){
-   if(end-p<4)return false;
-   const uint32_t bits=(uint32_t(d[p])<<24)|(uint32_t(d[p+1])<<16)|
-     (uint32_t(d[p+2])<<8)|d[p+3];
-   v=int32_t(bits);p+=4;
-  }else if(op==30){
-   bool done=false;
-   while(p<end&&!done){
-    const unsigned pair=d[p++];
-    done=((pair>>4)==15||(pair&15)==15);
-   }
-   if(!done)return false;
-  }else return false;
-  if(args.size()>=48)return false;
-  args.push_back(v);
- }
+  return true;
+ }))return false;
  if(array<0||select<0||size_t(array)>=n||size_t(select)>=n)return false;
  cursor=size_t(array);
  if(!index(cursor,first,end,count)||count==0||count>256)return false;
@@ -223,49 +192,15 @@ bool sfnt_cff_cid_local_subroutine(const SfntFont& font,uint16_t glyph,
  const size_t n=cff->length;
  auto parse_dict=[&](size_t begin,size_t limit,unsigned desired,
                      int32_t& first,int32_t& second)->bool{
-  if(begin>limit||limit>n)return false;
-  std::vector<int32_t> args;
   bool found=false;
-  for(size_t pos=begin;pos<limit;){
-   const unsigned op=d[pos++];
-   if(op<=21){
-    if(op==12){if(pos>=limit)return false;++pos;}
-    else if(op==desired){
-     if(found||args.size()!=(desired==18?2u:1u))return false;
-     first=args[0];
-     if(desired==18)second=args[1];
-     found=true;
-    }
-    args.clear();
-    continue;
-   }
-   int32_t v=0;
-   if(op>=32&&op<=246)v=int32_t(op)-139;
-   else if(op>=247&&op<=250){
-    if(pos>=limit)return false;
-    v=(int32_t(op)-247)*256+d[pos++]+108;
-   }else if(op>=251&&op<=254){
-    if(pos>=limit)return false;
-    v=-(int32_t(op)-251)*256-d[pos++]-108;
-   }else if(op==28){
-    if(limit-pos<2)return false;
-    v=int16_t((uint16_t(d[pos])<<8)|d[pos+1]);pos+=2;
-   }else if(op==29){
-    if(limit-pos<4)return false;
-    uint32_t raw=(uint32_t(d[pos])<<24)|(uint32_t(d[pos+1])<<16)|
-      (uint32_t(d[pos+2])<<8)|d[pos+3];
-    v=static_cast<int32_t>(raw);pos+=4;
-   }else if(op==30){
-    bool terminated=false;
-    while(pos<limit&&!terminated){
-     unsigned pair=d[pos++];
-     terminated=((pair>>4)==15||(pair&15)==15);
-    }
-    if(!terminated)return false;
-   }else return false;
-   if(args.size()>=48)return false;
-   args.push_back(v);
-  }
+  if(!cff_walk_dict(d,n,begin,limit,[&](unsigned op,
+                 const std::vector<int32_t>& args){
+   if(op!=desired)return true;
+   if(found||args.size()!=(desired==18?2u:1u))return false;
+   first=args[0];
+   if(desired==18)second=args[1];
+   found=true;return true;
+  }))return false;
   return found;
  };
  int32_t private_length=-1,private_offset=-1;
