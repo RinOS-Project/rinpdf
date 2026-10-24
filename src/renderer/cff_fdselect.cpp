@@ -2,6 +2,71 @@
 #include <cstdint>
 #include <vector>
 namespace rinpdf::renderer {
+// A CID-keyed CFF must advertise ROS (12 30) in its Top DICT.
+// Distinguish absent ROS from malformed FDSelect: the latter must fail closed.
+bool sfnt_cff_is_cid_keyed(const SfntFont& font,bool& cid_keyed){
+ cid_keyed=false;
+ if(!font.bytes)return false;
+ const SfntTable* cff=nullptr;
+ for(const auto& t:font.tables)if(t.tag==0x43464620){cff=&t;break;}
+ if(!cff||cff->length<4)return false;
+ const uint8_t* d=font.bytes+cff->offset;
+ const size_t n=cff->length;
+ if(d[0]!=1||d[2]<4||d[2]>n)return false;
+ size_t p=d[2];
+ auto skip_index=[&](size_t& pos,size_t& first,size_t& last,uint16_t& count)->bool{
+  if(pos>n||n-pos<2)return false;
+  count=(uint16_t(d[pos])<<8)|d[pos+1];pos+=2;
+  if(!count){first=last=pos;return true;}
+  if(pos>=n)return false;
+  const unsigned width=d[pos++];
+  if(width<1||width>4||(size_t(count)+1)>(n-pos)/width)return false;
+  auto off=[&](size_t i)->uint32_t{
+   uint32_t v=0;
+   for(unsigned k=0;k<width;++k)v=(v<<8)|d[pos+i*width+k];
+   return v;
+  };
+  if(off(0)!=1)return false;
+  uint32_t prev=1;
+  for(size_t i=1;i<=count;++i){
+   const uint32_t v=off(i);
+   if(v<prev)return false;
+   prev=v;
+  }
+  first=pos+(size_t(count)+1)*width;
+  if(first>n||size_t(prev-1)>n-first)return false;
+  last=first+prev-1;pos=last;return true;
+ };
+ size_t first=0,last=0;uint16_t count=0;
+ if(!skip_index(p,first,last,count)||count!=1||
+    !skip_index(p,first,last,count)||count!=1)return false;
+ for(size_t i=first;i<last;){
+  const unsigned op=d[i++];
+  if(op==12){
+   if(i>=last)return false;
+   if(d[i++]==30)cid_keyed=true;
+  }else if(op==28){
+   if(last-i<2)return false;
+   i+=2;
+  }else if(op==29){
+   if(last-i<4)return false;
+   i+=4;
+  }else if(op==30){
+   bool done=false;
+   while(i<last&&!done){
+    const unsigned pair=d[i++];
+    done=((pair>>4)==15||(pair&15)==15);
+   }
+   if(!done)return false;
+  }else if(op>=247&&op<=254){
+   if(i>=last)return false;
+   ++i;
+  }else if(op>=32&&op<=246){}
+  else if(op<=21){}
+  else return false;
+ }
+ return true;
+}
 static bool locate_fd(const SfntFont& font,uint16_t glyph,
  uint16_t& fd_index,size_t* dict_start,size_t* dict_end){
  if(!font.bytes||glyph>=font.glyph_count)return false;
