@@ -143,19 +143,24 @@ public:
   if(!it->second.lru_linked)return false;
   const auto lru_pos=it->second.lru_position;
   auto node=glyphs_.extract(it);
-  // If the destination comparator throws, restore the extracted node.
-  // LRU bookkeeping and byte accounting have not changed yet.
+  // Invalidate the cache-owned iterator while the node is detached.
+  // Restore it only if the node is reinserted into the source.
+  node.mapped().lru_linked=false;
+  node.mapped().lru_position={};
+  auto restore=[&](decltype(node)&& pending){
+   if(pending.empty())return;
+   pending.mapped().lru_linked=true;
+   pending.mapped().lru_position=lru_pos;
+   glyphs_.insert(std::move(pending));
+  };
   try{
    auto inserted=target.insert(std::move(node));
    if(!inserted.inserted){
-    glyphs_.insert(std::move(inserted.node));
+    restore(std::move(inserted.node));
     return false;
    }
-   // The detached entry no longer owns this cache's list handle.
-   inserted.position->second.lru_linked=false;
-   inserted.position->second.lru_position={};
   }catch(...){
-   if(!node.empty())glyphs_.insert(std::move(node));
+   restore(std::move(node));
    throw;
   }
   if(weight>estimated_bytes_)refresh_weight();
