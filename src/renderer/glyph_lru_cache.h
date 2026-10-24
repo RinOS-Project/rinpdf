@@ -126,10 +126,17 @@ public:
   if(it==glyphs_.end()||target.find(id)!=target.end())return false;
   const size_t weight=glyph_weight(it->second);
   auto node=glyphs_.extract(it);
-  auto inserted=target.insert(std::move(node));
-  if(!inserted.inserted){
-   glyphs_.insert(std::move(inserted.node));
-   return false;
+  // If the destination comparator throws, restore the extracted node.
+  // LRU bookkeeping and byte accounting have not changed yet.
+  try{
+   auto inserted=target.insert(std::move(node));
+   if(!inserted.inserted){
+    glyphs_.insert(std::move(inserted.node));
+    return false;
+   }
+  }catch(...){
+   if(!node.empty())glyphs_.insert(std::move(node));
+   throw;
   }
   estimated_bytes_-=std::min(estimated_bytes_,weight);
   auto pos=positions_.find(id);
