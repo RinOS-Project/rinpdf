@@ -66,8 +66,9 @@ public:
    auto victim=glyphs_.find(id);
    if(victim!=glyphs_.end()){
     const size_t weight=glyph_weight(victim->second);
-    estimated_bytes_-=std::min(estimated_bytes_,weight);
     glyphs_.erase(victim);
+    if(weight>estimated_bytes_)refresh_weight();
+    else estimated_bytes_-=weight;
    }
    positions_.erase(id);
    oldest_first_.erase(oldest);
@@ -143,7 +144,8 @@ public:
    if(!node.empty())glyphs_.insert(std::move(node));
    throw;
   }
-  estimated_bytes_-=std::min(estimated_bytes_,weight);
+  if(weight>estimated_bytes_)refresh_weight();
+  else estimated_bytes_-=weight;
   auto pos=positions_.find(id);
   if(pos!=positions_.end()){
    oldest_first_.erase(pos->second);
@@ -154,7 +156,6 @@ public:
  void remove_accounted(uint16_t id){
   auto it=glyphs_.find(id);
   if(it==glyphs_.end())return;
-  const size_t weight=glyph_weight(it->second);
   erase(id);
  }
  void erase(uint16_t id){
