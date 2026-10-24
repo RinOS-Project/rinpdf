@@ -139,33 +139,17 @@ bool sfnt_cff_cid_local_subroutine(const SfntFont& font,uint16_t glyph,
                 size_t(private_offset)+size_t(private_length),
                 19,relative_subrs,unused)||relative_subrs<0||
     size_t(relative_subrs)>n-size_t(private_offset))return false;
- const size_t index=size_t(private_offset)+size_t(relative_subrs);
- if(index>n||n-index<3)return false;
- const uint16_t count=(uint16_t(d[index])<<8)|d[index+1];
- if(!count)return false;
- const unsigned width=d[index+2];
- const size_t off=index+3;
- if(width<1||width>4||size_t(count)+1>(n-off)/width)return false;
- auto entry=[&](size_t i)->uint32_t{
-  uint32_t v=0;
-  for(unsigned j=0;j<width;++j)v=(v<<8)|d[off+i*width+j];
-  return v;
- };
- if(entry(0)!=1)return false;
- uint32_t previous=1;
- for(size_t i=1;i<=count;++i){
-  const uint32_t next=entry(i);
-  if(next<previous)return false;
-  previous=next;
- }
- const int32_t bias=count<1240?107:count<33900?1131:32768;
+ size_t cursor=size_t(private_offset)+size_t(relative_subrs);
+ CffIndex locals;
+ if(!cff_read_index(d,n,cursor,locals)||!locals.count)return false;
+ const int32_t bias=locals.count<1240?107:
+                    locals.count<33900?1131:32768;
  const int64_t id=int64_t(operand)+bias;
- if(id<0||id>=count)return false;
- const uint32_t a=entry(size_t(id)),b=entry(size_t(id)+1);
- const size_t payload=off+(size_t(count)+1)*width;
- if(payload>n||a<1||b<a||size_t(b-1)>n-payload)return false;
- bytes=d+payload+a-1;
- length=b-a;
+ if(id<0||id>=locals.count)return false;
+ size_t first=0,last=0;
+ if(!locals.item(size_t(id),first,last))return false;
+ bytes=d+first;
+ length=last-first;
  return length>0&&length<=65536;
 }
 
