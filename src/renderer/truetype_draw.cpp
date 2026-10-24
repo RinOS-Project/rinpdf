@@ -81,6 +81,28 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
    g.cff_outline.capacity()*sizeof(CffSegment)+path_weight(g.flattened);
  };
  thread_local LastFont last_font;
+ // Evict LRU entries while respecting an active glyph (if any).
+ auto evict_for=[&](size_t extra,size_t max_count,int protected_id){
+  constexpr size_t budget=4*1024*1024;
+  while(!last_font.glyphs.empty()&&
+        (last_font.glyphs.size()>=max_count||
+         extra>budget||last_font.estimated_bytes>budget-extra)){
+   auto oldest=last_font.recency.end();
+   for(auto it=last_font.recency.begin();it!=last_font.recency.end();++it)
+    if(int(it->first)!=protected_id&&
+       (oldest==last_font.recency.end()||it->second<oldest->second))
+     oldest=it;
+   if(oldest==last_font.recency.end())break;
+   auto victim=last_font.glyphs.find(oldest->first);
+   if(victim!=last_font.glyphs.end()){
+    const size_t weight=glyph_weight(victim->second);
+    last_font.estimated_bytes-=std::min(last_font.estimated_bytes,weight);
+    last_font.glyphs.erase(victim);
+   }
+   last_font.recency.erase(oldest);
+  }
+ };
+
  std::map<uint16_t,CachedGlyph> transient_glyphs;
  // CFF retains scale-independent cubic commands. Device-dependent
  // flattened paths are regenerated for each CFF glyph paint.
@@ -161,27 +183,7 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
       cached=transient_glyphs.emplace(glyph_id,std::move(decoded)).first;
       transient_current=true;
      }else{
-     if(retain){
-      // Evict older entries before insertion. This glyph is not yet held
-      // by any reference, and the currently active glyph is never evicted.
-      while(!last_font.glyphs.empty()&&
-            (last_font.glyphs.size()>=512||
-             last_font.estimated_bytes>4*1024*1024-
-                std::min(full_estimated,size_t(4*1024*1024)))){
-       auto oldest=std::min_element(last_font.recency.begin(),
-        last_font.recency.end(),[](const auto& x,const auto& y){
-         return x.second<y.second;
-        });
-       if(oldest==last_font.recency.end())break;
-       auto victim=last_font.glyphs.find(oldest->first);
-       if(victim!=last_font.glyphs.end()){
-        size_t weight=glyph_weight(victim->second);
-        last_font.estimated_bytes-=std::min(last_font.estimated_bytes,weight);
-        last_font.glyphs.erase(victim);
-       }
-       last_font.recency.erase(oldest);
-      }
-     }
+     if(retain)evict_for(full_estimated,512,-1);
      cached=glyph_cache.emplace(glyph_id,std::move(decoded)).first;
      if(retain){
       last_font.estimated_bytes+=full_estimated;
@@ -242,25 +244,7 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
      if(persisted){
       const size_t prior=path_weight(cached->second.flattened);
       const size_t next=path_weight(replacement);
-      // Keep the currently used glyph alive while evicting older glyphs.
-      while(last_font.glyphs.size()>1 &&
-            next>prior &&
-            last_font.estimated_bytes>4*1024*1024-
-                std::min(next-prior,size_t(4*1024*1024))){
-       auto oldest=last_font.recency.end();
-       for(auto it=last_font.recency.begin();it!=last_font.recency.end();++it)
-        if(it->first!=glyph_id &&
-           (oldest==last_font.recency.end()||it->second<oldest->second))
-         oldest=it;
-       if(oldest==last_font.recency.end())break;
-       auto victim=last_font.glyphs.find(oldest->first);
-       if(victim!=last_font.glyphs.end()){
-        size_t weight=glyph_weight(victim->second);
-        last_font.estimated_bytes-=std::min(weight,last_font.estimated_bytes);
-        last_font.glyphs.erase(victim);
-       }
-       last_font.recency.erase(oldest);
-      }
+      if(next>prior)evict_for(next-prior,513,int(glyph_id));
       last_font.estimated_bytes-=std::min(prior,last_font.estimated_bytes);
       last_font.estimated_bytes+=next;
      }
