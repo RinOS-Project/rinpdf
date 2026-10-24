@@ -32,18 +32,15 @@ public:
   estimated_bytes_=0;
  }
  void touch(uint16_t id){
-  // Never create LRU records for glyphs that are not resident.
   if(glyphs_.find(id)==glyphs_.end())return;
+  // Repair missing or orphaned tracking nodes before touching the list.
+  if(positions_.size()!=glyphs_.size()||
+     oldest_first_.size()!=glyphs_.size()||
+     positions_.find(id)==positions_.end())rebuild_order();
   auto it=positions_.find(id);
-  if(it==positions_.end()){
-   oldest_first_.push_back(id);
-   try{
-    positions_.emplace(id,std::prev(oldest_first_.end()));
-   }catch(...){
-    oldest_first_.pop_back();
-    throw;
-   }
-  }else oldest_first_.splice(oldest_first_.end(),oldest_first_,it->second);
+  // A resident glyph always has a position after reconstruction.
+  if(it!=positions_.end())
+   oldest_first_.splice(oldest_first_.end(),oldest_first_,it->second);
  }
  static size_t path_weight(const std::vector<std::vector<MaskPoint>>& paths){
   size_t n=paths.capacity()*sizeof(std::vector<MaskPoint>);
@@ -62,8 +59,8 @@ public:
         extra>budget||estimated_bytes_>budget-extra)){
    // A missing LRU node would otherwise silently leave the cache over
    // budget. Rebuild the index from the authoritative glyph map.
-   if(oldest_first_.empty()||positions_.size()!=glyphs_.size())
-    rebuild_order();
+   if(oldest_first_.size()!=glyphs_.size()||
+      positions_.size()!=glyphs_.size())rebuild_order();
    auto oldest=oldest_first_.begin();
    if(oldest==oldest_first_.end())break;
    if(int(*oldest)==protected_id)++oldest;
@@ -179,15 +176,19 @@ public:
  }
 private:
  void rebuild_order(){
-  // Reconstruct off to the side so an allocation failure leaves the
-  // currently published structures unchanged.
+  // Preserve usable recency order; append any glyphs missing from it.
+  // Build both structures locally before publishing either one.
   std::list<uint16_t> order;
   std::map<uint16_t,std::list<uint16_t>::iterator> positions;
-  for(const auto& entry:glyphs_){
-   order.push_back(entry.first);
-   try{positions.emplace(entry.first,std::prev(order.end()));}
+  auto append=[&](uint16_t id){
+   if(glyphs_.find(id)==glyphs_.end()||positions.find(id)!=positions.end())
+    return;
+   order.push_back(id);
+   try{positions.emplace(id,std::prev(order.end()));}
    catch(...){order.pop_back();throw;}
-  }
+  };
+  for(uint16_t id:oldest_first_)append(id);
+  for(const auto& entry:glyphs_)append(entry.first);
   oldest_first_.swap(order);
   positions_.swap(positions);
   refresh_weight();
