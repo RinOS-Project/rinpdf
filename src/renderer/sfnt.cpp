@@ -137,7 +137,8 @@ bool sfnt_glyph_id(const SfntFont& f,uint32_t code,uint16_t& glyph){
      if(range==0)id=uint16_t((code+delta)&65535);
      else{
       size_t addr=ranges+2*j+range+2*(code-lo);
-      if(addr<sub||addr>=sub+length||!u16(f.bytes,f.size,addr,id))return false;
+      if(addr<sub||addr>sub+length||sub+length-addr<2||
+         !u16(f.bytes,f.size,addr,id))return false;
       if(id)id=uint16_t((id+delta)&65535);
      }
      if(id>=f.glyph_count)return false;
