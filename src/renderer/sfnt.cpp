@@ -338,55 +338,20 @@ bool sfnt_cff_global_subroutine(const SfntFont& font,int32_t operand,
  const size_t n=t->length;
  if(data[0]!=1||data[2]<4||data[2]>n)return false;
  size_t cursor=data[2];
- auto skip=[&](bool capture,size_t& begin,size_t& total,
-               uint16_t& count,unsigned& os)->bool{
-  if(cursor>n||n-cursor<2)return false;
-  count=uint16_t(data[cursor])<<8|data[cursor+1];cursor+=2;
-  if(!count){begin=cursor;total=0;os=0;return true;}
-  if(cursor>=n)return false;
-  os=data[cursor++];
-  if(os<1||os>4||size_t(count)+1>(n-cursor)/os)return false;
-  const size_t entries=cursor;
-  auto read=[&](size_t id)->uint32_t{
-   uint32_t value=0;
-   for(unsigned j=0;j<os;++j)
-    value=(value<<8)|data[entries+id*os+j];
-   return value;
-  };
-  if(read(0)!=1)return false;
-  uint32_t previous=1;
-  for(size_t k=1;k<=count;++k){
-   const uint32_t next=read(k);
-   if(next<previous)return false;
-   previous=next;
-  }
-  begin=entries;total=size_t(previous)-1;
-  const size_t start=entries+(size_t(count)+1)*os;
-  if(start>n||total>n-start)return false;
-  cursor=start+total;
-  (void)capture;
-  return true;
- };
- size_t begin=0,total=0;uint16_t count=0;unsigned os=0;
- for(int i=0;i<4;++i)
-  if(!skip(i==3,begin,total,count,os))return false;
- if(!count)return false;
- const int32_t bias=count<1240?107:count<33900?1131:32768;
+ CffIndex names,top,strings,globals;
+ if(!cff_read_index(data,n,cursor,names)||
+    !cff_read_index(data,n,cursor,top)||
+    !cff_read_index(data,n,cursor,strings)||
+    !cff_read_index(data,n,cursor,globals)||!globals.count)return false;
+ const int32_t bias=globals.count<1240?107:
+                    globals.count<33900?1131:32768;
  const int64_t id=int64_t(operand)+bias;
- if(id<0||id>=count)return false;
- auto read=[&](size_t j)->uint32_t{
-  uint32_t value=0;
-  for(unsigned k=0;k<os;++k)
-   value=(value<<8)|data[begin+j*os+k];
-  return value;
- };
- const uint32_t a=read(size_t(id)),b=read(size_t(id)+1);
- if(a==0||b<a)return false;
- const size_t payload=begin+(size_t(count)+1)*os;
- if(payload>n||size_t(b-1)>n-payload)return false;
- bytes=data+payload+a-1;
- length=b-a;
- return length<=65536;
+ if(id<0||id>=globals.count)return false;
+ size_t start=0,end=0;
+ if(!globals.item(size_t(id),start,end))return false;
+ bytes=data+start;
+ length=end-start;
+ return length>0&&length<=65536;
 }
 
 bool sfnt_cff_local_subroutine(const SfntFont& font,int32_t operand,
