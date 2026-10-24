@@ -125,8 +125,12 @@ static bool resolve(const SfntFont& font,uint16_t id,SimpleGlyph& out,
   more=(flags&MORE)!=0;
   if(!more&&(flags&INSTRUCTIONS)){
    uint16_t count=0;
-   if(!be16(font.bytes,end,pos,count)||count>end-pos-2)return false;
-   pos+=2+count;
+   // Check the two-byte instruction length before subtracting from the
+   // glyph boundary: size_t subtraction must never wrap on truncated data.
+   if(pos>end||end-pos<2||!be16(font.bytes,end,pos,count))return false;
+   pos+=2;
+   if(size_t(count)>end-pos)return false;
+   pos+=count;
   }
  }
  if(!result.points.empty()){
