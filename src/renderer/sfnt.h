@@ -58,5 +58,5 @@ bool sfnt_cff_charstrings(const SfntFont& font,CffCharStrings& out);
 struct CffPoint {double x=0,y=0;};
 using CffPath=std::vector<CffPoint>;
 bool sfnt_cff_simple_outline(const SfntFont& font,uint16_t glyph,
- std::vector<CffPath>& contours);
+ std::vector<CffPath>& contours,double tolerance=0.25);
 }
