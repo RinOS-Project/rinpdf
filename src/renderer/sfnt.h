@@ -57,6 +57,17 @@ bool sfnt_cff_charstrings(const SfntFont& font,CffCharStrings& out);
 // Unsupported hinting, subroutines and flex operators fail closed.
 struct CffPoint {double x=0,y=0;};
 using CffPath=std::vector<CffPoint>;
+// Scale-independent CFF cubic path commands.
+struct CffSegment {
+ enum class Kind:uint8_t {Move,Line,Cubic};
+ Kind kind=Kind::Move;
+ CffPoint first{},second{},end{};
+};
+using CffCommands=std::vector<CffSegment>;
+bool sfnt_cff_outline_commands(const SfntFont& font,uint16_t glyph,
+ CffCommands& commands);
+bool cff_flatten_commands(const CffCommands& commands,double tolerance,
+ std::vector<CffPath>& contours);
 bool sfnt_cff_simple_outline(const SfntFont& font,uint16_t glyph,
  std::vector<CffPath>& contours,double tolerance=0.25);
 }
