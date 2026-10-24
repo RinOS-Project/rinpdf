@@ -62,8 +62,12 @@ public:
  }
  void evict_for(size_t extra,size_t max_count,int protected_id){
   constexpr size_t budget=4*1024*1024;
+  // Avoid unsigned underflow for requests larger than the cache budget.
+  // An oversized protected glyph is handed to the transient cache by
+  // the caller after other entries have been evicted.
   while(!glyphs_.empty()&&(glyphs_.size()>=max_count||
-        extra>budget||estimated_bytes_>budget-extra)){
+        extra>budget||
+        (extra<=budget&&estimated_bytes_>budget-extra))){
    auto oldest=oldest_first_.begin();
    if(oldest==oldest_first_.end())break;
    if(int(*oldest)==protected_id)++oldest;
