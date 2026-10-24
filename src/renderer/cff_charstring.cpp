@@ -1,4 +1,5 @@
 #include "sfnt.h"
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <vector>
@@ -41,14 +42,36 @@ bool sfnt_cff_simple_outline(const SfntFont& font,uint16_t glyph,
   if(!coordinate(c,d))return false;
   const double c2x=x,c2y=y;
   if(!coordinate(e,f))return false;
-  // Fixed subdivision provides an initial supported cubic path. Curves
-  // can be flattened adaptively once the complete Type2 model exists.
-  for(int i=1;i<=16;++i){
-   const double t=double(i)/16,u=1-t;
-   const double px=u*u*u*x0+3*u*u*t*c1x+3*u*t*t*c2x+t*t*t*x;
-   const double py=u*u*u*y0+3*u*u*t*c1y+3*u*t*t*c2y+t*t*t*y;
-   if(!std::isfinite(px)||!std::isfinite(py))return false;
-   paths.back().push_back({px,py});
+  // Split only where the cubic deviates from its chord. Keep both
+  // recursion depth and generated points bounded for untrusted fonts.
+  struct Cubic{CffPoint p0,p1,p2,p3;unsigned depth;};
+  std::vector<Cubic> pending{{{x0,y0},{c1x,c1y},{c2x,c2y},{x,y},0}};
+  while(!pending.empty()){
+   const Cubic q=pending.back();pending.pop_back();
+   const double dx=q.p3.x-q.p0.x,dy=q.p3.y-q.p0.y;
+   const double chord=std::hypot(dx,dy);
+   const double d1=std::abs((q.p1.x-q.p0.x)*dy-
+                            (q.p1.y-q.p0.y)*dx);
+   const double d2=std::abs((q.p2.x-q.p0.x)*dy-
+                            (q.p2.y-q.p0.y)*dx);
+   if(!std::isfinite(chord)||!std::isfinite(d1)||!std::isfinite(d2))
+    return false;
+   if((chord>0?(std::max(d1,d2)/chord<=0.25):
+       (std::hypot(q.p1.x-q.p0.x,q.p1.y-q.p0.y)<=0.25&&
+        std::hypot(q.p2.x-q.p0.x,q.p2.y-q.p0.y)<=0.25))){
+    if(paths.back().size()>=16384)return false;
+    paths.back().push_back(q.p3);
+    continue;
+   }
+   if(q.depth>=12||pending.size()>=4096)return false;
+   auto mid=[](CffPoint u,CffPoint v)->CffPoint{
+    return {(u.x+v.x)*0.5,(u.y+v.y)*0.5};
+   };
+   const CffPoint a=mid(q.p0,q.p1),b=mid(q.p1,q.p2),
+                  c=mid(q.p2,q.p3),d=mid(a,b),e=mid(b,c),
+                  m=mid(d,e);
+   pending.push_back({m,e,c,q.p3,q.depth+1});
+   pending.push_back({q.p0,a,d,m,q.depth+1});
   }
   return true;
  };
