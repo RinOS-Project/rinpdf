@@ -17,6 +17,7 @@ bool sfnt_cff_simple_outline(const SfntFont& font,uint16_t glyph,
  size_t stems=0;
  bool path_started=false;
  bool width_seen=false;
+ bool width_seen=false;
  auto coordinate=[&](double dx,double dy)->bool{
   x+=dx;y+=dy;
   return std::isfinite(x)&&std::isfinite(y)&&
@@ -84,6 +85,17 @@ bool sfnt_cff_simple_outline(const SfntFont& font,uint16_t glyph,
     if(has_width)stack.erase(stack.begin());
     if(stem||move||op==14)width_seen=true;
    }
+   // Optional Type 2 width is allowed only on the first stem, move,
+   // or endchar operator, and does not contribute to the outline.
+   if(!width_seen){
+    const bool stem=(op==1||op==3||op==18||op==23||op==19||op==20);
+    const bool move=(op==4||op==21||op==22);
+    if((stem&&(stack.size()%2))||
+       (move&&stack.size()==(op==21?3u:2u))||
+       (op==14&&stack.size()==1))
+     stack.erase(stack.begin());
+    if(stem||move||op==14)width_seen=true;
+   }
    const size_t n=stack.size();
    if(op==14){
     if(n!=0||pos!=length)return false;
@@ -99,7 +111,7 @@ bool sfnt_cff_simple_outline(const SfntFont& font,uint16_t glyph,
     const size_t mask_bytes=(stems+7)/8;
     if(mask_bytes>length-pos)return false;
     pos+=mask_bytes;
-   }else    if(op==21){
+   }else if(op==21){
     if(n!=2||!begin(stack[0],stack[1]))return false;
    }else if(op==22||op==4){
     if(n!=1||!begin(op==22?stack[0]:0,op==4?stack[0]:0))return false;
