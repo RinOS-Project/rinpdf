@@ -122,7 +122,7 @@ bool sfnt_cff_simple_outline(const SfntFont& font,uint16_t glyph,
     continue;
    }
    const size_t n=stack.size();
-   if(op==29){
+   if(op==10||op==29){
     if(stack.empty()||frames.size()>=10)return false;
     const double number=stack.back();
     if(!std::isfinite(number)||number<-65536||number>65536||
@@ -130,8 +130,10 @@ bool sfnt_cff_simple_outline(const SfntFont& font,uint16_t glyph,
     stack.pop_back();
     const uint8_t* sub=nullptr;
     size_t sub_length=0;
-    if(!sfnt_cff_global_subroutine(font,int32_t(number),sub,sub_length)||
-       sub_length==0)return false;
+    const bool resolved=op==10?
+       sfnt_cff_local_subroutine(font,int32_t(number),sub,sub_length):
+       sfnt_cff_global_subroutine(font,int32_t(number),sub,sub_length);
+    if(!resolved||sub_length==0)return false;
     frames.push_back({current,current_length,pos});
     current=sub;current_length=sub_length;pos=0;
     continue;
