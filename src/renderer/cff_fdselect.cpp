@@ -41,31 +41,17 @@ bool sfnt_cff_is_cid_keyed(const SfntFont& font,bool& cid_keyed){
  size_t first=0,last=0;uint16_t count=0;
  if(!skip_index(p,first,last,count)||count!=1||
     !skip_index(p,first,last,count)||count!=1)return false;
- for(size_t i=first;i<last;){
-  const unsigned op=d[i++];
-  if(op==12){
-   if(i>=last)return false;
-   if(d[i++]==30)cid_keyed=true;
-  }else if(op==28){
-   if(last-i<2)return false;
-   i+=2;
-  }else if(op==29){
-   if(last-i<4)return false;
-   i+=4;
-  }else if(op==30){
-   bool done=false;
-   while(i<last&&!done){
-    const unsigned pair=d[i++];
-    done=((pair>>4)==15||(pair&15)==15);
-   }
-   if(!done)return false;
-  }else if(op>=247&&op<=254){
-   if(i>=last)return false;
-   ++i;
-  }else if(op>=32&&op<=246){}
-  else if(op<=21){}
-  else return false;
- }
+ bool ros_seen=false;
+ if(!cff_walk_dict(d,n,first,last,[&](unsigned op,
+                     const std::vector<int32_t>& args){
+  if(op==0x100+30){
+   if(ros_seen||args.size()!=3||args[0]<0||args[1]<0||
+      args[2]<0)return false;
+   ros_seen=true;
+  }
+  return true;
+ }))return false;
+ cid_keyed=ros_seen;
  return true;
 }
 static bool locate_fd(const SfntFont& font,uint16_t glyph,
