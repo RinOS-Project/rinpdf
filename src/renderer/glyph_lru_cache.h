@@ -141,6 +141,9 @@ public:
     glyphs_.insert(std::move(inserted.node));
     return false;
    }
+   // The detached entry no longer owns a list position in this cache.
+   inserted.position->second.lru_linked=false;
+   inserted.position->second.lru_position={};
   }catch(...){
    if(!node.empty())glyphs_.insert(std::move(node));
    throw;
