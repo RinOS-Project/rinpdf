@@ -41,6 +41,7 @@ struct CffCharStrings {
  uint16_t count=0;
 };
 // Select a CID-keyed CFF Font DICT via validated FDSelect format 0 or 3.
+bool sfnt_cff_is_cid_keyed(const SfntFont& font,bool& cid_keyed);
 bool sfnt_cff_fd_for_glyph(const SfntFont& font,uint16_t glyph,
  uint16_t& fd_index);
 bool sfnt_cff_cid_local_subroutine(const SfntFont& font,uint16_t glyph,
