@@ -145,13 +145,16 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
   if(points&&(max_x<-1.0||max_y<-1.0||
               min_x>double(width)+1.0||min_y>double(height)+1.0))
    continue;
-  std::vector<uint8_t> coverage;
-  if(!rasterize_path_coverage_2x(paint.paths,width,height,
-                                FillRule::NonZero,coverage))return false;
-  for(size_t i=0;i<coverage.size();++i){
-   const unsigned src=coverage[i],dst=layer[i];
-   layer[i]=uint8_t(src+(dst*(255-src)+127)/255);
-  }
+  CoverageRegion coverage;
+  if(!rasterize_path_coverage_region_2x(paint.paths,width,height,
+                                        FillRule::NonZero,coverage))return false;
+  for(unsigned y=0;y<coverage.height;++y)
+   for(unsigned x=0;x<coverage.width;++x){
+    const unsigned src=coverage.pixels[size_t(y)*coverage.width+x];
+    const size_t index=size_t(y+coverage.y)*width+x+coverage.x;
+    const unsigned dst=layer[index];
+    layer[index]=uint8_t(src+(dst*(255-src)+127)/255);
+   }
  }
  // Iterate only the visible clip instead of scanning the entire glyph
  // layer and rejecting out-of-clip pixels individually.
