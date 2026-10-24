@@ -15,6 +15,9 @@ bool cff_flatten_commands(const CffCommands& commands,double tolerance,
   return {(a.x+b.x)*0.5,(a.y+b.y)*0.5};
  };
  struct Cubic {CffPoint a,b,c,d;unsigned depth;};
+ // Reuse the worklist capacity across consecutive curves in one glyph.
+ std::vector<Cubic> pending;
+ pending.reserve(32);
  for(const auto& command:commands){
   if(!std::isfinite(command.end.x)||!std::isfinite(command.end.y))
    return false;
@@ -29,8 +32,9 @@ bool cff_flatten_commands(const CffCommands& commands,double tolerance,
       !std::isfinite(command.first.x)||!std::isfinite(command.first.y)||
       !std::isfinite(command.second.x)||!std::isfinite(command.second.y))
     return false;
-   std::vector<Cubic> pending{{current,command.first,
-                               command.second,command.end,0}};
+   pending.clear();
+   pending.push_back({current,command.first,
+                      command.second,command.end,0});
    while(!pending.empty()){
     const auto q=pending.back();pending.pop_back();
     const double dx=q.d.x-q.a.x,dy=q.d.y-q.a.y;
