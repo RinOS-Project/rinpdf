@@ -98,17 +98,24 @@ public:
   it->second.flattened_tolerance=tolerance;
  }
  bool over_budget()const{return estimated_bytes_>4*1024*1024;}
- // Transfer an oversized glyph out without copying its outline vectors.
- // Account its resident allocation before moving its payload away.
- // Extract directly into the transient map's node: outline vectors are
- // moved once, with resident bytes deducted before moving from the node.
+ // Transfer the whole map node, including the allocated glyph payload.
+ // No mapped-value move or second node allocation is needed.
  bool take_accounted(uint16_t id,std::map<uint16_t,CachedFontGlyph>& target){
   auto it=glyphs_.find(id);
-  if(it==glyphs_.end())return false;
+  if(it==glyphs_.end()||target.find(id)!=target.end())return false;
   const size_t weight=glyph_weight(it->second);
-  target.insert_or_assign(id,std::move(it->second));
+  auto node=glyphs_.extract(it);
+  auto inserted=target.insert(std::move(node));
+  if(!inserted.inserted){
+   glyphs_.insert(std::move(inserted.node));
+   return false;
+  }
   estimated_bytes_-=std::min(estimated_bytes_,weight);
-  erase(id);
+  auto pos=positions_.find(id);
+  if(pos!=positions_.end()){
+   oldest_first_.erase(pos->second);
+   positions_.erase(pos);
+  }
   return true;
  }
  void remove_accounted(uint16_t id){
