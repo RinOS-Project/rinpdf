@@ -1,5 +1,6 @@
 #include "sfnt.h"
 #include "cff_dict.h"
+#include "cff_index.h"
 #include <cstdint>
 #include <vector>
 namespace rinpdf::renderer {
@@ -15,32 +16,11 @@ bool sfnt_cff_is_cid_keyed(const SfntFont& font,bool& cid_keyed){
  const size_t n=cff->length;
  if(d[0]!=1||d[2]<4||d[2]>n)return false;
  size_t p=d[2];
- auto skip_index=[&](size_t& pos,size_t& first,size_t& last,uint16_t& count)->bool{
-  if(pos>n||n-pos<2)return false;
-  count=(uint16_t(d[pos])<<8)|d[pos+1];pos+=2;
-  if(!count){first=last=pos;return true;}
-  if(pos>=n)return false;
-  const unsigned width=d[pos++];
-  if(width<1||width>4||(size_t(count)+1)>(n-pos)/width)return false;
-  auto off=[&](size_t i)->uint32_t{
-   uint32_t v=0;
-   for(unsigned k=0;k<width;++k)v=(v<<8)|d[pos+i*width+k];
-   return v;
-  };
-  if(off(0)!=1)return false;
-  uint32_t prev=1;
-  for(size_t i=1;i<=count;++i){
-   const uint32_t v=off(i);
-   if(v<prev)return false;
-   prev=v;
-  }
-  first=pos+(size_t(count)+1)*width;
-  if(first>n||size_t(prev-1)>n-first)return false;
-  last=first+prev-1;pos=last;return true;
- };
- size_t first=0,last=0;uint16_t count=0;
- if(!skip_index(p,first,last,count)||count!=1||
-    !skip_index(p,first,last,count)||count!=1)return false;
+ CffIndex names,top;
+ if(!cff_read_index(d,n,p,names)||names.count!=1||
+    !cff_read_index(d,n,p,top)||top.count!=1)return false;
+ size_t first=0,last=0;
+ if(!top.item(0,first,last))return false;
  bool ros_seen=false;
  if(!cff_walk_dict(d,n,first,last,[&](unsigned op,
                      const std::vector<int32_t>& args){
@@ -66,36 +46,11 @@ static bool locate_fd(const SfntFont& font,uint16_t glyph,
  auto u16=[&](size_t p)->uint16_t{
   return uint16_t(d[p])<<8|d[p+1];
  };
- auto index=[&](size_t& cursor,size_t& first,size_t& end,
-                uint16_t& count)->bool{
-  if(cursor>n||n-cursor<2)return false;
-  count=u16(cursor);cursor+=2;
-  if(!count){first=end=cursor;return true;}
-  if(cursor>=n)return false;
-  const unsigned width=d[cursor++];
-  if(width<1||width>4||(size_t(count)+1)>(n-cursor)/width)return false;
-  auto value=[&](size_t i)->uint32_t{
-   uint32_t result=0;
-   for(unsigned k=0;k<width;++k)
-    result=(result<<8)|d[cursor+i*width+k];
-   return result;
-  };
-  if(value(0)!=1)return false;
-  uint32_t previous=1;
-  for(size_t i=1;i<=count;++i){
-   const uint32_t current=value(i);
-   if(current<previous)return false;
-   previous=current;
-  }
-  first=cursor+(size_t(count)+1)*width;
-  if(first>n||size_t(previous-1)>n-first)return false;
-  end=first+previous-1;cursor=end;
-  return true;
- };
  size_t cursor=d[2],first=0,end=0;
- uint16_t count=0;
- if(!index(cursor,first,end,count)||count!=1||
-    !index(cursor,first,end,count)||count!=1)return false;
+ CffIndex names,top;
+ if(!cff_read_index(d,n,cursor,names)||names.count!=1||
+    !cff_read_index(d,n,cursor,top)||top.count!=1||
+    !top.item(0,first,end))return false;
  // Read CID operators 12 36 (FDArray) and 12 37 (FDSelect).
  int32_t array=-1,select=-1;
  if(!cff_walk_dict(d,n,first,end,[&](unsigned op,
@@ -109,7 +64,9 @@ static bool locate_fd(const SfntFont& font,uint16_t glyph,
  }))return false;
  if(array<0||select<0||size_t(array)>=n||size_t(select)>=n)return false;
  cursor=size_t(array);
- if(!index(cursor,first,end,count)||count==0||count>256)return false;
+ CffIndex fdarray;
+ if(!cff_read_index(d,n,cursor,fdarray)||fdarray.count==0||fdarray.count>256)return false;
+ const uint16_t count=fdarray.count;
  const size_t pos=size_t(select);
  uint16_t selected=0;
  if(d[pos]==0){
@@ -141,24 +98,7 @@ static bool locate_fd(const SfntFont& font,uint16_t glyph,
  if(selected>=count)return false;
  fd_index=selected;
  if(dict_start&&dict_end){
-  // Read the selected FDArray INDEX entry without trusting FDSelect alone.
-  const size_t at=size_t(array);
-  if(n-at<3)return false;
-  const uint16_t entries=u16(at);
-  const unsigned width=d[at+2];
-  if(entries!=count||width<1||width>4||
-     size_t(entries)+1>(n-at-3)/width)return false;
-  const size_t offsets=at+3;
-  auto entry=[&](size_t i)->uint32_t{
-   uint32_t v=0;
-   for(unsigned j=0;j<width;++j)v=(v<<8)|d[offsets+i*width+j];
-   return v;
-  };
-  const uint32_t a=entry(selected),b=entry(size_t(selected)+1);
-  const size_t data=offsets+(size_t(entries)+1)*width;
-  if(a<1||b<a||data>n||size_t(b-1)>n-data)return false;
-  *dict_start=data+size_t(a)-1;
-  *dict_end=data+size_t(b)-1;
+  if(!fdarray.item(selected,*dict_start,*dict_end))return false;
  }
  return true;
 }
