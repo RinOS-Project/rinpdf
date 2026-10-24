@@ -188,9 +188,7 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
      // oversized glyph between calls.
      // Move the oversized glyph into this call's transient cache so a
      // repeated glyph does not need its outline decoded again.
-     CachedGlyph evicted;
-     if(!last_font.take_accounted(glyph_id,evicted))return false;
-     transient_glyphs.insert_or_assign(glyph_id,std::move(evicted));
+     if(!last_font.take_accounted(glyph_id,transient_glyphs))return false;
     }
     for(auto& contour:paint.paths)for(auto& point:contour){
      const double local_x=point.x*matrix.horizontal_scale,local_y=-point.y;
