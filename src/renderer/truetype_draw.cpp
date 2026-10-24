@@ -140,9 +140,14 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
    layer[i]=uint8_t(src+(dst*(255-src)+127)/255);
   }
  }
- for(unsigned y=0;y<height;++y)for(unsigned x=0;x<width;++x){
+ // Iterate only the visible clip instead of scanning the entire glyph
+ // layer and rejecting out-of-clip pixels individually.
+ const unsigned x_begin=std::min(width,clip_x0);
+ const unsigned x_end=std::min(width,clip_x1);
+ const unsigned y_begin=std::min(height,clip_y0);
+ const unsigned y_end=std::min(height,clip_y1);
+ for(unsigned y=y_begin;y<y_end;++y)for(unsigned x=x_begin;x<x_end;++x){
   unsigned alpha=layer[size_t(y)*width+x];
-  if(x<clip_x0||x>=clip_x1||y<clip_y0||y>=clip_y1)continue;
   if(clip_mask)alpha=(alpha*(*clip_mask)[size_t(y)*width+x]+127)/255;
   if(!alpha)continue;
   auto* pixel=rgba+size_t(y)*stride+size_t(x)*4;
