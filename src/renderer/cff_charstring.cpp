@@ -127,6 +127,45 @@ bool sfnt_cff_simple_outline(const SfntFont& font,uint16_t glyph,
      if(!line(stack[i],stack[i+1]))return false;
     if(!curve(stack[n-6],stack[n-5],stack[n-4],stack[n-3],
               stack[n-2],stack[n-1]))return false;
+   }else if(op==26||op==27){
+    // vvcurveto / hhcurveto: optional first cross-axis displacement,
+    // followed by groups of four relative control-point operands.
+    if(n<4||n%4>1)return false;
+    const bool vv=op==26;
+    size_t i=n%4;
+    const double first=i?stack[0]:0;
+    bool initial=true;
+    for(;i<n;i+=4){
+     const double cross=initial?first:0;
+     if(vv){
+      if(!curve(cross,stack[i],stack[i+1],stack[i+2],0,stack[i+3]))
+       return false;
+     }else{
+      if(!curve(stack[i],cross,stack[i+1],stack[i+2],stack[i+3],0))
+       return false;
+     }
+     initial=false;
+    }
+   }else if(op==30||op==31){
+    // vhcurveto / hvcurveto alternate vertical and horizontal starts.
+    // An optional final operand sets the terminal perpendicular delta.
+    if(n<4||n%4>1)return false;
+    bool vertical=op==30;
+    size_t i=0;
+    while(i<n){
+     const bool last=(n-i<=5);
+     if(n-i<4)return false;
+     const double extra=last&&n-i==5?stack[i+4]:0;
+     if(vertical){
+      if(!curve(0,stack[i],stack[i+1],stack[i+2],
+                stack[i+3],extra))return false;
+     }else{
+      if(!curve(stack[i],0,stack[i+1],stack[i+2],
+                extra,stack[i+3]))return false;
+     }
+     i+=last&&n-i==5?5:4;
+     vertical=!vertical;
+    }
    }else if(op==8){
     if(n<6||(n%6))return false;
     for(size_t i=0;i<n;i+=6)
