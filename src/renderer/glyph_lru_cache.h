@@ -58,6 +58,10 @@ public:
   constexpr size_t budget=4*1024*1024;
   while(!glyphs_.empty()&&(glyphs_.size()>=max_count||
         extra>budget||estimated_bytes_>budget-extra)){
+   // A missing LRU node would otherwise silently leave the cache over
+   // budget. Rebuild the index from the authoritative glyph map.
+   if(oldest_first_.empty()||positions_.size()!=glyphs_.size())
+    rebuild_order();
    auto oldest=oldest_first_.begin();
    if(oldest==oldest_first_.end())break;
    if(int(*oldest)==protected_id)++oldest;
@@ -172,6 +176,20 @@ public:
   }
  }
 private:
+ void rebuild_order(){
+  // Reconstruct off to the side so an allocation failure leaves the
+  // currently published structures unchanged.
+  std::list<uint16_t> order;
+  std::map<uint16_t,std::list<uint16_t>::iterator> positions;
+  for(const auto& entry:glyphs_){
+   order.push_back(entry.first);
+   try{positions.emplace(entry.first,std::prev(order.end()));}
+   catch(...){order.pop_back();throw;}
+  }
+  oldest_first_.swap(order);
+  positions_.swap(positions);
+  refresh_weight();
+ }
  void refresh_weight(){
   size_t total=0;
   for(const auto& entry:glyphs_){
