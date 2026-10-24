@@ -367,7 +367,38 @@ bool sfnt_cff_charstrings(const SfntFont& font,CffCharStrings& out){
  size_t char_cursor=size_t(char_offset);Index chars;
  if(!index(char_cursor,chars)||!chars.count||
     chars.count!=font.glyph_count)return false;
- out={chars.start,chars.length,chars.count};
+ out={chars.start,chars.length,size_t(char_offset),chars.count};
+ return true;
+}
+
+bool sfnt_cff_glyph_program(const SfntFont& font,uint16_t glyph_id,
+ const uint8_t*& bytes,size_t& length){
+ bytes=nullptr;length=0;
+ CffCharStrings chars;
+ if(!sfnt_cff_charstrings(font,chars)||glyph_id>=chars.count)return false;
+ const SfntTable* table_ptr=table(font,0x43464620);
+ if(!table_ptr)return false;
+ const uint8_t* data=font.bytes+table_ptr->offset;
+ const size_t n=table_ptr->length;
+ size_t cursor=chars.index_offset;
+ if(cursor>n||n-cursor<3)return false;
+ const uint16_t count=uint16_t(data[cursor])<<8|data[cursor+1];
+ const unsigned offsize=data[cursor+2];
+ if(count!=chars.count||offsize<1||offsize>4)return false;
+ cursor+=3;
+ if(size_t(count)+1>(n-cursor)/offsize)return false;
+ auto offset=[&](size_t i)->uint32_t{
+  uint32_t value=0;
+  for(unsigned j=0;j<offsize;++j)
+   value=(value<<8)|data[cursor+i*offsize+j];
+  return value;
+ };
+ const uint32_t begin=offset(glyph_id),end=offset(size_t(glyph_id)+1);
+ if(begin==0||end<begin)return false;
+ const size_t start=cursor+(size_t(count)+1)*offsize;
+ if(start>n||size_t(end-1)>n-start)return false;
+ bytes=data+start+begin-1;
+ length=size_t(end-begin);
  return true;
 }
 
