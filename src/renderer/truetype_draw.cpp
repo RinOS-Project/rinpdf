@@ -132,6 +132,19 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
  std::vector<uint8_t> layer(size_t(width)*height,0);
  for(const auto& paint:paints){
   if(paint.paths.empty())continue;
+  // All glyph coordinates were validated above. Avoid allocating and
+  // rasterizing coverage for glyphs wholly outside the visible viewport.
+  double min_x=std::numeric_limits<double>::infinity();
+  double min_y=min_x,max_x=-min_x,max_y=-min_y;
+  bool points=false;
+  for(const auto& contour:paint.paths)for(const auto& p:contour){
+   points=true;
+   min_x=std::min(min_x,p.x);max_x=std::max(max_x,p.x);
+   min_y=std::min(min_y,p.y);max_y=std::max(max_y,p.y);
+  }
+  if(points&&(max_x<-1.0||max_y<-1.0||
+              min_x>double(width)+1.0||min_y>double(height)+1.0))
+   continue;
   std::vector<uint8_t> coverage;
   if(!rasterize_path_coverage_2x(paint.paths,width,height,
                                 FillRule::NonZero,coverage))return false;
