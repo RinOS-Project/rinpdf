@@ -30,6 +30,13 @@ rinpdf_status rinpdf_render_page_buffer_size(unsigned width,unsigned height,
 rinpdf_status rinpdf_render_page_at_dpi_sized(const rinpdf_document *doc,
  size_t page_index,double dpi,unsigned char *rgba,size_t buffer_bytes,
  size_t stride,unsigned *width,unsigned *height);
+/* Capacity-checked rendering at explicit pixel dimensions.
+ * stride=0 means tightly packed RGBA rows. buffer_bytes must cover the
+ * final row's pixels, including any inter-row padding.
+ */
+rinpdf_status rinpdf_render_page_sized(const rinpdf_document *doc,
+ size_t page_index,unsigned width,unsigned height,unsigned char *rgba,
+ size_t buffer_bytes,size_t stride);
 #ifdef __cplusplus
 }
 #endif
