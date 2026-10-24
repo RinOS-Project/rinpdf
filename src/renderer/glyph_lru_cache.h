@@ -100,11 +100,13 @@ public:
  bool over_budget()const{return estimated_bytes_>4*1024*1024;}
  // Transfer an oversized glyph out without copying its outline vectors.
  // Account its resident allocation before moving its payload away.
- bool take_accounted(uint16_t id,CachedFontGlyph& out){
+ // Extract directly into the transient map's node: outline vectors are
+ // moved once, with resident bytes deducted before moving from the node.
+ bool take_accounted(uint16_t id,std::map<uint16_t,CachedFontGlyph>& target){
   auto it=glyphs_.find(id);
   if(it==glyphs_.end())return false;
   const size_t weight=glyph_weight(it->second);
-  out=std::move(it->second);
+  target.insert_or_assign(id,std::move(it->second));
   estimated_bytes_-=std::min(estimated_bytes_,weight);
   erase(id);
   return true;
