@@ -121,8 +121,10 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
      if(!sfnt_vertical_substitution(sfnt,glyph_id,glyph_id,
           script,language))return false;
     }
-    auto cached=glyph_cache.find(glyph_id);
-    if(cached==glyph_cache.end()){
+    auto transient=transient_glyphs.find(glyph_id);
+    auto cached=transient!=transient_glyphs.end()?transient:glyph_cache.find(glyph_id);
+    const bool transient_hit=transient!=transient_glyphs.end();
+    if(!transient_hit&&cached==glyph_cache.end()){
      CachedGlyph decoded;
      if(!sfnt_horizontal_metrics(sfnt,glyph_id,decoded.units,decoded.advance)||
         !sfnt_glyph_outline(sfnt,glyph_id,decoded.outline))return false;
@@ -168,8 +170,9 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
      }
      }
     }
-    const bool persisted=retain&&
-       last_font.glyphs.find(glyph_id)!=last_font.glyphs.end();
+    const bool persisted=retain&&!transient_hit&&
+       last_font.glyphs.find(glyph_id)!=last_font.glyphs.end()&&
+       cached==last_font.glyphs.find(glyph_id);
     if(persisted)last_font.recency[glyph_id]=++last_font.clock;
     units=cached->second.units;advance=cached->second.advance;
     const SimpleGlyph& glyph=cached->second.outline;
@@ -236,6 +239,9 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
        stored.outline.contour_ends.size()*sizeof(uint16_t);
      for(const auto& contour:stored.flattened)
       weight+=sizeof(contour)+contour.size()*sizeof(MaskPoint);
+     // Move the oversized glyph into this call's transient cache so a
+     // repeated glyph does not need its outline decoded again.
+     transient_glyphs.insert_or_assign(glyph_id,std::move(cached->second));
      last_font.estimated_bytes-=std::min(last_font.estimated_bytes,weight);
      last_font.glyphs.erase(glyph_id);
      last_font.recency.erase(glyph_id);
