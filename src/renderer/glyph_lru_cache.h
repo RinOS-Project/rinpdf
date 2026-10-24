@@ -98,6 +98,17 @@ public:
   it->second.flattened_tolerance=tolerance;
  }
  bool over_budget()const{return estimated_bytes_>4*1024*1024;}
+ // Transfer an oversized glyph out without copying its outline vectors.
+ // Account its resident allocation before moving its payload away.
+ bool take_accounted(uint16_t id,CachedFontGlyph& out){
+  auto it=glyphs_.find(id);
+  if(it==glyphs_.end())return false;
+  const size_t weight=glyph_weight(it->second);
+  out=std::move(it->second);
+  estimated_bytes_-=std::min(estimated_bytes_,weight);
+  erase(id);
+  return true;
+ }
  void remove_accounted(uint16_t id){
   auto it=glyphs_.find(id);
   if(it==glyphs_.end())return;
