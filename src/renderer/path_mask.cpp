@@ -96,8 +96,20 @@ bool rasterize_path_coverage_2x(const std::vector<std::vector<MaskPoint>>& subpa
  }
  std::vector<uint8_t> samples;
  if(!rasterize_path_mask(scaled,width*2,height*2,rule,samples))return false;
- std::vector<uint8_t> result((size_t)width*height);
- for(unsigned y=0;y<height;++y)for(unsigned x=0;x<width;++x){
+ std::vector<uint8_t> result((size_t)width*height,0);
+ // Only the horizontal rows covered by validated path vertices can
+ // contain samples; rasterize_path_mask has already validated all edges.
+ double min_y=std::numeric_limits<double>::infinity();
+ double max_y=-std::numeric_limits<double>::infinity();
+ for(const auto& path:subpaths)for(const auto& point:path){
+  min_y=std::min(min_y,point.y);
+  max_y=std::max(max_y,point.y);
+ }
+ const unsigned first_y=std::isfinite(min_y)?
+  unsigned(std::clamp(std::floor(min_y)-1.0,0.0,double(height))):0u;
+ const unsigned last_y=std::isfinite(max_y)?
+  unsigned(std::clamp(std::ceil(max_y)+1.0,0.0,double(height))):0u;
+ for(unsigned y=first_y;y<last_y;++y)for(unsigned x=0;x<width;++x){
   size_t i=(size_t)(y*2)*(width*2)+x*2;
   unsigned sum=samples[i]+samples[i+1]+samples[i+width*2]+samples[i+width*2+1];
   result[(size_t)y*width+x]=(uint8_t)((sum*255+2)/4);
