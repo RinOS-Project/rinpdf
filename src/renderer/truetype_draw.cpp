@@ -188,8 +188,31 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
      };
      if(retain){
       const size_t prior=path_weight(cached->second.flattened);
+      const size_t next=path_weight(replacement);
+      // Keep the currently used glyph alive while evicting older glyphs.
+      while(last_font.glyphs.size()>1 &&
+            next>prior &&
+            last_font.estimated_bytes>4*1024*1024-
+                std::min(next-prior,size_t(4*1024*1024))){
+       auto oldest=last_font.recency.end();
+       for(auto it=last_font.recency.begin();it!=last_font.recency.end();++it)
+        if(it->first!=glyph_id &&
+           (oldest==last_font.recency.end()||it->second<oldest->second))
+         oldest=it;
+       if(oldest==last_font.recency.end())break;
+       auto victim=last_font.glyphs.find(oldest->first);
+       if(victim!=last_font.glyphs.end()){
+        size_t weight=sizeof(CachedGlyph)+128+
+         victim->second.outline.points.size()*sizeof(GlyphPoint)+
+         victim->second.outline.contour_ends.size()*sizeof(uint16_t);
+        weight+=path_weight(victim->second.flattened);
+        last_font.estimated_bytes-=std::min(weight,last_font.estimated_bytes);
+        last_font.glyphs.erase(victim);
+       }
+       last_font.recency.erase(oldest);
+      }
       last_font.estimated_bytes-=std::min(prior,last_font.estimated_bytes);
-      last_font.estimated_bytes+=path_weight(replacement);
+      last_font.estimated_bytes+=next;
      }
      cached->second.flattened=std::move(replacement);
      cached->second.has_flattened=true;
