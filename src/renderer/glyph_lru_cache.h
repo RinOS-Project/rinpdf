@@ -33,12 +33,21 @@ public:
  }
  void touch(uint16_t id){
   if(glyphs_.find(id)==glyphs_.end())return;
-  // Repair missing or orphaned tracking nodes before touching the list.
+  auto it=positions_.find(id);
+  // A newly inserted glyph is the sole untracked resident entry.
+  if(it==positions_.end()&&glyphs_.size()==positions_.size()+1&&
+     oldest_first_.size()==positions_.size()){
+   oldest_first_.push_back(id);
+   try{positions_.emplace(id,std::prev(oldest_first_.end()));}
+   catch(...){oldest_first_.pop_back();throw;}
+   return;
+  }
   if(positions_.size()!=glyphs_.size()||
      oldest_first_.size()!=glyphs_.size()||
-     positions_.find(id)==positions_.end())rebuild_order();
-  auto it=positions_.find(id);
-  // A resident glyph always has a position after reconstruction.
+     it==positions_.end()){
+   rebuild_order();
+   it=positions_.find(id);
+  }
   if(it!=positions_.end())
    oldest_first_.splice(oldest_first_.end(),oldest_first_,it->second);
  }
