@@ -84,35 +84,43 @@ bool rasterize_path_coverage_2x(const std::vector<std::vector<MaskPoint>>& subpa
   if(path.size()>4096||path.size()>65536-total_vertices)return false;
   total_vertices+=path.size();
  }
- std::vector<std::vector<MaskPoint>> scaled;
- scaled.reserve(subpaths.size());
- for(const auto& path:subpaths){
-  auto& dest=scaled.emplace_back();
-  dest.reserve(path.size());
-  for(const auto& point:path){
-   if(!std::isfinite(point.x)||!std::isfinite(point.y))return false;
-   dest.push_back({point.x*2,point.y*2});
-  }
- }
- std::vector<uint8_t> samples;
- if(!rasterize_path_mask(scaled,width*2,height*2,rule,samples))return false;
- std::vector<uint8_t> result((size_t)width*height,0);
- // Only the horizontal rows covered by validated path vertices can
- // contain samples; rasterize_path_mask has already validated all edges.
- double min_y=std::numeric_limits<double>::infinity();
- double max_y=-std::numeric_limits<double>::infinity();
+ // Restrict the 2x coverage surface to a conservative pixel-aligned
+ // bounding rectangle. Keep the final output layout unchanged for callers.
+ double min_x=std::numeric_limits<double>::infinity();
+ double min_y=min_x,max_x=-min_x,max_y=-min_y;
  for(const auto& path:subpaths)for(const auto& point:path){
-  min_y=std::min(min_y,point.y);
-  max_y=std::max(max_y,point.y);
+  if(!std::isfinite(point.x)||!std::isfinite(point.y))return false;
+  min_x=std::min(min_x,point.x);max_x=std::max(max_x,point.x);
+  min_y=std::min(min_y,point.y);max_y=std::max(max_y,point.y);
  }
- const unsigned first_y=std::isfinite(min_y)?
-  unsigned(std::clamp(std::floor(min_y)-1.0,0.0,double(height))):0u;
- const unsigned last_y=std::isfinite(max_y)?
-  unsigned(std::clamp(std::ceil(max_y)+1.0,0.0,double(height))):0u;
- for(unsigned y=first_y;y<last_y;++y)for(unsigned x=0;x<width;++x){
-  size_t i=(size_t)(y*2)*(width*2)+x*2;
-  unsigned sum=samples[i]+samples[i+1]+samples[i+width*2]+samples[i+width*2+1];
-  result[(size_t)y*width+x]=(uint8_t)((sum*255+2)/4);
+ std::vector<uint8_t> result(size_t(width)*height,0);
+ if(min_x!=std::numeric_limits<double>::infinity()){
+  const unsigned x0=unsigned(std::clamp(std::floor(min_x)-1.0,0.0,double(width)));
+  const unsigned y0=unsigned(std::clamp(std::floor(min_y)-1.0,0.0,double(height)));
+  const unsigned x1=unsigned(std::clamp(std::ceil(max_x)+1.0,0.0,double(width)));
+  const unsigned y1=unsigned(std::clamp(std::ceil(max_y)+1.0,0.0,double(height)));
+  if(x0<x1&&y0<y1){
+   const unsigned local_width=x1-x0,local_height=y1-y0;
+   std::vector<std::vector<MaskPoint>> scaled;
+   scaled.reserve(subpaths.size());
+   for(const auto& path:subpaths){
+    auto& dest=scaled.emplace_back();
+    dest.reserve(path.size());
+    for(const auto& point:path)
+     dest.push_back({(point.x-double(x0))*2,(point.y-double(y0))*2});
+   }
+   std::vector<uint8_t> samples;
+   if(!rasterize_path_mask(scaled,local_width*2,local_height*2,rule,samples))
+    return false;
+   const size_t sample_stride=size_t(local_width)*2;
+   for(unsigned y=0;y<local_height;++y)
+    for(unsigned x=0;x<local_width;++x){
+     const size_t i=size_t(y*2)*sample_stride+x*2;
+     const unsigned sum=samples[i]+samples[i+1]+
+      samples[i+sample_stride]+samples[i+sample_stride+1];
+     result[size_t(y+y0)*width+x+x0]=uint8_t((sum*255+2)/4);
+    }
+  }
  }
  coverage=std::move(result);
  return true;
