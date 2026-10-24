@@ -210,7 +210,6 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
      // repeated glyph does not need its outline decoded again.
      transient_glyphs.insert_or_assign(glyph_id,std::move(cached->second));
      last_font.estimated_bytes-=std::min(last_font.estimated_bytes,weight);
-     last_font.glyphs.erase(glyph_id);
      last_font.erase(glyph_id);
     }
     for(auto& contour:paint.paths)for(auto& point:contour){
