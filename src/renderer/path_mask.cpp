@@ -28,10 +28,22 @@ bool rasterize_path_mask(const std::vector<std::vector<MaskPoint>>& subpaths,
    edges.push_back({p.x,p.y,q.x,q.y,q.y>p.y?1:-1});
   }
  }
+ // No scanline outside the vertical extent of non-horizontal edges can
+ // contribute coverage. The output remains initialized to transparent.
+ double min_y=std::numeric_limits<double>::infinity();
+ double max_y=-std::numeric_limits<double>::infinity();
+ for(const auto& edge:edges){
+  min_y=std::min(min_y,std::min(edge.y0,edge.y1));
+  max_y=std::max(max_y,std::max(edge.y0,edge.y1));
+ }
+ const unsigned first_y=edges.empty()?0u:
+  (unsigned)std::clamp(std::ceil(min_y-0.5),0.0,double(height));
+ const unsigned last_y=edges.empty()?0u:
+  (unsigned)std::clamp(std::ceil(max_y-0.5),0.0,double(height));
  std::vector<uint8_t> result((size_t)width*height,0);
  struct Crossing {double x;int direction;};
  size_t work=0;
- for(unsigned y=0;y<height;++y){
+ for(unsigned y=first_y;y<last_y;++y){
   const double scan=y+0.5;
   std::vector<Crossing> hits;
   for(const auto& e:edges){
