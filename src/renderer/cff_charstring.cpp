@@ -16,6 +16,7 @@ bool sfnt_cff_simple_outline(const SfntFont& font,uint16_t glyph,
  size_t segments=0;
  size_t stems=0;
  bool path_started=false;
+ bool width_seen=false;
  auto coordinate=[&](double dx,double dy)->bool{
   x+=dx;y+=dy;
   return std::isfinite(x)&&std::isfinite(y)&&
@@ -71,6 +72,18 @@ bool sfnt_cff_simple_outline(const SfntFont& font,uint16_t glyph,
    pos+=4;
    stack.push_back(double(int32_t(bits))/65536.0);
   }else{
+   // Type 2 allows one optional width before the first stem/moveto.
+   // Width is positioning metadata, not a path coordinate.
+   if(!width_seen&&!path_started){
+    const bool stem=(op==1||op==3||op==18||op==23||op==19||op==20);
+    const bool move=(op==4||op==21||op==22);
+    const bool has_width=(stem&&(stack.size()%2)==1)||
+      (op==21&&stack.size()==3)||
+      ((op==4||op==22)&&stack.size()==2)||
+      (op==14&&stack.size()==1);
+    if(has_width)stack.erase(stack.begin());
+    if(stem||move||op==14)width_seen=true;
+   }
    const size_t n=stack.size();
    if(op==14){
     if(n!=0||pos!=length)return false;
