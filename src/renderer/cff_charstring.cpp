@@ -84,6 +84,37 @@ bool sfnt_cff_simple_outline(const SfntFont& font,uint16_t glyph,
     if(has_width)stack.erase(stack.begin());
     if(stem||move||op==14)width_seen=true;
    }
+   if(op==12){
+    if(pos>=length)return false;
+    const unsigned escaped=program[pos++];
+    const size_t n=stack.size();
+    if(escaped==34){ // hflex
+     if(n!=7||
+        !curve(stack[0],0,stack[1],stack[2],stack[3],0)||
+        !curve(stack[4],0,stack[5],-stack[2],stack[6],0))return false;
+    }else if(escaped==35){ // flex, with ignored flex depth
+     if(n!=13||
+        !curve(stack[0],stack[1],stack[2],stack[3],stack[4],stack[5])||
+        !curve(stack[6],stack[7],stack[8],stack[9],stack[10],stack[11]))
+      return false;
+    }else if(escaped==36){ // hflex1
+     if(n!=9||
+        !curve(stack[0],stack[1],stack[2],stack[3],stack[4],0)||
+        !curve(stack[5],0,stack[6],stack[7],
+               stack[8],-(stack[1]+stack[3]+stack[7])))return false;
+    }else if(escaped==37){ // flex1
+     if(n!=11)return false;
+     const double dx=stack[0]+stack[2]+stack[4]+stack[6]+stack[8];
+     const double dy=stack[1]+stack[3]+stack[5]+stack[7]+stack[9];
+     const double last_x=std::abs(dx)>std::abs(dy)?stack[10]:-dx;
+     const double last_y=std::abs(dx)>std::abs(dy)?-dy:stack[10];
+     if(!curve(stack[0],stack[1],stack[2],stack[3],stack[4],stack[5])||
+        !curve(stack[6],stack[7],stack[8],stack[9],last_x,last_y))
+      return false;
+    }else return false;
+    stack.clear();
+    continue;
+   }
    const size_t n=stack.size();
    if(op==14){
     if(n!=0||pos!=length)return false;
