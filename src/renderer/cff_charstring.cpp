@@ -52,23 +52,29 @@ bool sfnt_cff_simple_outline(const SfntFont& font,uint16_t glyph,
   }
   return true;
  };
- for(size_t pos=0;pos<length;){
-  const unsigned op=program[pos++];
+ struct Frame{const uint8_t* bytes;size_t length,pos;};
+ std::vector<Frame> frames;
+ const uint8_t* current=program;
+ size_t current_length=length;
+ size_t executed=0;
+ for(size_t pos=0;pos<current_length;){
+  if(++executed>100000)return false;
+  const unsigned op=current[pos++];
   if(op==28){
-   if(length-pos<2)return false;
-   stack.push_back(double(int16_t(uint16_t(program[pos])<<8|program[pos+1])));
+   if(current_length-pos<2)return false;
+   stack.push_back(double(int16_t(uint16_t(current[pos])<<8|current[pos+1])));
    pos+=2;
   }else if(op>=32&&op<=246)stack.push_back(int(op)-139);
   else if(op>=247&&op<=250){
-   if(pos>=length)return false;
-   stack.push_back((int(op)-247)*256+program[pos++]+108);
+   if(pos>=current_length)return false;
+   stack.push_back((int(op)-247)*256+current[pos++]+108);
   }else if(op>=251&&op<=254){
-   if(pos>=length)return false;
-   stack.push_back(-(int(op)-251)*256-program[pos++]-108);
+   if(pos>=current_length)return false;
+   stack.push_back(-(int(op)-251)*256-current[pos++]-108);
   }else if(op==255){
-   if(length-pos<4)return false;
-   const uint32_t bits=uint32_t(program[pos])<<24|
-      uint32_t(program[pos+1])<<16|uint32_t(program[pos+2])<<8|program[pos+3];
+   if(current_length-pos<4)return false;
+   const uint32_t bits=uint32_t(current[pos])<<24|
+      uint32_t(current[pos+1])<<16|uint32_t(current[pos+2])<<8|current[pos+3];
    pos+=4;
    stack.push_back(double(int32_t(bits))/65536.0);
   }else{
@@ -85,8 +91,8 @@ bool sfnt_cff_simple_outline(const SfntFont& font,uint16_t glyph,
     if(stem||move||op==14)width_seen=true;
    }
    if(op==12){
-    if(pos>=length)return false;
-    const unsigned escaped=program[pos++];
+    if(pos>=current_length)return false;
+    const unsigned escaped=current[pos++];
     const size_t n=stack.size();
     if(escaped==34){ // hflex
      if(n!=7||
@@ -116,8 +122,30 @@ bool sfnt_cff_simple_outline(const SfntFont& font,uint16_t glyph,
     continue;
    }
    const size_t n=stack.size();
+   if(op==29){
+    if(stack.empty()||frames.size()>=10)return false;
+    const double number=stack.back();
+    if(!std::isfinite(number)||number<-65536||number>65536||
+       std::trunc(number)!=number)return false;
+    stack.pop_back();
+    const uint8_t* sub=nullptr;
+    size_t sub_length=0;
+    if(!sfnt_cff_global_subroutine(font,int32_t(number),sub,sub_length)||
+       sub_length==0)return false;
+    frames.push_back({current,current_length,pos});
+    current=sub;current_length=sub_length;pos=0;
+    continue;
+   }
+   if(op==11){
+    if(frames.empty()||n>48)return false;
+    const Frame previous=frames.back();frames.pop_back();
+    if(pos!=current_length)return false;
+    current=previous.bytes;current_length=previous.length;
+    pos=previous.pos;
+    continue;
+   }
    if(op==14){
-    if(n!=0||pos!=length)return false;
+    if(!frames.empty()||n!=0||pos!=current_length)return false;
     ended=true;break;
    }
    if(op==1||op==3||op==18||op==23){
@@ -128,7 +156,7 @@ bool sfnt_cff_simple_outline(const SfntFont& font,uint16_t glyph,
     if(path_started||n%2||stems+n/2>96)return false;
     stems+=n/2;
     const size_t mask_bytes=(stems+7)/8;
-    if(mask_bytes>length-pos)return false;
+    if(mask_bytes>current_length-pos)return false;
     pos+=mask_bytes;
    }else if(op==21){
     if(n!=2||!begin(stack[0],stack[1]))return false;
