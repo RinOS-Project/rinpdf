@@ -58,6 +58,7 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
  struct LastFont {
   std::vector<uint8_t> bytes;
   std::map<uint16_t,CachedGlyph> glyphs;
+  size_t estimated_bytes=0;
  };
  thread_local LastFont last_font;
  std::map<uint16_t,CachedGlyph> transient_glyphs;
@@ -68,6 +69,7 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
   std::vector<uint8_t> replacement(bytes);
   last_font.bytes.swap(replacement);
   last_font.glyphs.clear();
+  last_font.estimated_bytes=0;
  }
  auto& glyph_cache=retain?last_font.glyphs:transient_glyphs;
  struct Paint {std::vector<std::vector<MaskPoint>> paths;};
@@ -120,7 +122,18 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
      CachedGlyph decoded;
      if(!sfnt_horizontal_metrics(sfnt,glyph_id,decoded.units,decoded.advance)||
         !sfnt_glyph_outline(sfnt,glyph_id,decoded.outline))return false;
+     // Keep transient decoding for large fonts. Bound retained glyph
+     // outlines by count and estimated allocated payload.
+     const size_t estimated=sizeof(CachedGlyph)+
+      decoded.outline.points.size()*sizeof(GlyphPoint)+
+      decoded.outline.contour_ends.size()*sizeof(uint16_t)+128;
+     if(retain&&(last_font.glyphs.size()>=512||
+        estimated>4*1024*1024-last_font.estimated_bytes)){
+      last_font.glyphs.clear();
+      last_font.estimated_bytes=0;
+     }
      cached=glyph_cache.emplace(glyph_id,std::move(decoded)).first;
+     if(retain)last_font.estimated_bytes+=estimated;
     }
     units=cached->second.units;advance=cached->second.advance;
     const SimpleGlyph& glyph=cached->second.outline;
