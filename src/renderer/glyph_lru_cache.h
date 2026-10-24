@@ -114,8 +114,8 @@ public:
   it->second.has_flattened=true;
   it->second.flattened_em=em;
   it->second.flattened_tolerance=tolerance;
-  estimated_bytes_-=std::min(estimated_bytes_,prior);
-  estimated_bytes_+=next;
+  // Recompute after the swap so capacity changes cannot accumulate drift.
+  refresh_weight();
   evict_for(0,513,int(id));
  }
  bool over_budget()const{return estimated_bytes_>4*1024*1024;}
@@ -160,8 +160,18 @@ public:
    positions_.erase(pos);
   }
   glyphs_.erase(id);
+  refresh_weight();
  }
 private:
+ void refresh_weight(){
+  size_t total=0;
+  for(const auto& entry:glyphs_){
+   const size_t weight=glyph_weight(entry.second);
+   if(weight>SIZE_MAX-total){total=SIZE_MAX;break;}
+   total+=weight;
+  }
+  estimated_bytes_=total;
+ }
  std::vector<uint8_t> bytes_;
  std::map<uint16_t,CachedFontGlyph> glyphs_;
  size_t estimated_bytes_=0;
