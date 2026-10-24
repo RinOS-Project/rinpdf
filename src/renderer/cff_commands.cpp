@@ -23,23 +23,26 @@ bool sfnt_cff_outline_commands(const SfntFont& font,uint16_t glyph,
    std::abs(x)<=1000000&&std::abs(y)<=1000000;
  };
  auto begin=[&](double dx,double dy)->bool{
-  if(!coordinate(dx,dy)||result.size()>=8192)return false;
+  if(result.size()>=8192||!coordinate(dx,dy))return false;
   path_started=true;
   result.push_back({CffSegment::Kind::Move,{},{},{x,y}});
   return true;
  };
  auto line=[&](double dx,double dy)->bool{
-  if(!path_started||!coordinate(dx,dy)||++segments>8192)return false;
+  if(!path_started||segments>=8192||result.size()>=8192||
+     !coordinate(dx,dy))return false;
+  ++segments;
   result.push_back({CffSegment::Kind::Line,{},{},{x,y}});
   return true;
  };
  auto curve=[&](double a,double b,double c,double d,double e,double f)->bool{
-  if(!path_started||++segments>8192)return false;
+  if(!path_started||segments>=8192||result.size()>=8192)return false;
   if(!coordinate(a,b))return false;
   const CffPoint p1{x,y};
   if(!coordinate(c,d))return false;
   const CffPoint p2{x,y};
   if(!coordinate(e,f))return false;
+  ++segments;
   result.push_back({CffSegment::Kind::Cubic,p1,p2,{x,y}});
   return true;
  };
