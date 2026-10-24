@@ -43,9 +43,12 @@ bool rasterize_path_mask(const std::vector<std::vector<MaskPoint>>& subpaths,
  std::vector<uint8_t> result((size_t)width*height,0);
  struct Crossing {double x;int direction;};
  size_t work=0;
+ // Reuse crossing storage across scanlines; retain its capacity between
+ // rows rather than reallocating on every nonempty row.
+ std::vector<Crossing> hits;
  for(unsigned y=first_y;y<last_y;++y){
   const double scan=y+0.5;
-  std::vector<Crossing> hits;
+  hits.clear();
   for(const auto& e:edges){
    if(++work>16777216)return false;
    if((e.y0<=scan&&scan<e.y1)||(e.y1<=scan&&scan<e.y0)){
