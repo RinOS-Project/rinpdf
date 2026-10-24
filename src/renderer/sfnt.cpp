@@ -264,4 +264,111 @@ bool sfnt_horizontal_metrics(const SfntFont& font,uint16_t id,
  return true;
 }
 
+bool sfnt_cff_charstrings(const SfntFont& font,CffCharStrings& out){
+ out={};
+ if(!font.bytes)return false;
+ const SfntTable* cff=table(font,0x43464620); // 'CFF '
+ if(!cff||cff->length<4)return false;
+ const uint8_t* d=font.bytes+cff->offset;
+ const size_t n=cff->length;
+ if(d[0]!=1||d[2]<4||d[2]>n||d[3]<1||d[3]>4)return false;
+ struct Index {size_t start=0,length=0;uint16_t count=0;};
+ auto index=[&](size_t& cursor,Index& result)->bool{
+  if(cursor>n||n-cursor<2)return false;
+  const uint16_t count=uint16_t(d[cursor])<<8|d[cursor+1];
+  cursor+=2;
+  if(!count){result={cursor,0,0};return true;}
+  if(cursor>=n)return false;
+  const unsigned offsize=d[cursor++];
+  if(offsize<1||offsize>4||size_t(count)+1>(n-cursor)/offsize)return false;
+  auto offset=[&](size_t i)->uint32_t{
+   uint32_t v=0;
+   for(unsigned j=0;j<offsize;++j)v=(v<<8)|d[cursor+i*offsize+j];
+   return v;
+  };
+  if(offset(0)!=1)return false;
+  uint32_t prior=1;
+  for(size_t i=1;i<=count;++i){
+   const uint32_t next=offset(i);
+   if(next<prior)return false;
+   prior=next;
+  }
+  const size_t data_start=cursor+(size_t(count)+1)*offsize;
+  const size_t data_length=size_t(prior)-1;
+  if(data_start>n||data_length>n-data_start)return false;
+  result={data_start,data_length,count};
+  cursor=data_start+data_length;
+  return true;
+ };
+ size_t cursor=d[2];Index names,top,strings,subrs;
+ if(!index(cursor,names)||!index(cursor,top)||!index(cursor,strings)||
+    !index(cursor,subrs)||names.count!=1||top.count!=1)return false;
+ // Resolve the first Top DICT object rather than interpreting other INDEX data.
+ size_t at=d[2];
+ Index ignored;
+ if(!index(at,ignored))return false;
+ if(at>n||n-at<3||d[at]==0)return false;
+ const unsigned os=d[at];
+ if(os<1||os>4)return false;
+ const size_t offsets=at+1;
+ if(n-offsets<2*os)return false;
+ uint32_t a=0,b=0;
+ for(unsigned j=0;j<os;++j){
+  a=(a<<8)|d[offsets+j];
+  b=(b<<8)|d[offsets+os+j];
+ }
+ if(a!=1||b<a)return false;
+ const size_t first=offsets+2*os;
+ if(first>n||size_t(b-1)>n-first)return false;
+ size_t pos=first,end=first+size_t(b-1);
+ std::vector<int32_t> operands;
+ bool found=false;int32_t char_offset=0;
+ while(pos<end){
+  const uint8_t op=d[pos++];
+  if(op<=21){
+   if(op==12){if(pos>=end)return false;++pos;}
+   else if(op==17){
+    if(operands.size()!=1||found)return false;
+    char_offset=operands.front();found=true;
+   }
+   operands.clear();continue;
+  }
+  int32_t value=0;
+  if(op>=32&&op<=246)value=int32_t(op)-139;
+  else if(op>=247&&op<=250){
+   if(pos>=end)return false;
+   value=(int32_t(op)-247)*256+d[pos++]+108;
+  }else if(op>=251&&op<=254){
+   if(pos>=end)return false;
+   value=-(int32_t(op)-251)*256-d[pos++]-108;
+  }else if(op==28){
+   if(end-pos<2)return false;
+   value=int16_t(uint16_t(d[pos])<<8|d[pos+1]);pos+=2;
+  }else if(op==29){
+   if(end-pos<4)return false;
+   const uint32_t bits=uint32_t(d[pos])<<24|uint32_t(d[pos+1])<<16|
+    uint32_t(d[pos+2])<<8|d[pos+3];
+   value=static_cast<int32_t>(bits);pos+=4;
+  }else if(op==30){
+   // Real-number operands aren't needed for CharStrings offsets, but
+   // must still be skipped to parse valid Top DICT entries.
+   bool terminated=false;
+   while(pos<end&&!terminated){
+    const uint8_t pair=d[pos++];
+    terminated=((pair>>4)==15||(pair&15)==15);
+   }
+   if(!terminated)return false;
+   value=0;
+  }else return false;
+  if(operands.size()>=48)return false;
+  operands.push_back(value);
+ }
+ if(!found||char_offset<0||size_t(char_offset)>=n)return false;
+ size_t char_cursor=size_t(char_offset);Index chars;
+ if(!index(char_cursor,chars)||!chars.count||
+    chars.count!=font.glyph_count)return false;
+ out={chars.start,chars.length,chars.count};
+ return true;
+}
+
 }
