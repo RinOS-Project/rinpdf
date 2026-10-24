@@ -114,8 +114,13 @@ public:
   it->second.has_flattened=true;
   it->second.flattened_em=em;
   it->second.flattened_tolerance=tolerance;
-  // Recompute after the swap so capacity changes cannot accumulate drift.
-  refresh_weight();
+  // Apply the measured capacity delta; reconcile only on inconsistent state.
+  if(prior>estimated_bytes_)refresh_weight();
+  else{
+   estimated_bytes_-=prior;
+   if(next>SIZE_MAX-estimated_bytes_)refresh_weight();
+   else estimated_bytes_+=next;
+  }
   evict_for(0,513,int(id));
  }
  bool over_budget()const{return estimated_bytes_>4*1024*1024;}
@@ -150,7 +155,6 @@ public:
   auto it=glyphs_.find(id);
   if(it==glyphs_.end())return;
   const size_t weight=glyph_weight(it->second);
-  estimated_bytes_-=std::min(estimated_bytes_,weight);
   erase(id);
  }
  void erase(uint16_t id){
@@ -159,8 +163,12 @@ public:
    oldest_first_.erase(pos->second);
    positions_.erase(pos);
   }
-  glyphs_.erase(id);
-  refresh_weight();
+  if(auto it=glyphs_.find(id);it!=glyphs_.end()){
+   const size_t weight=glyph_weight(it->second);
+   glyphs_.erase(it);
+   if(weight>estimated_bytes_)refresh_weight();
+   else estimated_bytes_-=weight;
+  }
  }
 private:
  void refresh_weight(){
