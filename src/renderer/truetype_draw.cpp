@@ -68,7 +68,9 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
  };
  thread_local LastFont last_font;
  std::map<uint16_t,CachedGlyph> transient_glyphs;
- const bool retain=bytes.size()<=2*1024*1024;
+ // CFF outlines are flattened while decoding. Retain them only within
+ // this draw call until cache entries can be keyed by device-space tolerance.
+ const bool retain=!cff_font&&bytes.size()<=2*1024*1024;
  if(retain && last_font.bytes!=bytes){
   // Construct the replacement first: allocation failures do not damage
   // an existing cached font.
@@ -133,7 +135,18 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
      if(!sfnt_horizontal_metrics(sfnt,glyph_id,decoded.units,decoded.advance))
       return false;
      if(cff_font){
-      if(!sfnt_cff_simple_outline(sfnt,glyph_id,decoded.cff_outline))
+      // Convert the device-space quarter-pixel error budget back into
+      // unscaled CFF font units, including text and page transforms.
+      const double hx=matrix.horizontal_scale;
+      const double ux=std::hypot(sx*(matrix.a*matrix.ta+matrix.c*matrix.tb)*hx,
+                                sy*(matrix.b*matrix.ta+matrix.d*matrix.tb)*hx);
+      const double uy=std::hypot(sx*(matrix.a*matrix.tc+matrix.c*matrix.td),
+                                sy*(matrix.b*matrix.tc+matrix.d*matrix.td));
+      const double pixel_per_unit=(em/decoded.units)*(ux+uy);
+      if(!std::isfinite(pixel_per_unit))return false;
+      const double tolerance=std::min(8.0,
+          0.25/std::max(pixel_per_unit,1e-12));
+      if(!sfnt_cff_simple_outline(sfnt,glyph_id,decoded.cff_outline,tolerance))
        return false;
      }else if(!sfnt_glyph_outline(sfnt,glyph_id,decoded.outline))return false;
      // Keep transient decoding for large fonts. Bound retained glyph
