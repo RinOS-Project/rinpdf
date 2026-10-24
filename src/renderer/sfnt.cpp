@@ -399,34 +399,12 @@ bool sfnt_cff_local_subroutine(const SfntFont& font,int32_t operand,
  if(d[0]!=1||d[2]<4||d[2]>n)return false;
  size_t cursor=d[2];
  // Locate the single-font Top DICT INDEX after the Name INDEX.
- auto index=[&](size_t& pos,size_t& first,size_t& last,
-                uint16_t& count)->bool{
-  if(pos>n||n-pos<2)return false;
-  count=(uint16_t(d[pos])<<8)|d[pos+1];pos+=2;
-  if(!count){first=last=pos;return true;}
-  if(pos>=n)return false;
-  const unsigned width=d[pos++];
-  if(width<1||width>4||(size_t(count)+1)>(n-pos)/width)return false;
-  auto read=[&](size_t i){
-   uint32_t v=0;
-   for(unsigned j=0;j<width;++j)v=(v<<8)|d[pos+i*width+j];
-   return v;
-  };
-  if(read(0)!=1)return false;
-  uint32_t previous=1;
-  for(size_t i=1;i<=count;++i){
-   const uint32_t v=read(i);
-   if(v<previous)return false;
-   previous=v;
-  }
-  const size_t data=pos+(size_t(count)+1)*width;
-  if(data>n||size_t(previous-1)>n-data)return false;
-  first=data;last=data+previous-1;pos=last;
-  return true;
- };
- size_t first=0,last=0;uint16_t count=0;
- if(!index(cursor,first,last,count)||count!=1)return false;
- if(!index(cursor,first,last,count)||count!=1)return false;
+ CffIndex names,top;
+ if(!cff_read_index(d,n,cursor,names)||names.count!=1||
+    !cff_read_index(d,n,cursor,top)||top.count!=1)return false;
+ size_t first=0,last=0;
+ if(!top.item(0,first,last))return false;
+ uint16_t count=0;
  // Decode Top DICT numeric operands to find the Private DICT (operator 18).
  int32_t private_size=-1,private_offset=-1;
  auto read_dict=[&](size_t start,size_t end,bool top,
@@ -452,26 +430,16 @@ bool sfnt_cff_local_subroutine(const SfntFont& font,int32_t operand,
                false,sub_offset,dummy)||sub_offset<0)return false;
  if(size_t(sub_offset)>n-size_t(private_offset))return false;
  cursor=size_t(private_offset)+size_t(sub_offset);
- if(!index(cursor,first,last,count)||!count)return false;
- // Re-read the local INDEX offsets and select the biased subroutine.
+ CffIndex locals;
+ if(!cff_read_index(d,n,cursor,locals)||!locals.count)return false;
+ count=locals.count;
+ // Apply the CFF subroutine bias and return the validated INDEX entry.
  const int32_t bias=count<1240?107:count<33900?1131:32768;
  const int64_t id=int64_t(operand)+bias;
  if(id<0||id>=count)return false;
- size_t at=size_t(private_offset)+size_t(sub_offset);
- if(n-at<3)return false;
- const unsigned width=d[at+2];
- if(width<1||width>4)return false;
- const size_t offsets=at+3;
- if(size_t(count)+1>(n-offsets)/width)return false;
- auto off=[&](size_t i)->uint32_t{
-  uint32_t v=0;
-  for(unsigned j=0;j<width;++j)v=(v<<8)|d[offsets+i*width+j];
-  return v;
- };
- const uint32_t a=off(size_t(id)),b=off(size_t(id)+1);
- const size_t data=offsets+(size_t(count)+1)*width;
- if(!a||b<a||data>n||size_t(b-1)>n-data)return false;
- bytes=d+data+a-1;length=b-a;
+ size_t from=0,to=0;
+ if(!locals.item(size_t(id),from,to))return false;
+ bytes=d+from;length=to-from;
  return length>0&&length<=65536;
 }
 
