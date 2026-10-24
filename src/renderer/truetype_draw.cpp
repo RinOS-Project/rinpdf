@@ -230,9 +230,15 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
     if(persisted&&last_font.estimated_bytes>4*1024*1024){
      // Preserve the active paint in its owned copy, but do not retain an
      // oversized glyph between calls.
-     last_font.estimated_bytes=0;
-     last_font.glyphs.clear();
-     last_font.recency.clear();
+     const auto& stored=cached->second;
+     size_t weight=sizeof(CachedGlyph)+128+
+       stored.outline.points.size()*sizeof(GlyphPoint)+
+       stored.outline.contour_ends.size()*sizeof(uint16_t);
+     for(const auto& contour:stored.flattened)
+      weight+=sizeof(contour)+contour.size()*sizeof(MaskPoint);
+     last_font.estimated_bytes-=std::min(last_font.estimated_bytes,weight);
+     last_font.glyphs.erase(glyph_id);
+     last_font.recency.erase(glyph_id);
     }
     for(auto& contour:paint.paths)for(auto& point:contour){
      const double local_x=point.x*matrix.horizontal_scale,local_y=-point.y;
