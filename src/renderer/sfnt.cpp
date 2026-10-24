@@ -96,15 +96,19 @@ bool sfnt_glyph_id(const SfntFont& f,uint32_t code,uint16_t& glyph){
       !u32(f.bytes,f.size,sub+12,groups)||length<16||
       length>end-sub||groups>(length-16)/12||groups>100000)return false;
    uint32_t previous_end=0;
+   bool matched=false;
+   uint16_t found=0;
    for(uint32_t j=0;j<groups;++j){
     const size_t pos=sub+16+size_t(j)*12;
     uint32_t lo=0,hi=0,id=0;
     if(!u32(f.bytes,f.size,pos,lo)||!u32(f.bytes,f.size,pos+4,hi)||
        !u32(f.bytes,f.size,pos+8,id)||lo>hi||
-       (j&&lo<=previous_end)||id>=f.glyph_count)return false;
+       (j&&lo<=previous_end)||hi>0x10ffff||
+       id>=f.glyph_count)return false;
     previous_end=hi;
-    if(code>=lo&&code<=hi){glyph=uint16_t(id);return true;}
+    if(code>=lo&&code<=hi){matched=true;found=uint16_t(id);}
    }
+   if(matched){glyph=found;return true;}
   }else if(format==6&&code<=65535){
    uint16_t length=0,first=0,entries=0;
    if(end-sub<10||!u16(f.bytes,f.size,sub+2,length)||
