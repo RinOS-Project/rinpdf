@@ -72,17 +72,23 @@ bool sfnt_glyph_id(const SfntFont& f,uint32_t code,uint16_t& glyph){
    if(end-sub<16||!u32(f.bytes,f.size,sub+4,length)||
       !u32(f.bytes,f.size,sub+12,groups)||length<16||
       length>end-sub||groups>(length-16)/12||groups>100000)return false;
+   uint32_t previous_end=0;
+   bool matched=false;
+   uint16_t found=0;
    for(uint32_t j=0;j<groups;++j){
-    size_t p=sub+16+size_t(j)*12;
+    const size_t p=sub+16+size_t(j)*12;
     uint32_t lo=0,hi=0,base=0;
     if(!u32(f.bytes,f.size,p,lo)||!u32(f.bytes,f.size,p+4,hi)||
-       !u32(f.bytes,f.size,p+8,base)||lo>hi)return false;
+       !u32(f.bytes,f.size,p+8,base)||lo>hi||
+       (j&&lo<=previous_end)||hi>0x10ffff||
+       uint64_t(base)+hi-lo>=f.glyph_count)return false;
+    previous_end=hi;
     if(code>=lo&&code<=hi){
-     uint64_t id=uint64_t(base)+code-lo;
-     if(id>=f.glyph_count)return false;
-     glyph=static_cast<uint16_t>(id);return true;
+     matched=true;
+     found=static_cast<uint16_t>(uint64_t(base)+code-lo);
     }
    }
+   if(matched){glyph=found;return true;}
   }else if(format==13){
    // Unicode many-to-one mapping: each range maps to a single glyph ID.
    uint32_t length=0,groups=0;
