@@ -73,9 +73,9 @@ bool rasterize_path_mask(const std::vector<std::vector<MaskPoint>>& subpaths,
  mask=std::move(result);
  return true;
 }
-bool rasterize_path_coverage_2x(const std::vector<std::vector<MaskPoint>>& subpaths,
- unsigned width,unsigned height,FillRule rule,std::vector<uint8_t>& coverage){
- coverage.clear();
+bool rasterize_path_coverage_region_2x(const std::vector<std::vector<MaskPoint>>& subpaths,
+ unsigned width,unsigned height,FillRule rule,CoverageRegion& region){
+ region={};
  if(!width||!height||(size_t)width*height>262144)return false;
  // Validate aggregate geometry before allocating a scaled copy.
  if(subpaths.size()>4096)return false;
@@ -93,7 +93,6 @@ bool rasterize_path_coverage_2x(const std::vector<std::vector<MaskPoint>>& subpa
   min_x=std::min(min_x,point.x);max_x=std::max(max_x,point.x);
   min_y=std::min(min_y,point.y);max_y=std::max(max_y,point.y);
  }
- std::vector<uint8_t> result(size_t(width)*height,0);
  if(min_x!=std::numeric_limits<double>::infinity()){
   const unsigned x0=unsigned(std::clamp(std::floor(min_x)-1.0,0.0,double(width)));
   const unsigned y0=unsigned(std::clamp(std::floor(min_y)-1.0,0.0,double(height)));
@@ -101,6 +100,7 @@ bool rasterize_path_coverage_2x(const std::vector<std::vector<MaskPoint>>& subpa
   const unsigned y1=unsigned(std::clamp(std::ceil(max_y)+1.0,0.0,double(height)));
   if(x0<x1&&y0<y1){
    const unsigned local_width=x1-x0,local_height=y1-y0;
+   std::vector<uint8_t> result(size_t(local_width)*local_height,0);
    std::vector<std::vector<MaskPoint>> scaled;
    scaled.reserve(subpaths.size());
    for(const auto& path:subpaths){
@@ -118,11 +118,24 @@ bool rasterize_path_coverage_2x(const std::vector<std::vector<MaskPoint>>& subpa
      const size_t i=size_t(y*2)*sample_stride+x*2;
      const unsigned sum=samples[i]+samples[i+1]+
       samples[i+sample_stride]+samples[i+sample_stride+1];
-     result[size_t(y+y0)*width+x+x0]=uint8_t((sum*255+2)/4);
+     result[size_t(y)*local_width+x]=uint8_t((sum*255+2)/4);
     }
+   region.x=x0;region.y=y0;region.width=local_width;
+   region.height=local_height;region.pixels=std::move(result);
   }
  }
- coverage=std::move(result);
+ return true;
+}
+bool rasterize_path_coverage_2x(const std::vector<std::vector<MaskPoint>>& paths,
+ unsigned width,unsigned height,FillRule rule,std::vector<uint8_t>& coverage){
+ coverage.clear();
+ CoverageRegion region;
+ if(!rasterize_path_coverage_region_2x(paths,width,height,rule,region))return false;
+ std::vector<uint8_t> full(size_t(width)*height,0);
+ for(unsigned y=0;y<region.height;++y)
+  std::copy_n(region.pixels.data()+size_t(y)*region.width,region.width,
+   full.data()+size_t(y+region.y)*width+region.x);
+ coverage=std::move(full);
  return true;
 }
 bool intersect_path_masks(std::vector<uint8_t>& current,const std::vector<uint8_t>& incoming){
