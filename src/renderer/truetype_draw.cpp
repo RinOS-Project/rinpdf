@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <list>
 #include <map>
 #include <utility>
 namespace rinpdf::renderer {
@@ -64,8 +65,8 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
   std::vector<uint8_t> bytes;
   std::map<uint16_t,CachedGlyph> glyphs;
   size_t estimated_bytes=0;
-  std::map<uint16_t,uint64_t> recency;
-  uint64_t clock=0;
+  std::list<uint16_t> oldest_first;
+  std::map<uint16_t,std::list<uint16_t>::iterator> positions;
  };
  // Estimate retained allocations using capacities, not just element counts.
  // The common node overhead is included for each map entry.
@@ -81,25 +82,36 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
    g.cff_outline.capacity()*sizeof(CffSegment)+path_weight(g.flattened);
  };
  thread_local LastFont last_font;
- // Evict LRU entries while respecting an active glyph (if any).
+ // The front of this list is the LRU entry. Repeated uses move the
+ // existing node to the back in constant time without allocating a node.
+ auto touch=[&](uint16_t id){
+  auto it=last_font.positions.find(id);
+  if(it==last_font.positions.end()){
+   last_font.oldest_first.push_back(id);
+   last_font.positions.emplace(id,std::prev(last_font.oldest_first.end()));
+  }else{
+   last_font.oldest_first.splice(last_font.oldest_first.end(),
+                                 last_font.oldest_first,it->second);
+  }
+ };
  auto evict_for=[&](size_t extra,size_t max_count,int protected_id){
   constexpr size_t budget=4*1024*1024;
   while(!last_font.glyphs.empty()&&
         (last_font.glyphs.size()>=max_count||
          extra>budget||last_font.estimated_bytes>budget-extra)){
-   auto oldest=last_font.recency.end();
-   for(auto it=last_font.recency.begin();it!=last_font.recency.end();++it)
-    if(int(it->first)!=protected_id&&
-       (oldest==last_font.recency.end()||it->second<oldest->second))
-     oldest=it;
-   if(oldest==last_font.recency.end())break;
-   auto victim=last_font.glyphs.find(oldest->first);
+   auto oldest=last_font.oldest_first.begin();
+   if(oldest==last_font.oldest_first.end())break;
+   if(int(*oldest)==protected_id)++oldest;
+   if(oldest==last_font.oldest_first.end())break;
+   const uint16_t id=*oldest;
+   auto victim=last_font.glyphs.find(id);
    if(victim!=last_font.glyphs.end()){
     const size_t weight=glyph_weight(victim->second);
     last_font.estimated_bytes-=std::min(last_font.estimated_bytes,weight);
     last_font.glyphs.erase(victim);
    }
-   last_font.recency.erase(oldest);
+   last_font.positions.erase(id);
+   last_font.oldest_first.erase(oldest);
   }
  };
 
@@ -114,7 +126,7 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
   last_font.bytes.swap(replacement);
   last_font.glyphs.clear();
   last_font.estimated_bytes=0;
-  last_font.recency.clear();last_font.clock=0;
+  last_font.positions.clear();last_font.oldest_first.clear();
  }
  auto& glyph_cache=retain?last_font.glyphs:transient_glyphs;
  struct Paint {std::vector<std::vector<MaskPoint>> paths;};
@@ -187,12 +199,12 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
      cached=glyph_cache.emplace(glyph_id,std::move(decoded)).first;
      if(retain){
       last_font.estimated_bytes+=full_estimated;
-      last_font.recency[glyph_id]=++last_font.clock;
+      touch(glyph_id);
      }
      }
     }
     const bool persisted=retain&&!transient_current;
-    if(persisted)last_font.recency[glyph_id]=++last_font.clock;
+    if(persisted)touch(glyph_id);
     units=cached->second.units;advance=cached->second.advance;
     const SimpleGlyph& glyph=cached->second.outline;
     parser::CIDVerticalMetric vertical_metric;
@@ -264,7 +276,11 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
      transient_glyphs.insert_or_assign(glyph_id,std::move(cached->second));
      last_font.estimated_bytes-=std::min(last_font.estimated_bytes,weight);
      last_font.glyphs.erase(glyph_id);
-     last_font.recency.erase(glyph_id);
+     auto pos=last_font.positions.find(glyph_id);
+     if(pos!=last_font.positions.end()){
+      last_font.oldest_first.erase(pos->second);
+      last_font.positions.erase(pos);
+     }
     }
     for(auto& contour:paint.paths)for(auto& point:contour){
      const double local_x=point.x*matrix.horizontal_scale,local_y=-point.y;
