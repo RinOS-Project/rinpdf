@@ -17,7 +17,6 @@ bool sfnt_cff_simple_outline(const SfntFont& font,uint16_t glyph,
  size_t stems=0;
  bool path_started=false;
  bool width_seen=false;
- bool width_seen=false;
  auto coordinate=[&](double dx,double dy)->bool{
   x+=dx;y+=dy;
   return std::isfinite(x)&&std::isfinite(y)&&
@@ -85,17 +84,6 @@ bool sfnt_cff_simple_outline(const SfntFont& font,uint16_t glyph,
     if(has_width)stack.erase(stack.begin());
     if(stem||move||op==14)width_seen=true;
    }
-   // Optional Type 2 width is allowed only on the first stem, move,
-   // or endchar operator, and does not contribute to the outline.
-   if(!width_seen){
-    const bool stem=(op==1||op==3||op==18||op==23||op==19||op==20);
-    const bool move=(op==4||op==21||op==22);
-    if((stem&&(stack.size()%2))||
-       (move&&stack.size()==(op==21?3u:2u))||
-       (op==14&&stack.size()==1))
-     stack.erase(stack.begin());
-    if(stem||move||op==14)width_seen=true;
-   }
    const size_t n=stack.size();
    if(op==14){
     if(n!=0||pos!=length)return false;
@@ -156,25 +144,6 @@ bool sfnt_cff_simple_outline(const SfntFont& font,uint16_t glyph,
      if(!line(stack[i],stack[i+1]))return false;
     if(!curve(stack[n-6],stack[n-5],stack[n-4],stack[n-3],
               stack[n-2],stack[n-1]))return false;
-   }else if(op==26||op==27){
-    // vvcurveto / hhcurveto: optional first cross-axis displacement,
-    // followed by groups of four relative control-point operands.
-    if(n<4||n%4>1)return false;
-    const bool vv=op==26;
-    size_t i=n%4;
-    const double first=i?stack[0]:0;
-    bool initial=true;
-    for(;i<n;i+=4){
-     const double cross=initial?first:0;
-     if(vv){
-      if(!curve(cross,stack[i],stack[i+1],stack[i+2],0,stack[i+3]))
-       return false;
-     }else{
-      if(!curve(stack[i],cross,stack[i+1],stack[i+2],stack[i+3],0))
-       return false;
-     }
-     initial=false;
-    }
    }else if(op==30||op==31){
     // vhcurveto / hvcurveto alternate vertical and horizontal starts.
     // An optional final operand sets the terminal perpendicular delta.
