@@ -48,7 +48,7 @@ bool sfnt_glyph_id(const SfntFont& f,uint32_t code,uint16_t& glyph){
  uint16_t count=0;
  if(!u16(f.bytes,f.size,start+2,count)||count>256||
     size_t(count)>(end-start-4)/8)return false;
- for(unsigned pass=0;pass<2;++pass)for(unsigned i=0;i<count;++i){
+ for(unsigned pass=0;pass<4;++pass)for(unsigned i=0;i<count;++i){
   size_t rec=start+4+size_t(i)*8;
   uint16_t platform=0,encoding=0;
   uint32_t offset=0;
@@ -62,6 +62,8 @@ bool sfnt_glyph_id(const SfntFont& f,uint32_t code,uint16_t& glyph){
   if(!u16(f.bytes,f.size,sub,format))return false;
   if(pass==0&&format!=12)continue;
   if(pass==1&&format!=4)continue;
+  if(pass==2&&format!=6)continue;
+  if(pass==3&&format!=0)continue;
   if(format==12){
    uint32_t length=0,groups=0;
    if(end-sub<16||!u32(f.bytes,f.size,sub+4,length)||
@@ -78,7 +80,26 @@ bool sfnt_glyph_id(const SfntFont& f,uint32_t code,uint16_t& glyph){
      glyph=static_cast<uint16_t>(id);return true;
     }
    }
-  }else if(code<=65535){
+  }else if(format==6&&code<=65535){
+   uint16_t length=0,first=0,entries=0;
+   if(end-sub<10||!u16(f.bytes,f.size,sub+2,length)||
+      !u16(f.bytes,f.size,sub+6,first)||
+      !u16(f.bytes,f.size,sub+8,entries)||
+      length<10||length>end-sub||entries>(length-10)/2)return false;
+   if(code>=first&&uint32_t(code)-first<entries){
+    uint16_t id=0;
+    if(!u16(f.bytes,f.size,sub+10+2*(uint32_t(code)-first),id)||
+       id>=f.glyph_count)return false;
+    glyph=id;return true;
+   }
+  }else if(format==0&&code<256){
+   uint16_t length=0;
+   if(end-sub<262||!u16(f.bytes,f.size,sub+2,length)||
+      length<262||length>end-sub)return false;
+   const uint16_t id=f.bytes[sub+6+code];
+   if(id>=f.glyph_count)return false;
+   glyph=id;return true;
+  }else if(format==4&&code<=65535){
    uint16_t length=0,segx2=0;
    if(!u16(f.bytes,f.size,sub+2,length)||length<24||length>end-sub||
       !u16(f.bytes,f.size,sub+6,segx2)||segx2==0||(segx2&1))return false;
