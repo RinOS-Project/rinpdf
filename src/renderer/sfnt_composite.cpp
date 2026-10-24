@@ -49,7 +49,7 @@ static bool resolve(const SfntFont& font,uint16_t id,SimpleGlyph& out,
  bool more=true;
  size_t pos=begin+10,components=0;
  while(more){
-  if(++components>32||end-pos<4)return false;
+  if(++components>32||pos>end||end-pos<4)return false;
   uint16_t flags=0,component=0;
   if(!be16(font.bytes,end,pos,flags)||!be16(font.bytes,end,pos+2,component))
    return false;
@@ -63,13 +63,13 @@ static bool resolve(const SfntFont& font,uint16_t id,SimpleGlyph& out,
   int32_t arg1=0,arg2=0;
   if(flags&ARG_WORDS){
    uint16_t x=0,y=0;
-   if(end-pos<4||!be16(font.bytes,end,pos,x)||
+   if(pos>end||end-pos<4||!be16(font.bytes,end,pos,x)||
       !be16(font.bytes,end,pos+2,y))return false;
    arg1=(flags&ARGS_XY)?static_cast<int16_t>(x):x;
    arg2=(flags&ARGS_XY)?static_cast<int16_t>(y):y;
    pos+=4;
   }else{
-   if(end-pos<2)return false;
+   if(pos>end||end-pos<2)return false;
    arg1=(flags&ARGS_XY)?static_cast<int8_t>(font.bytes[pos]):font.bytes[pos];
    arg2=(flags&ARGS_XY)?static_cast<int8_t>(font.bytes[pos+1]):font.bytes[pos+1];
    pos+=2;
