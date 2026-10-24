@@ -18,9 +18,14 @@ bool sfnt_cff_outline_commands(const SfntFont& font,uint16_t glyph,
  bool path_started=false;
  bool width_seen=false;
  auto coordinate=[&](double dx,double dy)->bool{
-  x+=dx;y+=dy;
-  return std::isfinite(x)&&std::isfinite(y)&&
-   std::abs(x)<=1000000&&std::abs(y)<=1000000;
+  // Validate before committing either coordinate: an invalid operand must
+  // not partially mutate the interpreter's current point.
+  if(!std::isfinite(dx)||!std::isfinite(dy))return false;
+  const double nx=x+dx,ny=y+dy;
+  if(!std::isfinite(nx)||!std::isfinite(ny)||
+     std::abs(nx)>1000000||std::abs(ny)>1000000)return false;
+  x=nx;y=ny;
+  return true;
  };
  auto begin=[&](double dx,double dy)->bool{
   if(result.size()>=8192||!coordinate(dx,dy))return false;
