@@ -20,6 +20,11 @@ struct CachedFontGlyph {
 };
 class GlyphLruCache {
 public:
+ GlyphLruCache()=default;
+ GlyphLruCache(const GlyphLruCache&)=delete;
+ GlyphLruCache& operator=(const GlyphLruCache&)=delete;
+ GlyphLruCache(GlyphLruCache&&)=delete;
+ GlyphLruCache& operator=(GlyphLruCache&&)=delete;
  bool matches(const std::vector<uint8_t>& source)const{return bytes_==source;}
  void reset_font(const std::vector<uint8_t>& source){
   std::vector<uint8_t> copy(source);
