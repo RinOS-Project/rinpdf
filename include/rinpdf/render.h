@@ -37,6 +37,14 @@ rinpdf_status rinpdf_render_page_at_dpi_sized(const rinpdf_document *doc,
 rinpdf_status rinpdf_render_page_sized(const rinpdf_document *doc,
  size_t page_index,unsigned width,unsigned height,unsigned char *rgba,
  size_t buffer_bytes,size_t stride);
+/* Render a viewport in the coordinate system of a full-resolution page.
+ * x/y are top-left pixel offsets; tile dimensions determine output storage.
+ * Tiles are currently supported for unrotated pages only.
+ */
+rinpdf_status rinpdf_render_page_tile_sized(const rinpdf_document *doc,
+ size_t page_index,unsigned full_width,unsigned full_height,
+ unsigned tile_x,unsigned tile_y,unsigned tile_width,unsigned tile_height,
+ unsigned char *rgba,size_t buffer_bytes,size_t stride);
 #ifdef __cplusplus
 }
 #endif
