@@ -39,10 +39,7 @@ bool cff_flatten_commands(const CffCommands& commands,double tolerance,
     const auto q=pending.back();pending.pop_back();
     const double dx=q.d.x-q.a.x,dy=q.d.y-q.a.y;
     const double chord=std::hypot(dx,dy);
-    const double d1=std::abs((q.b.x-q.a.x)*dy-(q.b.y-q.a.y)*dx);
-    const double d2=std::abs((q.c.x-q.a.x)*dy-(q.c.y-q.a.y)*dx);
-    if(!std::isfinite(chord)||!std::isfinite(d1)||!std::isfinite(d2))
-     return false;
+    if(!std::isfinite(chord))return false;
     // Distance to the finite endpoint segment, not its infinite line.
     // Collinear control points beyond either endpoint can describe a
     // substantial backtracking cubic and must not be flattened to a line.
@@ -52,8 +49,10 @@ bool cff_flatten_commands(const CffCommands& commands,double tolerance,
                                 (chord*chord),0.0,1.0);
      return std::hypot(p.x-(q.a.x+t*dx),p.y-(q.a.y+t*dy));
     };
-    const bool flat=distance_to_chord(q.b)<=tolerance&&
-                    distance_to_chord(q.c)<=tolerance;
+    const double d1=distance_to_chord(q.b);
+    const double d2=distance_to_chord(q.c);
+    if(!std::isfinite(d1)||!std::isfinite(d2))return false;
+    const bool flat=d1<=tolerance&&d2<=tolerance;
     if(flat){
      if(++total>16384)return false;
      paths.back().push_back(q.d);
