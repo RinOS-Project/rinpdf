@@ -48,6 +48,8 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
  struct CachedGlyph {
   uint16_t units=0,advance=0;
   SimpleGlyph outline;
+  std::vector<std::vector<MaskPoint>> flattened;
+  bool has_flattened=false;
  };
  std::map<uint16_t,CachedGlyph> glyph_cache;
  struct Paint {std::vector<std::vector<MaskPoint>> paths;};
@@ -112,10 +114,14 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
     const double origin_y=vertical?
        baseline+cursor-vertical_metric.v1y*em/1000:baseline;
     Paint paint;
-    // Build in font-coordinate units, then apply the text basis and CTM
-    // before mapping PDF user coordinates to device pixels.
-    if(!flatten_simple_glyph(glyph,em/units,0,0,0.15,paint.paths))
-     return false;
+    // The font-space flattening tolerance and size are constant across
+    // this call. Copy cached contours before applying per-glyph transforms.
+    if(!cached->second.has_flattened){
+     if(!flatten_simple_glyph(glyph,em/units,0,0,0.15,
+                              cached->second.flattened))return false;
+     cached->second.has_flattened=true;
+    }
+    paint.paths=cached->second.flattened;
     for(auto& contour:paint.paths)for(auto& point:contour){
      const double local_x=point.x*matrix.horizontal_scale,local_y=-point.y;
      const double ux=origin_x+matrix.ta*local_x+matrix.tc*local_y;
