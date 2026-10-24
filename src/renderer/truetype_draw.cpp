@@ -55,6 +55,7 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
   std::vector<std::vector<MaskPoint>> flattened;
   bool has_flattened=false;
   double flattened_em=0;
+  double flattened_tolerance=0;
  };
  // Per-thread last-font cache: exact byte comparison prevents collisions and
  // owns the font bytes independently of PDF document and resource lifetime.
@@ -200,21 +201,26 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
     // The font-space flattening tolerance and size are constant across
     // this call. Copy cached contours before applying per-glyph transforms.
     // Flattening depends on em, unlike the decoded sfnt glyph outline.
-    if(cff_font||!cached->second.has_flattened || cached->second.flattened_em!=em){
+    // The CFF path geometry depends on em and the device-space flattening
+    // tolerance, not on glyph translation or paint colour.
+    double cff_tolerance=0;
+    if(cff_font){
+     const double scale=em/units,hx=matrix.horizontal_scale;
+     const double ux=std::hypot(sx*(matrix.a*matrix.ta+matrix.c*matrix.tb)*hx,
+                               sy*(matrix.b*matrix.ta+matrix.d*matrix.tb)*hx);
+     const double uy=std::hypot(sx*(matrix.a*matrix.tc+matrix.c*matrix.td),
+                               sy*(matrix.b*matrix.tc+matrix.d*matrix.td));
+     const double pixel_per_unit=scale*(ux+uy);
+     if(!std::isfinite(pixel_per_unit))return false;
+     cff_tolerance=std::min(8.0,0.25/std::max(pixel_per_unit,1e-12));
+    }
+    if(!cached->second.has_flattened || cached->second.flattened_em!=em ||
+       (cff_font&&cached->second.flattened_tolerance!=cff_tolerance)){
      std::vector<std::vector<MaskPoint>> replacement;
      if(cff_font){
       const double scale=em/units;
-      const double hx=matrix.horizontal_scale;
-      const double ux=std::hypot(sx*(matrix.a*matrix.ta+matrix.c*matrix.tb)*hx,
-                                sy*(matrix.b*matrix.ta+matrix.d*matrix.tb)*hx);
-      const double uy=std::hypot(sx*(matrix.a*matrix.tc+matrix.c*matrix.td),
-                                sy*(matrix.b*matrix.tc+matrix.d*matrix.td));
-      const double pixel_per_unit=scale*(ux+uy);
-      if(!std::isfinite(pixel_per_unit))return false;
-      const double tolerance=std::min(8.0,
-          0.25/std::max(pixel_per_unit,1e-12));
       std::vector<CffPath> paths;
-      if(!cff_flatten_commands(cached->second.cff_outline,tolerance,paths))
+      if(!cff_flatten_commands(cached->second.cff_outline,cff_tolerance,paths))
        return false;
       for(const auto& contour:paths){
        std::vector<MaskPoint> path;
@@ -263,6 +269,7 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
      cached->second.flattened=std::move(replacement);
      cached->second.has_flattened=true;
      cached->second.flattened_em=em;
+     cached->second.flattened_tolerance=cff_tolerance;
     }
     paint.paths=cached->second.flattened;
     if(persisted&&last_font.estimated_bytes>4*1024*1024){
