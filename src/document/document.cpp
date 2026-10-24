@@ -607,6 +607,18 @@ extern "C" rinpdf_status rinpdf_render_page_buffer_size(
  *required=size_t(height-1)*stride+row;
  return RINPDF_OK;
 }
+extern "C" rinpdf_status rinpdf_render_page_sized(
+ const rinpdf_document* doc,size_t index,unsigned width,unsigned height,
+ unsigned char* rgba,size_t capacity,size_t stride){
+ if(!doc||!rgba)return RINPDF_INVALID_ARGUMENT;
+ const size_t effective_stride=stride?stride:size_t(width)*4;
+ size_t required=0;
+ const auto status=rinpdf_render_page_buffer_size(
+  width,height,effective_stride,&required);
+ if(status!=RINPDF_OK)return status;
+ if(capacity<required)return RINPDF_INVALID_ARGUMENT;
+ return rinpdf_render_page(doc,index,width,height,rgba,effective_stride);
+}
 extern "C" rinpdf_status rinpdf_render_page_at_dpi_sized(
  const rinpdf_document* doc,size_t index,double dpi,
  unsigned char* rgba,size_t capacity,size_t stride,unsigned* width,unsigned* height){
@@ -614,12 +626,7 @@ extern "C" rinpdf_status rinpdf_render_page_at_dpi_sized(
  unsigned w=0,h=0;
  auto status=rinpdf_render_page_size_for_dpi(doc,index,dpi,&w,&h);
  if(status!=RINPDF_OK)return status;
- const size_t effective_stride=stride?stride:size_t(w)*4;
- size_t required=0;
- status=rinpdf_render_page_buffer_size(w,h,effective_stride,&required);
- if(status!=RINPDF_OK)return status;
- if(capacity<required)return RINPDF_INVALID_ARGUMENT;
- status=rinpdf_render_page(doc,index,w,h,rgba,effective_stride);
+ status=rinpdf_render_page_sized(doc,index,w,h,rgba,capacity,stride);
  if(status!=RINPDF_OK)return status;
  *width=w;*height=h;return RINPDF_OK;
 }
