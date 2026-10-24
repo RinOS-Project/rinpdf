@@ -43,9 +43,17 @@ bool cff_flatten_commands(const CffCommands& commands,double tolerance,
     const double d2=std::abs((q.c.x-q.a.x)*dy-(q.c.y-q.a.y)*dx);
     if(!std::isfinite(chord)||!std::isfinite(d1)||!std::isfinite(d2))
      return false;
-    const bool flat=chord>0?std::max(d1,d2)/chord<=tolerance:
-      (std::hypot(q.b.x-q.a.x,q.b.y-q.a.y)<=tolerance&&
-       std::hypot(q.c.x-q.a.x,q.c.y-q.a.y)<=tolerance);
+    // Distance to the finite endpoint segment, not its infinite line.
+    // Collinear control points beyond either endpoint can describe a
+    // substantial backtracking cubic and must not be flattened to a line.
+    auto distance_to_chord=[&](CffPoint p)->double{
+     if(chord==0)return std::hypot(p.x-q.a.x,p.y-q.a.y);
+     const double t=std::clamp(((p.x-q.a.x)*dx+(p.y-q.a.y)*dy)/
+                                (chord*chord),0.0,1.0);
+     return std::hypot(p.x-(q.a.x+t*dx),p.y-(q.a.y+t*dy));
+    };
+    const bool flat=distance_to_chord(q.b)<=tolerance&&
+                    distance_to_chord(q.c)<=tolerance;
     if(flat){
      if(++total>16384)return false;
      paths.back().push_back(q.d);
