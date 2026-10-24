@@ -130,8 +130,12 @@ bool sfnt_cff_simple_outline(const SfntFont& font,uint16_t glyph,
     stack.pop_back();
     const uint8_t* sub=nullptr;
     size_t sub_length=0;
+    uint16_t fd_index=0;
+    const bool cid_keyed=sfnt_cff_fd_for_glyph(font,glyph,fd_index);
     const bool resolved=op==10?
-       sfnt_cff_local_subroutine(font,int32_t(number),sub,sub_length):
+       (cid_keyed?
+         sfnt_cff_cid_local_subroutine(font,glyph,int32_t(number),sub,sub_length):
+         sfnt_cff_local_subroutine(font,int32_t(number),sub,sub_length)):
        sfnt_cff_global_subroutine(font,int32_t(number),sub,sub_length);
     if(!resolved||sub_length==0)return false;
     frames.push_back({current,current_length,pos});
