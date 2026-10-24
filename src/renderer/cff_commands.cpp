@@ -56,7 +56,10 @@ bool sfnt_cff_outline_commands(const SfntFont& font,uint16_t glyph,
  const uint8_t* current=program;
  size_t current_length=length;
  size_t executed=0;
- for(size_t pos=0;pos<current_length;){
+ for(size_t pos=0;;){
+  // Reaching the end of a subroutine without return is malformed.
+  // Likewise, the top-level CharString must terminate with endchar.
+  if(pos>=current_length)return false;
   if(++executed>100000)return false;
   const unsigned op=current[pos++];
   if(op==28){
