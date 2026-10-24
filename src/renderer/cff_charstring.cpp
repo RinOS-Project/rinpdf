@@ -5,8 +5,9 @@
 #include <vector>
 namespace rinpdf::renderer {
 bool sfnt_cff_simple_outline(const SfntFont& font,uint16_t glyph,
- std::vector<CffPath>& contours){
+ std::vector<CffPath>& contours,double tolerance){
  contours.clear();
+ if(!std::isfinite(tolerance)||tolerance<=0||tolerance>8)return false;
  const uint8_t* program=nullptr;
  size_t length=0;
  if(!sfnt_cff_glyph_program(font,glyph,program,length)||length>65536)return false;
@@ -56,9 +57,9 @@ bool sfnt_cff_simple_outline(const SfntFont& font,uint16_t glyph,
                             (q.p2.y-q.p0.y)*dx);
    if(!std::isfinite(chord)||!std::isfinite(d1)||!std::isfinite(d2))
     return false;
-   if((chord>0?(std::max(d1,d2)/chord<=0.25):
-       (std::hypot(q.p1.x-q.p0.x,q.p1.y-q.p0.y)<=0.25&&
-        std::hypot(q.p2.x-q.p0.x,q.p2.y-q.p0.y)<=0.25))){
+   if((chord>0?(std::max(d1,d2)/chord<=tolerance):
+       (std::hypot(q.p1.x-q.p0.x,q.p1.y-q.p0.y)<=tolerance&&
+        std::hypot(q.p2.x-q.p0.x,q.p2.y-q.p0.y)<=tolerance))){
     if(paths.back().size()>=16384)return false;
     paths.back().push_back(q.p3);
     continue;
