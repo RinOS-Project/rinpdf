@@ -6,6 +6,7 @@
 #include "../parser/font_encoding.h"
 #include <cmath>
 #include <limits>
+#include <map>
 #include <utility>
 namespace rinpdf::renderer {
 bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
@@ -42,6 +43,13 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
  if(vertical&&(!cid_map||!cid_widths||!vertical_metrics||!next_y))return false;
  SfntFont sfnt;
  if(!parse_sfnt(bytes.data(),bytes.size(),sfnt))return false;
+ // A text run frequently repeats glyph IDs. Cache validated outlines and
+ // metrics within this call; the font bytes and sfnt table view remain live.
+ struct CachedGlyph {
+  uint16_t units=0,advance=0;
+  SimpleGlyph outline;
+ };
+ std::map<uint16_t,CachedGlyph> glyph_cache;
  struct Paint {std::vector<std::vector<MaskPoint>> paths;};
  std::vector<Paint> paints;
  size_t glyph_count=0;
@@ -87,9 +95,15 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
      if(!sfnt_vertical_substitution(sfnt,glyph_id,glyph_id,
           script,language))return false;
     }
-    if(!sfnt_horizontal_metrics(sfnt,glyph_id,units,advance))return false;
-    SimpleGlyph glyph;
-    if(!sfnt_glyph_outline(sfnt,glyph_id,glyph))return false;
+    auto cached=glyph_cache.find(glyph_id);
+    if(cached==glyph_cache.end()){
+     CachedGlyph decoded;
+     if(!sfnt_horizontal_metrics(sfnt,glyph_id,decoded.units,decoded.advance)||
+        !sfnt_glyph_outline(sfnt,glyph_id,decoded.outline))return false;
+     cached=glyph_cache.emplace(glyph_id,std::move(decoded)).first;
+    }
+    units=cached->second.units;advance=cached->second.advance;
+    const SimpleGlyph& glyph=cached->second.outline;
     parser::CIDVerticalMetric vertical_metric;
     if(vertical&&!parser::cid_vertical_metric(*vertical_metrics,
        *cid_widths,cid,vertical_metric))return false;
