@@ -43,4 +43,10 @@ struct CffCharStrings {
 bool sfnt_cff_glyph_program(const SfntFont& font,uint16_t glyph_id,
  const uint8_t*& bytes,size_t& length);
 bool sfnt_cff_charstrings(const SfntFont& font,CffCharStrings& out);
+// Decode a bounded subset of Type 2 CharStrings into font-unit cubic paths.
+// Unsupported hinting, subroutines and flex operators fail closed.
+struct CffPoint {double x=0,y=0;};
+using CffPath=std::vector<CffPoint>;
+bool sfnt_cff_simple_outline(const SfntFont& font,uint16_t glyph,
+ std::vector<CffPath>& contours);
 }
