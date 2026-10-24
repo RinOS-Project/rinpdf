@@ -2,8 +2,8 @@
 #include <cstdint>
 #include <vector>
 namespace rinpdf::renderer {
-bool sfnt_cff_fd_for_glyph(const SfntFont& font,uint16_t glyph,
- uint16_t& fd_index){
+static bool locate_fd(const SfntFont& font,uint16_t glyph,
+ uint16_t& fd_index,size_t* dict_start,size_t* dict_end){
  if(!font.bytes||glyph>=font.glyph_count)return false;
  const SfntTable* cff=nullptr;
  for(const auto& t:font.tables)if(t.tag==0x43464620){cff=&t;break;}
@@ -120,6 +120,30 @@ bool sfnt_cff_fd_for_glyph(const SfntFont& font,uint16_t glyph,
  }else return false;
  if(selected>=count)return false;
  fd_index=selected;
+ if(dict_start&&dict_end){
+  // Read the selected FDArray INDEX entry without trusting FDSelect alone.
+  const size_t at=size_t(array);
+  if(n-at<3)return false;
+  const uint16_t entries=u16(at);
+  const unsigned width=d[at+2];
+  if(entries!=count||width<1||width>4||
+     size_t(entries)+1>(n-at-3)/width)return false;
+  const size_t offsets=at+3;
+  auto entry=[&](size_t i)->uint32_t{
+   uint32_t v=0;
+   for(unsigned j=0;j<width;++j)v=(v<<8)|d[offsets+i*width+j];
+   return v;
+  };
+  const uint32_t a=entry(selected),b=entry(size_t(selected)+1);
+  const size_t data=offsets+(size_t(entries)+1)*width;
+  if(a<1||b<a||data>n||size_t(b-1)>n-data)return false;
+  *dict_start=data+size_t(a)-1;
+  *dict_end=data+size_t(b)-1;
+ }
  return true;
+}
+bool sfnt_cff_fd_for_glyph(const SfntFont& font,uint16_t glyph,
+ uint16_t& fd_index){
+ return locate_fd(font,glyph,fd_index,nullptr,nullptr);
 }
 }
