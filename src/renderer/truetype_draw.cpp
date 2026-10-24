@@ -51,7 +51,7 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
  struct CachedGlyph {
   uint16_t units=0,advance=0;
   SimpleGlyph outline;
-  std::vector<CffPath> cff_outline;
+  CffCommands cff_outline;
   std::vector<std::vector<MaskPoint>> flattened;
   bool has_flattened=false;
   double flattened_em=0;
@@ -135,18 +135,7 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
      if(!sfnt_horizontal_metrics(sfnt,glyph_id,decoded.units,decoded.advance))
       return false;
      if(cff_font){
-      // Convert the device-space quarter-pixel error budget back into
-      // unscaled CFF font units, including text and page transforms.
-      const double hx=matrix.horizontal_scale;
-      const double ux=std::hypot(sx*(matrix.a*matrix.ta+matrix.c*matrix.tb)*hx,
-                                sy*(matrix.b*matrix.ta+matrix.d*matrix.tb)*hx);
-      const double uy=std::hypot(sx*(matrix.a*matrix.tc+matrix.c*matrix.td),
-                                sy*(matrix.b*matrix.tc+matrix.d*matrix.td));
-      const double pixel_per_unit=(em/decoded.units)*(ux+uy);
-      if(!std::isfinite(pixel_per_unit))return false;
-      const double tolerance=std::min(8.0,
-          0.25/std::max(pixel_per_unit,1e-12));
-      if(!sfnt_cff_simple_outline(sfnt,glyph_id,decoded.cff_outline,tolerance))
+      if(!sfnt_cff_outline_commands(sfnt,glyph_id,decoded.cff_outline))
        return false;
      }else if(!sfnt_glyph_outline(sfnt,glyph_id,decoded.outline))return false;
      // Keep transient decoding for large fonts. Bound retained glyph
@@ -155,8 +144,7 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
       decoded.outline.points.size()*sizeof(GlyphPoint)+
       decoded.outline.contour_ends.size()*sizeof(uint16_t)+128;
      size_t cff_weight=0;
-     for(const auto& path:decoded.cff_outline)
-      cff_weight+=sizeof(path)+path.size()*sizeof(CffPoint);
+     cff_weight=decoded.cff_outline.size()*sizeof(CffSegment);
      const size_t full_estimated=estimated+cff_weight;
      if(retain&&full_estimated>4*1024*1024){
       // A single oversized outline must never occupy the retained font
@@ -181,8 +169,7 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
         size_t weight=sizeof(CachedGlyph)+128+
          victim->second.outline.points.size()*sizeof(GlyphPoint)+
          victim->second.outline.contour_ends.size()*sizeof(uint16_t);
-        for(const auto& path:victim->second.cff_outline)
-         weight+=sizeof(path)+path.size()*sizeof(CffPoint);
+        weight+=victim->second.cff_outline.size()*sizeof(CffSegment);
         for(const auto& contour:victim->second.flattened)
          weight+=sizeof(contour)+contour.size()*sizeof(MaskPoint);
         last_font.estimated_bytes-=std::min(last_font.estimated_bytes,weight);
@@ -217,15 +204,23 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
      std::vector<std::vector<MaskPoint>> replacement;
      if(cff_font){
       const double scale=em/units;
-      for(const auto& contour:cached->second.cff_outline){
-       if(contour.size()>8192)return false;
+      const double hx=matrix.horizontal_scale;
+      const double ux=std::hypot(sx*(matrix.a*matrix.ta+matrix.c*matrix.tb)*hx,
+                                sy*(matrix.b*matrix.ta+matrix.d*matrix.tb)*hx);
+      const double uy=std::hypot(sx*(matrix.a*matrix.tc+matrix.c*matrix.td),
+                                sy*(matrix.b*matrix.tc+matrix.d*matrix.td));
+      const double pixel_per_unit=scale*(ux+uy);
+      if(!std::isfinite(pixel_per_unit))return false;
+      const double tolerance=std::min(8.0,
+          0.25/std::max(pixel_per_unit,1e-12));
+      std::vector<CffPath> paths;
+      if(!cff_flatten_commands(cached->second.cff_outline,tolerance,paths))
+       return false;
+      for(const auto& contour:paths){
        std::vector<MaskPoint> path;
        path.reserve(contour.size());
-       for(const auto& pt:contour){
-        const double px=pt.x*scale,py=-pt.y*scale;
-        if(!std::isfinite(px)||!std::isfinite(py))return false;
-        path.push_back({px,py});
-       }
+       for(const auto& pt:contour)
+        path.push_back({pt.x*scale,-pt.y*scale});
        if(!path.empty())replacement.push_back(std::move(path));
       }
      }else if(!flatten_simple_glyph(glyph,em/units,0,0,0.15,replacement))
@@ -255,8 +250,7 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
         size_t weight=sizeof(CachedGlyph)+128+
          victim->second.outline.points.size()*sizeof(GlyphPoint)+
          victim->second.outline.contour_ends.size()*sizeof(uint16_t);
-        for(const auto& path:victim->second.cff_outline)
-         weight+=sizeof(path)+path.size()*sizeof(CffPoint);
+        weight+=victim->second.cff_outline.size()*sizeof(CffSegment);
         weight+=path_weight(victim->second.flattened);
         last_font.estimated_bytes-=std::min(weight,last_font.estimated_bytes);
         last_font.glyphs.erase(victim);
@@ -278,8 +272,7 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
      size_t weight=sizeof(CachedGlyph)+128+
        stored.outline.points.size()*sizeof(GlyphPoint)+
        stored.outline.contour_ends.size()*sizeof(uint16_t);
-     for(const auto& path:stored.cff_outline)
-      weight+=sizeof(path)+path.size()*sizeof(CffPoint);
+     weight+=stored.cff_outline.size()*sizeof(CffSegment);
      for(const auto& contour:stored.flattened)
       weight+=sizeof(contour)+contour.size()*sizeof(MaskPoint);
      // Move the oversized glyph into this call's transient cache so a
