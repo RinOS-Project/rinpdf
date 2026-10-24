@@ -1,4 +1,5 @@
 #include "sfnt.h"
+#include "cff_dict.h"
 #include <algorithm>
 #include <limits>
 #include <set>
@@ -321,48 +322,13 @@ bool sfnt_cff_charstrings(const SfntFont& font,CffCharStrings& out){
  const size_t first=offsets+2*os;
  if(first>n||size_t(b-1)>n-first)return false;
  size_t pos=first,end=first+size_t(b-1);
- std::vector<int32_t> operands;
  bool found=false;int32_t char_offset=0;
- while(pos<end){
-  const uint8_t op=d[pos++];
-  if(op<=21){
-   if(op==12){if(pos>=end)return false;++pos;}
-   else if(op==17){
-    if(operands.size()!=1||found)return false;
-    char_offset=operands.front();found=true;
-   }
-   operands.clear();continue;
-  }
-  int32_t value=0;
-  if(op>=32&&op<=246)value=int32_t(op)-139;
-  else if(op>=247&&op<=250){
-   if(pos>=end)return false;
-   value=(int32_t(op)-247)*256+d[pos++]+108;
-  }else if(op>=251&&op<=254){
-   if(pos>=end)return false;
-   value=-(int32_t(op)-251)*256-d[pos++]-108;
-  }else if(op==28){
-   if(end-pos<2)return false;
-   value=int16_t(uint16_t(d[pos])<<8|d[pos+1]);pos+=2;
-  }else if(op==29){
-   if(end-pos<4)return false;
-   const uint32_t bits=uint32_t(d[pos])<<24|uint32_t(d[pos+1])<<16|
-    uint32_t(d[pos+2])<<8|d[pos+3];
-   value=static_cast<int32_t>(bits);pos+=4;
-  }else if(op==30){
-   // Real-number operands aren't needed for CharStrings offsets, but
-   // must still be skipped to parse valid Top DICT entries.
-   bool terminated=false;
-   while(pos<end&&!terminated){
-    const uint8_t pair=d[pos++];
-    terminated=((pair>>4)==15||(pair&15)==15);
-   }
-   if(!terminated)return false;
-   value=0;
-  }else return false;
-  if(operands.size()>=48)return false;
-  operands.push_back(value);
- }
+ if(!cff_walk_dict(d,n,first,end,[&](unsigned op,
+                     const std::vector<int32_t>& operands){
+  if(op!=17)return true;
+  if(found||operands.size()!=1||operands[0]<0)return false;
+  char_offset=operands[0];found=true;return true;
+ }))return false;
  if(!found||char_offset<0||size_t(char_offset)>=n)return false;
  size_t char_cursor=size_t(char_offset);Index chars;
  if(!index(char_cursor,chars)||!chars.count||
@@ -502,46 +468,18 @@ bool sfnt_cff_local_subroutine(const SfntFont& font,int32_t operand,
  if(!index(cursor,first,last,count)||count!=1)return false;
  // Decode Top DICT numeric operands to find the Private DICT (operator 18).
  int32_t private_size=-1,private_offset=-1;
- auto read_dict=[&](size_t start,size_t end,bool top,int32_t& a,int32_t& b)->bool{
-  std::vector<int32_t> operands;
-  for(size_t pos=start;pos<end;){
-   const uint8_t op=d[pos++];
-   if(op<=21){
-    if(op==12){if(pos>=end)return false;++pos;}
-    else if(op==(top?18:19)){
-     if(operands.size()!=(top?2u:1u))return false;
-     a=operands[0];if(top)b=operands[1];
-    }
-    operands.clear();continue;
-   }
-   int32_t value=0;
-   if(op>=32&&op<=246)value=int32_t(op)-139;
-   else if(op>=247&&op<=250){
-    if(pos>=end)return false;
-    value=(int32_t(op)-247)*256+d[pos++]+108;
-   }else if(op>=251&&op<=254){
-    if(pos>=end)return false;
-    value=-(int32_t(op)-251)*256-d[pos++]-108;
-   }else if(op==28){
-    if(end-pos<2)return false;
-    value=int16_t((uint16_t(d[pos])<<8)|d[pos+1]);pos+=2;
-   }else if(op==29){
-    if(end-pos<4)return false;
-    const uint32_t raw=(uint32_t(d[pos])<<24)|(uint32_t(d[pos+1])<<16)|
-       (uint32_t(d[pos+2])<<8)|d[pos+3];
-    value=static_cast<int32_t>(raw);pos+=4;
-   }else if(op==30){
-    bool done=false;
-    while(pos<end&&!done){
-     const unsigned pair=d[pos++];
-     done=((pair>>4)==15||(pair&15)==15);
-    }
-    if(!done)return false;
-   }else return false;
-   if(operands.size()>=48)return false;
-   operands.push_back(value);
-  }
-  return true;
+ auto read_dict=[&](size_t start,size_t end,bool top,
+                     int32_t& a,int32_t& b)->bool{
+  const unsigned desired=top?18:19;
+  bool found=false;
+  if(!cff_walk_dict(d,n,start,end,[&](unsigned op,
+                      const std::vector<int32_t>& args){
+   if(op!=desired)return true;
+   if(found||args.size()!=(top?2u:1u))return false;
+   a=args[0];if(top)b=args[1];
+   found=true;return true;
+  }))return false;
+  return found;
  };
  if(!read_dict(first,last,true,private_size,private_offset)||
     private_size<=0||private_offset<0||
