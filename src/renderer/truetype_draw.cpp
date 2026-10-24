@@ -186,10 +186,9 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
     if(persisted&&last_font.over_budget()){
      // Preserve the active paint in its owned copy, but do not retain an
      // oversized glyph between calls.
-     const auto& stored=cached->second;
      // Move the oversized glyph into this call's transient cache so a
      // repeated glyph does not need its outline decoded again.
-     transient_glyphs.insert_or_assign(glyph_id,std::move(*cached));
+     transient_glyphs.insert_or_assign(glyph_id,*cached);
      last_font.remove_accounted(glyph_id);
     }
     for(auto& contour:paint.paths)for(auto& point:contour){
