@@ -124,6 +124,7 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
     auto transient=transient_glyphs.find(glyph_id);
     auto cached=transient!=transient_glyphs.end()?transient:glyph_cache.find(glyph_id);
     const bool transient_hit=transient!=transient_glyphs.end();
+    bool transient_current=transient_hit;
     if(!transient_hit&&cached==glyph_cache.end()){
      CachedGlyph decoded;
      if(!sfnt_horizontal_metrics(sfnt,glyph_id,decoded.units,decoded.advance)||
@@ -137,6 +138,7 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
       // A single oversized outline must never occupy the retained font
       // cache. Keep it only for this render call.
       cached=transient_glyphs.emplace(glyph_id,std::move(decoded)).first;
+      transient_current=true;
      }else{
      if(retain){
       // Evict older entries before insertion. This glyph is not yet held
@@ -170,9 +172,7 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
      }
      }
     }
-    const bool persisted=retain&&!transient_hit&&
-       last_font.glyphs.find(glyph_id)!=last_font.glyphs.end()&&
-       cached==last_font.glyphs.find(glyph_id);
+    const bool persisted=retain&&!transient_current;
     if(persisted)last_font.recency[glyph_id]=++last_font.clock;
     units=cached->second.units;advance=cached->second.advance;
     const SimpleGlyph& glyph=cached->second.outline;
