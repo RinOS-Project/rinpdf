@@ -82,6 +82,10 @@ public:
    touch(id);
    return &existing->second;
   }
+  // Incoming glyphs may originate from another cache. Their list handles
+  // must never be used with this cache's list.
+  glyph.lru_linked=false;
+  glyph.lru_position={};
   const size_t weight=glyph_weight(glyph);
   constexpr size_t budget=4*1024*1024;
   if(weight>budget)return nullptr;
@@ -131,6 +135,7 @@ public:
   auto it=glyphs_.find(id);
   if(it==glyphs_.end()||target.find(id)!=target.end())return false;
   const size_t weight=glyph_weight(it->second);
+  if(!it->second.lru_linked)return false;
   const auto lru_pos=it->second.lru_position;
   auto node=glyphs_.extract(it);
   // If the destination comparator throws, restore the extracted node.
@@ -141,7 +146,7 @@ public:
     glyphs_.insert(std::move(inserted.node));
     return false;
    }
-   // The detached entry no longer owns a list position in this cache.
+   // The detached entry no longer owns this cache's list handle.
    inserted.position->second.lru_linked=false;
    inserted.position->second.lru_position={};
   }catch(...){
