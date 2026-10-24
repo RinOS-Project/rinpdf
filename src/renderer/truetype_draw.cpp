@@ -44,11 +44,14 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
  if(vertical&&(!cid_map||!cid_widths||!vertical_metrics||!next_y))return false;
  SfntFont sfnt;
  if(!parse_sfnt(bytes.data(),bytes.size(),sfnt))return false;
+ const bool cff_font=std::any_of(sfnt.tables.begin(),sfnt.tables.end(),
+   [](const SfntTable& t){return t.tag==0x43464620;});
  // A text run frequently repeats glyph IDs. Cache validated outlines and
  // metrics within this call; the font bytes and sfnt table view remain live.
  struct CachedGlyph {
   uint16_t units=0,advance=0;
   SimpleGlyph outline;
+  std::vector<CffPath> cff_outline;
   std::vector<std::vector<MaskPoint>> flattened;
   bool has_flattened=false;
   double flattened_em=0;
@@ -127,14 +130,22 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
     bool transient_current=transient_hit;
     if(!transient_hit&&cached==glyph_cache.end()){
      CachedGlyph decoded;
-     if(!sfnt_horizontal_metrics(sfnt,glyph_id,decoded.units,decoded.advance)||
-        !sfnt_glyph_outline(sfnt,glyph_id,decoded.outline))return false;
+     if(!sfnt_horizontal_metrics(sfnt,glyph_id,decoded.units,decoded.advance))
+      return false;
+     if(cff_font){
+      if(!sfnt_cff_simple_outline(sfnt,glyph_id,decoded.cff_outline))
+       return false;
+     }else if(!sfnt_glyph_outline(sfnt,glyph_id,decoded.outline))return false;
      // Keep transient decoding for large fonts. Bound retained glyph
      // outlines by count and estimated allocated payload.
      const size_t estimated=sizeof(CachedGlyph)+
       decoded.outline.points.size()*sizeof(GlyphPoint)+
       decoded.outline.contour_ends.size()*sizeof(uint16_t)+128;
-     if(retain&&estimated>4*1024*1024){
+     size_t cff_weight=0;
+     for(const auto& path:decoded.cff_outline)
+      cff_weight+=sizeof(path)+path.size()*sizeof(CffPoint);
+     const size_t full_estimated=estimated+cff_weight;
+     if(retain&&full_estimated>4*1024*1024){
       // A single oversized outline must never occupy the retained font
       // cache. Keep it only for this render call.
       cached=transient_glyphs.emplace(glyph_id,std::move(decoded)).first;
@@ -146,7 +157,7 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
       while(!last_font.glyphs.empty()&&
             (last_font.glyphs.size()>=512||
              last_font.estimated_bytes>4*1024*1024-
-                std::min(estimated,size_t(4*1024*1024)))){
+                std::min(full_estimated,size_t(4*1024*1024)))){
        auto oldest=std::min_element(last_font.recency.begin(),
         last_font.recency.end(),[](const auto& x,const auto& y){
          return x.second<y.second;
@@ -157,6 +168,8 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
         size_t weight=sizeof(CachedGlyph)+128+
          victim->second.outline.points.size()*sizeof(GlyphPoint)+
          victim->second.outline.contour_ends.size()*sizeof(uint16_t);
+        for(const auto& path:victim->second.cff_outline)
+         weight+=sizeof(path)+path.size()*sizeof(CffPoint);
         for(const auto& contour:victim->second.flattened)
          weight+=sizeof(contour)+contour.size()*sizeof(MaskPoint);
         last_font.estimated_bytes-=std::min(last_font.estimated_bytes,weight);
@@ -167,7 +180,7 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
      }
      cached=glyph_cache.emplace(glyph_id,std::move(decoded)).first;
      if(retain){
-      last_font.estimated_bytes+=estimated;
+      last_font.estimated_bytes+=full_estimated;
       last_font.recency[glyph_id]=++last_font.clock;
      }
      }
@@ -189,7 +202,20 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
     // Flattening depends on em, unlike the decoded sfnt glyph outline.
     if(!cached->second.has_flattened || cached->second.flattened_em!=em){
      std::vector<std::vector<MaskPoint>> replacement;
-     if(!flatten_simple_glyph(glyph,em/units,0,0,0.15,replacement))
+     if(cff_font){
+      const double scale=em/units;
+      for(const auto& contour:cached->second.cff_outline){
+       if(contour.size()>8192)return false;
+       std::vector<MaskPoint> path;
+       path.reserve(contour.size());
+       for(const auto& pt:contour){
+        const double px=pt.x*scale,py=-pt.y*scale;
+        if(!std::isfinite(px)||!std::isfinite(py))return false;
+        path.push_back({px,py});
+       }
+       if(!path.empty())replacement.push_back(std::move(path));
+      }
+     }else if(!flatten_simple_glyph(glyph,em/units,0,0,0.15,replacement))
       return false;
      auto path_weight=[](const std::vector<std::vector<MaskPoint>>& paths){
       size_t n=0;
@@ -216,6 +242,8 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
         size_t weight=sizeof(CachedGlyph)+128+
          victim->second.outline.points.size()*sizeof(GlyphPoint)+
          victim->second.outline.contour_ends.size()*sizeof(uint16_t);
+        for(const auto& path:victim->second.cff_outline)
+         weight+=sizeof(path)+path.size()*sizeof(CffPoint);
         weight+=path_weight(victim->second.flattened);
         last_font.estimated_bytes-=std::min(weight,last_font.estimated_bytes);
         last_font.glyphs.erase(victim);
@@ -237,6 +265,8 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
      size_t weight=sizeof(CachedGlyph)+128+
        stored.outline.points.size()*sizeof(GlyphPoint)+
        stored.outline.contour_ends.size()*sizeof(uint16_t);
+     for(const auto& path:stored.cff_outline)
+      weight+=sizeof(path)+path.size()*sizeof(CffPoint);
      for(const auto& contour:stored.flattened)
       weight+=sizeof(contour)+contour.size()*sizeof(MaskPoint);
      // Move the oversized glyph into this call's transient cache so a
