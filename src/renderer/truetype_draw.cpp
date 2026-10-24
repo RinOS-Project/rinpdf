@@ -149,8 +149,21 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
     // this call. Copy cached contours before applying per-glyph transforms.
     // Flattening depends on em, unlike the decoded sfnt glyph outline.
     if(!cached->second.has_flattened || cached->second.flattened_em!=em){
-     if(!flatten_simple_glyph(glyph,em/units,0,0,0.15,
-                              cached->second.flattened))return false;
+     std::vector<std::vector<MaskPoint>> replacement;
+     if(!flatten_simple_glyph(glyph,em/units,0,0,0.15,replacement))
+      return false;
+     auto path_weight=[](const std::vector<std::vector<MaskPoint>>& paths){
+      size_t n=0;
+      for(const auto& path:paths)
+       n+=sizeof(path)+path.size()*sizeof(MaskPoint);
+      return n;
+     };
+     if(retain){
+      const size_t prior=path_weight(cached->second.flattened);
+      last_font.estimated_bytes-=std::min(prior,last_font.estimated_bytes);
+      last_font.estimated_bytes+=path_weight(replacement);
+     }
+     cached->second.flattened=std::move(replacement);
      cached->second.has_flattened=true;
      cached->second.flattened_em=em;
     }
