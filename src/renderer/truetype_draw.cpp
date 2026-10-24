@@ -68,9 +68,9 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
  };
  thread_local LastFont last_font;
  std::map<uint16_t,CachedGlyph> transient_glyphs;
- // CFF outlines are flattened while decoding. Retain them only within
- // this draw call until cache entries can be keyed by device-space tolerance.
- const bool retain=!cff_font&&bytes.size()<=2*1024*1024;
+ // CFF retains scale-independent cubic commands. Device-dependent
+ // flattened paths are regenerated for each CFF glyph paint.
+ const bool retain=bytes.size()<=2*1024*1024;
  if(retain && last_font.bytes!=bytes){
   // Construct the replacement first: allocation failures do not damage
   // an existing cached font.
@@ -200,7 +200,7 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
     // The font-space flattening tolerance and size are constant across
     // this call. Copy cached contours before applying per-glyph transforms.
     // Flattening depends on em, unlike the decoded sfnt glyph outline.
-    if(!cached->second.has_flattened || cached->second.flattened_em!=em){
+    if(cff_font||!cached->second.has_flattened || cached->second.flattened_em!=em){
      std::vector<std::vector<MaskPoint>> replacement;
      if(cff_font){
       const double scale=em/units;
