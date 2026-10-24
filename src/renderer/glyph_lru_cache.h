@@ -84,22 +84,23 @@ public:
   const size_t weight=glyph_weight(glyph);
   constexpr size_t budget=4*1024*1024;
   if(weight>budget)return nullptr;
-  touch(id);
-  try{
-   auto inserted=glyphs_.emplace(id,std::move(glyph));
-   if(!inserted.second)return &inserted.first->second;
-   estimated_bytes_+=weight;
-   // Evict only after insertion succeeds, never the inserted glyph.
-   evict_for(0,513,int(id));
+  // Allocate the glyph node first. If LRU bookkeeping allocation fails,
+  // erase only the new node; no resident accounting or eviction occurred.
+  auto inserted=glyphs_.emplace(id,std::move(glyph));
+  if(!inserted.second){
+   touch(id);
    return &inserted.first->second;
+  }
+  try{
+   touch(id);
   }catch(...){
-   auto pos=positions_.find(id);
-   if(pos!=positions_.end()){
-    oldest_first_.erase(pos->second);
-    positions_.erase(pos);
-   }
+   glyphs_.erase(inserted.first);
    throw;
   }
+  estimated_bytes_+=weight;
+  // The map and LRU indices are complete before any older glyph is evicted.
+  evict_for(0,513,int(id));
+  return &inserted.first->second;
  }
  void update_flattened(uint16_t id,
        std::vector<std::vector<MaskPoint>> replacement,
