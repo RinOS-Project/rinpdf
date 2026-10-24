@@ -130,12 +130,9 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
       cached=transient_glyphs.emplace(glyph_id,std::move(decoded)).first;
       transient_current=true;
      }else{
-     if(retain)last_font.evict_for(full_estimated,512,-1);
-     cached=glyph_cache.emplace(glyph_id,std::move(decoded)).first;
-     if(retain){
-      last_font.estimated_bytes+=full_estimated;
-      last_font.touch(glyph_id);
-     }
+     if(retain)cached=last_font.insert(glyph_id,std::move(decoded));
+     else cached=glyph_cache.emplace(glyph_id,std::move(decoded)).first;
+     if(cached==glyph_cache.end())return false;
      }
     }
     const bool persisted=retain&&!transient_current;
@@ -188,29 +185,24 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
       }
      }else if(!flatten_simple_glyph(glyph,em/units,0,0,0.15,replacement))
       return false;
-     if(persisted){
-      const size_t prior=GlyphLruCache::path_weight(cached->second.flattened);
-      const size_t next=GlyphLruCache::path_weight(replacement);
-      if(next>prior)last_font.evict_for(next-prior,513,int(glyph_id));
-      last_font.estimated_bytes-=std::min(prior,last_font.estimated_bytes);
-      last_font.estimated_bytes+=next;
+     if(persisted)last_font.update_flattened(glyph_id,std::move(replacement),
+                                              em,cff_tolerance);
+     else{
+      cached->second.flattened=std::move(replacement);
+      cached->second.has_flattened=true;
+      cached->second.flattened_em=em;
+      cached->second.flattened_tolerance=cff_tolerance;
      }
-     cached->second.flattened=std::move(replacement);
-     cached->second.has_flattened=true;
-     cached->second.flattened_em=em;
-     cached->second.flattened_tolerance=cff_tolerance;
     }
     paint.paths=cached->second.flattened;
-    if(persisted&&last_font.estimated_bytes>4*1024*1024){
+    if(persisted&&last_font.over_budget()){
      // Preserve the active paint in its owned copy, but do not retain an
      // oversized glyph between calls.
      const auto& stored=cached->second;
-     size_t weight=GlyphLruCache::glyph_weight(stored);
      // Move the oversized glyph into this call's transient cache so a
      // repeated glyph does not need its outline decoded again.
      transient_glyphs.insert_or_assign(glyph_id,std::move(cached->second));
-     last_font.estimated_bytes-=std::min(last_font.estimated_bytes,weight);
-     last_font.erase(glyph_id);
+     last_font.remove_accounted(glyph_id);
     }
     for(auto& contour:paint.paths)for(auto& point:contour){
      const double local_x=point.x*matrix.horizontal_scale,local_y=-point.y;
