@@ -870,19 +870,35 @@ static rinpdf_status render_page_internal(const rinpdf_document *doc,size_t inde
   doc->preparation_ns.fetch_add(uint64_t(prep_elapsed),std::memory_order_relaxed);
   doc->prepared_calls.fetch_add(1,std::memory_order_relaxed);
   const unsigned rotation=box.rotation;
-  if((tile_x||tile_y||width!=full_width||height!=full_height) && rotation!=0)
-   return RINPDF_UNSUPPORTED;
   const unsigned source_width=(rotation==90||rotation==270)?height:width;
   const unsigned source_height=(rotation==90||rotation==270)?width:height;
+  // Transform the destination viewport into the unrotated source image.
+  // All arithmetic is bounded by the validated virtual page dimensions.
+  const unsigned source_full_width=(rotation==90||rotation==270)?full_height:full_width;
+  const unsigned source_full_height=(rotation==90||rotation==270)?full_width:full_height;
+  unsigned source_x=tile_x,source_y=tile_y;
+  if(rotation==90){
+   source_x=tile_y;
+   source_y=full_width-(tile_x+width);
+  }else if(rotation==180){
+   source_x=full_width-(tile_x+width);
+   source_y=full_height-(tile_y+height);
+  }else if(rotation==270){
+   source_x=full_height-(tile_y+height);
+   source_y=tile_x;
+  }
+  const rinpdf::renderer::PageBox viewport{
+   box.x0+(box.x1-box.x0)*(double(source_x)/double(source_full_width)),
+   box.y1-(box.y1-box.y0)*(double(source_y+source_height)/double(source_full_height)),
+   box.x0+(box.x1-box.x0)*(double(source_x+source_width)/double(source_full_width)),
+   box.y1-(box.y1-box.y0)*(double(source_y)/double(source_full_height))
+  };
   if(rotation==0){
    // Render directly into the caller's buffer to avoid an extra full-page
    // RGBA allocation and pixel copy.
    if(!rinpdf::renderer::render_rectangles_box_with_fonts(
       contents->data(),contents->size(),width,height,rgba,stride,
-      {box.x0+(box.x1-box.x0)*(double(tile_x)/double(full_width)),
-       box.y1-(box.y1-box.y0)*(double(tile_y+height)/double(full_height)),
-       box.x0+(box.x1-box.x0)*(double(tile_x+width)/double(full_width)),
-       box.y1-(box.y1-box.y0)*(double(tile_y)/double(full_height))},
+      viewport,
       *fonts,*properties,*images,*forms,
       true,0,*graphic_states))return RINPDF_UNSUPPORTED;
    const auto elapsed=std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -892,7 +908,7 @@ static rinpdf_status render_page_internal(const rinpdf_document *doc,size_t inde
    return RINPDF_OK;
   }
   std::vector<uint8_t> temporary((size_t)width*height*4);
-  if(!rinpdf::renderer::render_rectangles_box_with_fonts(contents->data(),contents->size(),source_width,source_height,temporary.data(),(size_t)source_width*4,{box.x0,box.y0,box.x1,box.y1},*fonts,*properties,*images,*forms,true,0,*graphic_states))return RINPDF_UNSUPPORTED;
+  if(!rinpdf::renderer::render_rectangles_box_with_fonts(contents->data(),contents->size(),source_width,source_height,temporary.data(),(size_t)source_width*4,viewport,*fonts,*properties,*images,*forms,true,0,*graphic_states))return RINPDF_UNSUPPORTED;
   for(unsigned y=0;y<height;++y){
    for(unsigned x=0;x<width;++x){
     unsigned sx=x,sy=y;
