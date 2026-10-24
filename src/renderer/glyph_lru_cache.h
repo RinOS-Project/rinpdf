@@ -32,6 +32,8 @@ public:
   estimated_bytes_=0;
  }
  void touch(uint16_t id){
+  // Never create LRU records for glyphs that are not resident.
+  if(glyphs_.find(id)==glyphs_.end())return;
   auto it=positions_.find(id);
   if(it==positions_.end()){
    oldest_first_.push_back(id);
