@@ -52,6 +52,10 @@ bool decode_dct_image(const uint8_t* bytes,size_t length,
     decoder.jpeg_color_space!=JCS_YCCK){
   jpeg_destroy_decompress(&decoder);return false;
  }
+ // Do not silently interpret a non-grayscale JPEG as DeviceGray.
+ if(channels==1&&decoder.jpeg_color_space!=JCS_GRAYSCALE){
+  jpeg_destroy_decompress(&decoder);return false;
+ }
  decoder.out_color_space=channels==1?JCS_GRAYSCALE:
                          channels==3?JCS_RGB:JCS_CMYK;
  if(!jpeg_start_decompress(&decoder)||
