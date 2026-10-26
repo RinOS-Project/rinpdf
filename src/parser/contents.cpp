@@ -1007,6 +1007,8 @@ struct Reader {
           !decode_dct_image(data+range.offset,range.length,
              unsigned(w->integer),unsigned(h->integer),channels,
              image.pixels)){return false;}
+       // Color-key masking compares source sample values, before the
+       // Decode array remaps them into the output device color space.
        apply_color_key();
        apply_device_decode();
        if(channels==4){
