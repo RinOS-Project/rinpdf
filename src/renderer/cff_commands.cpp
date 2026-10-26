@@ -2,6 +2,8 @@
 #include <cmath>
 #include <cstdint>
 #include <optional>
+#include <map>
+#include <utility>
 #include <vector>
 namespace rinpdf::renderer {
 bool sfnt_cff_outline_commands(const SfntFont& font,uint16_t glyph,
@@ -58,6 +60,9 @@ bool sfnt_cff_outline_commands(const SfntFont& font,uint16_t glyph,
  // Local subroutines share one font dictionary throughout this glyph.
  // Resolve ROS once on first callsubr, including inside nested subroutines.
  std::optional<bool> cid_keyed;
+ // Memoize resolved spans within this glyph. All pointers borrow the same
+ // live font data; never retain these spans across render calls.
+ std::map<std::pair<unsigned,int32_t>,std::pair<const uint8_t*,size_t>> subr_cache;
  const uint8_t* current=program;
  size_t current_length=length;
  size_t executed=0;
@@ -142,12 +147,24 @@ bool sfnt_cff_outline_commands(const SfntFont& font,uint16_t glyph,
      if(!sfnt_cff_is_cid_keyed(font,identified))return false;
      cid_keyed=identified;
     }
-    const bool resolved=op==10?
-       (*cid_keyed?
-         sfnt_cff_cid_local_subroutine(font,glyph,int32_t(number),sub,sub_length):
-         sfnt_cff_local_subroutine(font,int32_t(number),sub,sub_length)):
-       sfnt_cff_global_subroutine(font,int32_t(number),sub,sub_length);
-    if(!resolved||sub_length==0)return false;
+    const auto key=std::make_pair(op,int32_t(number));
+    auto memo=subr_cache.find(key);
+    if(memo!=subr_cache.end()){
+     sub=memo->second.first;
+     sub_length=memo->second.second;
+    }else{
+     const bool resolved=op==10?
+        (*cid_keyed?
+          sfnt_cff_cid_local_subroutine(font,glyph,int32_t(number),sub,sub_length):
+          sfnt_cff_local_subroutine(font,int32_t(number),sub,sub_length)):
+        sfnt_cff_global_subroutine(font,int32_t(number),sub,sub_length);
+     if(!resolved||!sub||sub_length==0)return false;
+     // Bound the lookup cache independently of the interpreter's
+     // instruction and recursion limits.
+     if(subr_cache.size()<256)
+      subr_cache.emplace(key,std::make_pair(sub,sub_length));
+    }
+    if(!sub||sub_length==0)return false;
     frames.push_back({current,current_length,pos});
     current=sub;current_length=sub_length;pos=0;
     continue;
