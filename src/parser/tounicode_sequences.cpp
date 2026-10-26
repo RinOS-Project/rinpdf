@@ -92,6 +92,9 @@ bool parse_tounicode_sequences(const uint8_t* data,size_t size,
     if(!code(lexer.next(),last)||first.width!=last.width||
        first.code>last.code)return false;
    }else last=first;
+   // A source code must be representable in its declared byte width.
+   const uint64_t max_code=(uint64_t{1}<<(8*first.width))-1;
+   if(first.code>max_code||last.code>max_code)return false;
    const size_t span=size_t(last.code)-first.code+1;
    if(total+span>4096)return false;
    Token dest=lexer.next();
