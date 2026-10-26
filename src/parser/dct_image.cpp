@@ -64,6 +64,12 @@ bool decode_dct_image(const uint8_t* bytes,size_t length,
  }
  // libjpeg's CMYK output uses inverted ink samples for Adobe-tagged
  // CMYK/YCCK streams. Normalize those to PDF DeviceCMYK ink amounts.
+ // APP14 transform 0 identifies Adobe CMYK and transform 2 YCCK.
+ // Other transform values are not safe to reinterpret as DeviceCMYK.
+ if(channels==4&&decoder.saw_Adobe_marker&&
+    decoder.Adobe_transform!=0&&decoder.Adobe_transform!=2){
+  jpeg_destroy_decompress(&decoder);return false;
+ }
  const bool inverted_cmyk=channels==4&&decoder.saw_Adobe_marker;
  decoder.out_color_space=channels==1?JCS_GRAYSCALE:
                          channels==3?JCS_RGB:JCS_CMYK;
