@@ -825,7 +825,7 @@ struct Reader {
       std::array<unsigned,8> mask_bounds{};
       bool has_color_key=false;
       if(const Value* mask=get(range.dictionary,"Mask")){
-       if(bits->integer==16||indexed||separation||calibrated||lab||
+       if(indexed||separation||calibrated||lab||
           icc_channels||cs->kind!=Value::Kind::Name||
           (cs->text!="DeviceGray"&&cs->text!="DeviceRGB"&&
            cs->text!="DeviceCMYK")||
@@ -1090,14 +1090,25 @@ struct Reader {
                     (sample*255u+max_sample/2u)/max_sample);
         }
       }else if(sample_bits==16){
-       // PDF 16-bit samples are big-endian. Normalize to eight-bit output.
+       // Preserve the original 16-bit integer samples for PDF color-key
+       // comparisons, before normalizing to the eight-bit renderer format.
        image.pixels.resize(expected);
+       if(has_color_key)
+        image.alpha.assign(size_t(image.width)*image.height,255);
        for(size_t i=0;i<expected;++i){
         const unsigned value=(unsigned(decoded[2*i])<<8)|decoded[2*i+1];
+        if(has_color_key){
+         const unsigned channel=unsigned(i%channels);
+         const bool in_range=value>=mask_bounds[2*channel]&&
+                             value<=mask_bounds[2*channel+1];
+         const size_t pixel=i/channels;
+         if(channel==0)image.alpha[pixel]=in_range?0:255;
+         else if(!in_range)image.alpha[pixel]=255;
+        }
         image.pixels[i]=uint8_t((value*255u+32767u)/65535u);
        }
       }else image.pixels=std::move(decoded);
-      if(!packed_gray)apply_color_key();
+      if(!packed_gray&&sample_bits!=16)apply_color_key();
       apply_device_decode();
       if(indexed){
        std::vector<uint8_t> rgb(size_t(image.width)*image.height*3);
