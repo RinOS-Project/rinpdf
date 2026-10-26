@@ -27,7 +27,8 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
  const parser::CIDWidths* cid_widths,
  const parser::CIDVerticalMetrics* vertical_metrics,
  double* next_y,
- const std::string& pdf_language){
+ const std::string& pdf_language,
+ std::vector<uint8_t>* coverage_out){
  if(!rgba||!width||!height||width>512||height>512||
     stride<size_t(width)*4||!std::isfinite(em)||em<=0||em>1000||
     !std::isfinite(start_x)||!std::isfinite(baseline)||
@@ -217,6 +218,10 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
    }
   }
  }
+ // Commit coverage only after geometry validation and successful rasterization.
+ // This opt-in path avoids rendering into and decoding a contrasting RGBA page.
+ std::vector<uint8_t> coverage_result;
+ if(coverage_out)coverage_result.assign(size_t(width)*height,0);
  // All outlines are validated before painting. Build a conservative
  // union of their pixel bounds, clipped to the visible rectangle.
  double min_x=std::numeric_limits<double>::infinity(),min_y=min_x;
@@ -261,11 +266,18 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
      unsigned alpha=layer[size_t(y-top)*layer_width+x-left];
      if(clip_mask)alpha=(alpha*(*clip_mask)[size_t(y)*width+x]+127)/255;
      if(!alpha)continue;
-     auto* pixel=rgba+size_t(y)*stride+size_t(x)*4;
-     composite_solid_rgba(pixel,red,green,blue,alpha);
+     if(coverage_out){
+      const size_t at=size_t(y)*width+x;
+      const unsigned prior=coverage_result[at];
+      coverage_result[at]=uint8_t(alpha+(prior*(255-alpha)+127)/255);
+     }else{
+      auto* pixel=rgba+size_t(y)*stride+size_t(x)*4;
+      composite_solid_rgba(pixel,red,green,blue,alpha);
+     }
     }
   }
  }
+ if(coverage_out)*coverage_out=std::move(coverage_result);
  if(vertical){
   const double y=baseline+cursor;
   if(!std::isfinite(y)||std::abs(y)>10000000)return false;
