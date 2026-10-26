@@ -211,7 +211,10 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
   return blend_mode=="Multiply"?1u:blend_mode=="Screen"?2u:0u;
  };
  auto paint_text=[&](auto&& draw)->bool{
-  if(blend_mode!="Normal")return false;
+  // Text in a transparency group can use the same supported separable
+  // blend modes as filled paths. Opaque-page/CMYK text still needs a
+  // dedicated coverage-aware blend path, so reject those cases for now.
+  if(blend_mode!="Normal"&&(!transparent_target||cmyk_target))return false;
   if(transparent_target||cmyk_target){
    // Derive coverage from one draw on a contrasting opaque background.
    const unsigned color[3]={unsigned(std::lround(red*255)),
@@ -254,10 +257,16 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      }else{
       if(coverage&&!transparent_target->mark_shape(x,y,uint8_t(coverage)))return false;
       // Even zero-opacity glyphs knock out earlier objects by shape.
-      if(coverage&&(alpha||transparent_target->knockout)&&
-         !transparent_target->fill_pixel(x,y,uint8_t(color[0]),
+      if(coverage&&(alpha||transparent_target->knockout)){
+       const bool painted=blend_mode=="Normal"?
+        transparent_target->fill_pixel(x,y,uint8_t(color[0]),
                     uint8_t(color[1]),uint8_t(color[2]),uint8_t(alpha),
-                    uint8_t(coverage)))return false;
+                    uint8_t(coverage)):
+        transparent_target->blend_pixel(x,y,uint8_t(color[0]),
+                    uint8_t(color[1]),uint8_t(color[2]),uint8_t(alpha),
+                    transparent_blend_mode(),uint8_t(coverage));
+       if(!painted)return false;
+      }
      }
     }
    return true;
