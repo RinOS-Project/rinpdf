@@ -460,7 +460,7 @@ struct Reader {
       if(!w||!h||!bits||!cs||
          w->kind!=Value::Kind::Integer||h->kind!=Value::Kind::Integer||
          bits->kind!=Value::Kind::Integer||
-         (bits->integer!=8&&bits->integer!=4&&
+         (bits->integer!=16&&bits->integer!=8&&bits->integer!=4&&
           bits->integer!=2&&bits->integer!=1)||
          w->integer<=0||h->integer<=0||
          w->integer>4096||h->integer>4096||
@@ -809,21 +809,23 @@ struct Reader {
        if(palette.size()!=palette_size)return false;
        indexed=true;
       }
-      if(!indexed&&bits->integer!=8&&bits->integer!=1&&
-         bits->integer!=2&&bits->integer!=4)return false;
+      if(!indexed&&bits->integer!=16&&bits->integer!=8&&
+         bits->integer!=1&&bits->integer!=2&&bits->integer!=4)return false;
       if(indexed&&unsigned(maximum_index)>=(1u<<unsigned(bits->integer)))
        return false;
       const unsigned channels=indexed?1:separation?device_inputs:lab?3:calibrated?calibrated:icc_channels?icc_channels:
         cs->text=="DeviceGray"?1:cs->text=="DeviceRGB"?3:
         cs->text=="DeviceCMYK"?4:0;
-      if(!channels||(!indexed&&bits->integer!=8&&channels!=1))
+      if(!channels||(!indexed&&bits->integer!=8&&
+         bits->integer!=16&&channels!=1)||
+         (bits->integer==16&&(indexed||separation||calibrated||lab||icc_channels)))
        return false;
       // Color-key masking compares original integer samples, before
       // Decode and color-space conversion. Packed DeviceGray uses raw bit values.
       std::array<unsigned,8> mask_bounds{};
       bool has_color_key=false;
       if(const Value* mask=get(range.dictionary,"Mask")){
-       if(indexed||separation||calibrated||lab||
+       if(bits->integer==16||indexed||separation||calibrated||lab||
           icc_channels||cs->kind!=Value::Kind::Name||
           (cs->text!="DeviceGray"&&cs->text!="DeviceRGB"&&
            cs->text!="DeviceCMYK")||
@@ -851,7 +853,7 @@ struct Reader {
            cs->text!="DeviceCMYK")||
           decode->kind!=Value::Kind::Array||
           decode->array.size()!=2*channels)return false;
-       if(bits->integer!=8&&channels!=1)return false;
+       if(bits->integer!=8&&bits->integer!=16&&channels!=1)return false;
        for(size_t i=0;i<2*channels;++i){
         const Value& v=decode->array[i];
         if(v.kind==Value::Kind::Integer)decode_endpoints[i]=double(v.integer);
@@ -947,7 +949,7 @@ struct Reader {
        apply_device_decode();
        return true;
       }
-      if(!indexed&&bits->integer!=8&&
+      if(!indexed&&bits->integer!=8&&bits->integer!=16&&
          !(channels==1&&(bits->integer==1||bits->integer==2||
                          bits->integer==4)))return false;
       // Support a same-size, 8-bit grayscale SMask image. Restrict the
@@ -1056,7 +1058,7 @@ struct Reader {
       const size_t packed_stride=(size_t(image.width)*sample_bits+7)/8;
       const bool packed_gray=!indexed&&channels==1&&sample_bits<8;
       const size_t decoded_size=(indexed&&sample_bits<8)||packed_gray?
-         packed_stride*image.height:expected;
+         packed_stride*image.height:expected*(sample_bits==16?2u:1u);
       std::vector<uint8_t> decoded;
       if(!decode_stream(data,size,range,decoded,decoded_size)||
          decoded.size()!=decoded_size)return false;
@@ -1087,6 +1089,13 @@ struct Reader {
          image.pixels[index]=uint8_t(
                     (sample*255u+max_sample/2u)/max_sample);
         }
+      }else if(sample_bits==16){
+       // PDF 16-bit samples are big-endian. Normalize to eight-bit output.
+       image.pixels.resize(expected);
+       for(size_t i=0;i<expected;++i){
+        const unsigned value=(unsigned(decoded[2*i])<<8)|decoded[2*i+1];
+        image.pixels[i]=uint8_t((value*255u+32767u)/65535u);
+       }
       }else image.pixels=std::move(decoded);
       if(!packed_gray)apply_color_key();
       apply_device_decode();
