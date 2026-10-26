@@ -30,13 +30,16 @@ bool coverage_index(const uint8_t* d,size_t n,size_t p,
  }else if(format==2){
   if(count>4096||p>n||n-p<4+size_t(count)*6)return false;
   uint16_t prev_end=0;
+  uint32_t expected_start=0;
   for(unsigned i=0;i<count;++i){
    uint16_t first=0,last=0,start=0;
    if(!read16(d,n,p+4+i*6,first)||
       !read16(d,n,p+6+i*6,last)||
       !read16(d,n,p+8+i*6,start)||first>last||
-      (i&&first<=prev_end))return false;
+      (i&&first<=prev_end)||start!=expected_start)return false;
    if(glyph>=first&&glyph<=last)index=int(start)+glyph-first;
+   expected_start+=uint32_t(last)-first+1u;
+   if(expected_start>65536u)return false;
    prev_end=last;
   }
  }else return false;
