@@ -7,9 +7,41 @@ static const uint8_t* glyph(uint8_t c){
  static constexpr uint8_t I[7]={31,4,4,4,4,4,31};
  static constexpr uint8_t bang[7]={4,4,4,4,4,0,4};
  static constexpr uint8_t A[7]={14,17,17,31,17,17,17};
+ static constexpr uint8_t B[7]={30,17,17,30,17,17,30};
+ static constexpr uint8_t C[7]={14,17,16,16,16,17,14};
+ static constexpr uint8_t D[7]={30,17,17,17,17,17,30};
+ static constexpr uint8_t E[7]={31,16,16,30,16,16,31};
+ static constexpr uint8_t F[7]={31,16,16,30,16,16,16};
+ static constexpr uint8_t G[7]={14,17,16,23,17,17,14};
+ static constexpr uint8_t J[7]={7,2,2,2,18,18,12};
+ static constexpr uint8_t K[7]={17,18,20,24,20,18,17};
+ static constexpr uint8_t L[7]={16,16,16,16,16,16,31};
+ static constexpr uint8_t M[7]={17,27,21,21,17,17,17};
+ static constexpr uint8_t N[7]={17,25,21,19,17,17,17};
+ static constexpr uint8_t O[7]={14,17,17,17,17,17,14};
+ static constexpr uint8_t P[7]={30,17,17,30,16,16,16};
+ static constexpr uint8_t Q[7]={14,17,17,17,21,18,13};
+ static constexpr uint8_t R[7]={30,17,17,30,20,18,17};
+ static constexpr uint8_t S[7]={15,16,16,14,1,1,30};
+ static constexpr uint8_t T[7]={31,4,4,4,4,4,4};
+ static constexpr uint8_t U[7]={17,17,17,17,17,17,14};
+ static constexpr uint8_t V[7]={17,17,17,17,17,10,4};
+ static constexpr uint8_t W[7]={17,17,17,21,21,21,10};
+ static constexpr uint8_t X[7]={17,17,10,4,10,17,17};
+ static constexpr uint8_t Y[7]={17,17,10,4,4,4,4};
+ static constexpr uint8_t Z[7]={31,1,2,4,8,16,31};
  static constexpr uint8_t space[7]={0,0,0,0,0,0,0};
  switch(c){case 'H':return H;case 'I':return I;case '!':return bang;
- case 'A':return A;case ' ':return space;default:return nullptr;}
+ case 'A':return A;case ' ':return space;
+ case 'B':return B;case 'C':return C;case 'D':return D;
+ case 'E':return E;case 'F':return F;case 'G':return G;
+ case 'J':return J;case 'K':return K;case 'L':return L;
+ case 'M':return M;case 'N':return N;case 'O':return O;
+ case 'P':return P;case 'Q':return Q;case 'R':return R;
+ case 'S':return S;case 'T':return T;case 'U':return U;
+ case 'V':return V;case 'W':return W;case 'X':return X;
+ case 'Y':return Y;case 'Z':return Z;
+ default:return nullptr;}
 }
 bool diagnostic_glyph_supported(uint8_t c){return glyph(c)!=nullptr;}
 bool draw_diagnostic_glyph(uint8_t ascii,double x,double baseline,
