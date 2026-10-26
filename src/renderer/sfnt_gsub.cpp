@@ -102,7 +102,7 @@ bool active_features(const uint8_t* d,size_t n,uint16_t scripts,
    if(selected==0)continue;
    // LangSys offsets are relative to the selected Script table.
    // Ensure they point beyond its header and language records.
-   if(selected<4+size_t(lang_count)*6)return false;
+   if(size_t(selected)<4+size_t(lang_count)*6)return false;
    const size_t lang=script+selected;
    uint16_t required=0,features=0;
    if(selected<4||!read16(d,n,lang+2,required)||
