@@ -22,9 +22,9 @@ bool cff_flatten_commands(const CffCommands& commands,double tolerance,
   if(!std::isfinite(command.end.x)||!std::isfinite(command.end.y))
    return false;
   if(command.kind==CffSegment::Kind::Move){
-   // The downstream antialiased rasterizer accepts at most 4096 points
-   // per contour and 65536 overall. Enforce the tighter contour limit here.
-   if(paths.size()>=256)return false;
+   // Start a new contour only after enforcing both contour and total
+   // vertex budgets. A move contributes one vertex to the rasterizer.
+   if(paths.size()>=256||total>=16384)return false;
    paths.push_back({command.end});
    ++total;
   }else if(command.kind==CffSegment::Kind::Line){
