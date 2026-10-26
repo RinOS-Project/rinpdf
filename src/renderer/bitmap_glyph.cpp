@@ -30,7 +30,20 @@ static const uint8_t* glyph(uint8_t c){
  static constexpr uint8_t X[7]={17,17,10,4,10,17,17};
  static constexpr uint8_t Y[7]={17,17,10,4,4,4,4};
  static constexpr uint8_t Z[7]={31,1,2,4,8,16,31};
+ static constexpr uint8_t digits[10][7]={
+  {14,17,19,21,25,17,14},{4,12,4,4,4,4,14},
+  {14,17,1,2,4,8,31},{30,1,1,14,1,1,30},
+  {2,6,10,18,31,2,2},{31,16,16,30,1,1,30},
+  {14,16,16,30,17,17,14},{31,1,2,4,8,8,8},
+  {14,17,17,14,17,17,14},{14,17,17,15,1,1,14}
+ };
+ static constexpr uint8_t period[7]={0,0,0,0,0,12,12};
+ static constexpr uint8_t comma[7]={0,0,0,0,12,12,8};
+ static constexpr uint8_t colon[7]={0,12,12,0,12,12,0};
+ static constexpr uint8_t hyphen[7]={0,0,0,31,0,0,0};
+ static constexpr uint8_t question[7]={14,17,1,2,4,0,4};
  static constexpr uint8_t space[7]={0,0,0,0,0,0,0};
+ if(c>='0'&&c<='9')return digits[c-'0'];
  switch(c){case 'H':return H;case 'I':return I;case '!':return bang;
  case 'A':return A;case ' ':return space;
  case 'B':return B;case 'C':return C;case 'D':return D;
@@ -41,6 +54,9 @@ static const uint8_t* glyph(uint8_t c){
  case 'S':return S;case 'T':return T;case 'U':return U;
  case 'V':return V;case 'W':return W;case 'X':return X;
  case 'Y':return Y;case 'Z':return Z;
+ case '.':return period;case ',':return comma;
+ case ':':return colon;case '-':return hyphen;
+ case '?':return question;
  default:return nullptr;}
 }
 bool diagnostic_glyph_supported(uint8_t c){return glyph(c)!=nullptr;}
