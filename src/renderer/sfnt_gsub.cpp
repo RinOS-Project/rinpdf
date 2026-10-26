@@ -74,6 +74,33 @@ bool single_lookup(const uint8_t* d,size_t n,size_t p,
  if(replacement>=glyph_count)return false;
  found=true;return true;
 }
+bool alternate_lookup(const uint8_t* d,size_t n,size_t p,
+ uint16_t glyph,uint16_t glyph_count,uint16_t& replacement,bool& found){
+ uint16_t format=0,coverage_offset=0,count=0;
+ if(!read16(d,n,p,format)||!read16(d,n,p+2,coverage_offset)||
+    !read16(d,n,p+4,count)||format!=1||count>4096||
+    p>n||n-p<6+size_t(count)*2||
+    coverage_offset<6+size_t(count)*2||
+    coverage_offset>=n-p)return false;
+ int index=-1;
+ if(!coverage_index(d,n,p+coverage_offset,glyph,index))return false;
+ if(index<0)return true;
+ if(size_t(index)>=count)return false;
+ uint16_t relative=0;
+ if(!read16(d,n,p+6+size_t(index)*2,relative)||
+    relative<6+size_t(count)*2||relative>=n-p)return false;
+ const size_t alternate=p+relative;
+ uint16_t choices=0;
+ if(!read16(d,n,alternate,choices)||!choices||choices>4096||
+    alternate>n||n-alternate<2+size_t(choices)*2)return false;
+ // AlternateSubst does not prescribe a choice. Use the first alternate
+ // consistently for vertical rendering when no application selector exists.
+ if(!read16(d,n,alternate+2,replacement)||
+    replacement>=glyph_count)return false;
+ found=true;
+ return true;
+}
+
 }
 // Select only feature indices enabled by DFLT/default LangSys or a
 // supported CJK script's default LangSys. Do not scan unrelated features.
@@ -180,7 +207,7 @@ bool sfnt_vertical_substitution(const SfntFont& font,uint16_t glyph,
     if(lookup_relative<2||!read16(data,n,lookup,type)||
        !read16(data,n,lookup+4,sub_count)||sub_count>4096||
        lookup>n||n-lookup<6+size_t(sub_count)*2)return false;
-    if(type!=1&&type!=7)continue; // Only SingleSubst and its extension.
+    if(type!=1&&type!=3&&type!=7)continue;
     for(unsigned k=0;k<sub_count;++k){
      uint16_t sub_relative=0;
      if(!read16(data,n,lookup+6+size_t(k)*2,sub_relative)||
@@ -195,12 +222,15 @@ bool sfnt_vertical_substitution(const SfntFont& font,uint16_t glyph,
          !read32(data,n,sub+4,extension_offset)||
          format!=1||extension_offset<8||
          extension_offset>=n-sub)return false;
-      if(extension_type!=1)continue;
+      if(extension_type!=1&&extension_type!=3)continue;
+      type=extension_type;
       sub+=extension_offset;
      }
      bool found=false;
-     if(!single_lookup(data,n,sub,
-           current,font.glyph_count,replacement,found))return false;
+     if(!(type==3?
+          alternate_lookup(data,n,sub,current,font.glyph_count,replacement,found):
+          single_lookup(data,n,sub,current,font.glyph_count,replacement,found)))
+      return false;
      if(found){current=replacement;feature_changed=true;break;}
     }
    }
