@@ -901,8 +901,8 @@ struct Reader {
         (filter->text=="CCITTFaxDecode"||filter->text=="CCF");
       if(fax){
        if(indexed||bits->integer!=1||channels!=1||
-          get(range.dictionary,"SMask")||get(range.dictionary,"Mask")||
-          get(range.dictionary,"Decode"))return false;
+          get(range.dictionary,"SMask")||get(range.dictionary,"Mask"))
+        return false;
        const Value* parms=get(range.dictionary,"DecodeParms");
        if(parms&&parms->kind!=Value::Kind::Dictionary)return false;
        auto number=[&](const char* key,long long fallback,long long& out){
@@ -930,6 +930,9 @@ struct Reader {
           !decode_ccitt_image(data+range.offset,range.length,
              image.width,image.height,int(k),byte_align,black_is_one,
              image.pixels))return false;
+       // CCITT returns 8-bit grayscale pixels. Apply the PDF image's
+       // DeviceGray Decode mapping just as for other image filters.
+       apply_device_decode();
        return true;
       }
       if(!indexed&&bits->integer!=8&&
