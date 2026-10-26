@@ -6,7 +6,7 @@ namespace rinpdf::renderer {
 bool rasterize_path_mask(const std::vector<std::vector<MaskPoint>>& subpaths,
  unsigned width,unsigned height,FillRule rule,std::vector<uint8_t>& mask){
  mask.clear();
- if(!width||!height||(size_t)width*height>1048576)return false;
+ if(!width||!height||(size_t)width*height>4194304)return false;
  if(subpaths.empty()){mask.assign((size_t)width*height,0);return true;}
  struct Edge {double x0,y0,x1,y1;int direction;};
  std::vector<Edge> edges;
@@ -76,7 +76,7 @@ bool rasterize_path_mask(const std::vector<std::vector<MaskPoint>>& subpaths,
 bool rasterize_path_coverage_region_2x(const std::vector<std::vector<MaskPoint>>& subpaths,
  unsigned width,unsigned height,FillRule rule,CoverageRegion& region){
  region={};
- if(!width||!height||(size_t)width*height>262144)return false;
+ if(!width||!height||(size_t)width*height>1048576)return false;
  // Validate aggregate geometry before allocating a scaled copy.
  if(subpaths.size()>4096)return false;
  size_t total_vertices=0;
@@ -100,6 +100,7 @@ bool rasterize_path_coverage_region_2x(const std::vector<std::vector<MaskPoint>>
   const unsigned y1=unsigned(std::clamp(std::ceil(max_y)+1.0,0.0,double(height)));
   if(x0<x1&&y0<y1){
    const unsigned local_width=x1-x0,local_height=y1-y0;
+   if(size_t(local_width)*local_height>1048576)return false;
    std::vector<uint8_t> result(size_t(local_width)*local_height,0);
    std::vector<std::vector<MaskPoint>> scaled;
    scaled.reserve(subpaths.size());
