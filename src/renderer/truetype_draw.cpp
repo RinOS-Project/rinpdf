@@ -277,13 +277,15 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
     }
   }
  }
- if(coverage_out)*coverage_out=std::move(coverage_result);
  if(vertical){
   const double y=baseline+cursor;
   if(!std::isfinite(y)||std::abs(y)>10000000)return false;
   *next_y=y;
   next_x=start_x;
  }else next_x=cursor;
+ // Publish coverage only on success: callers must not receive an
+ // apparently valid mask from a failed text run.
+ if(coverage_out)*coverage_out=std::move(coverage_result);
  return true;
 }
 }
