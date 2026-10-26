@@ -60,6 +60,9 @@ bool decode_dct_image(const uint8_t* bytes,size_t length,
    jpeg_destroy_decompress(&decoder);return false;
   }
  }
+ if(decoder.output_scanline!=decoder.output_height){
+  jpeg_destroy_decompress(&decoder);return false;
+ }
  if(!jpeg_finish_decompress(&decoder)){
   jpeg_destroy_decompress(&decoder);return false;
  }
