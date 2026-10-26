@@ -46,7 +46,8 @@ bool single_lookup(const uint8_t* d,size_t n,size_t p,
  uint16_t glyph,uint16_t glyph_count,uint16_t& replacement,bool& found){
  uint16_t format=0,coverage_offset=0;
  if(!read16(d,n,p,format)||!read16(d,n,p+2,coverage_offset)||
-    coverage_offset<6||coverage_offset>=n-p)return false;
+    (format!=1&&format!=2)||coverage_offset<6||
+    coverage_offset>=n-p)return false;
  int index=-1;
  if(!coverage_index(d,n,p+coverage_offset,glyph,index))return false;
  if(index<0)return true;
