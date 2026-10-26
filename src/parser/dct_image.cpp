@@ -70,6 +70,12 @@ bool decode_dct_image(const uint8_t* bytes,size_t length,
     decoder.Adobe_transform!=0&&decoder.Adobe_transform!=2){
   jpeg_destroy_decompress(&decoder);return false;
  }
+ // YCCK requires a trustworthy Adobe transform marker. Without it,
+ // the JPEG decoder cannot establish the intended four-channel colorspace.
+ if(channels==4&&decoder.jpeg_color_space==JCS_YCCK&&
+    (!decoder.saw_Adobe_marker||decoder.Adobe_transform!=2)){
+  jpeg_destroy_decompress(&decoder);return false;
+ }
  const bool inverted_cmyk=channels==4&&decoder.saw_Adobe_marker;
  decoder.out_color_space=channels==1?JCS_GRAYSCALE:
                          channels==3?JCS_RGB:JCS_CMYK;
