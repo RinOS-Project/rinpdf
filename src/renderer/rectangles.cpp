@@ -839,10 +839,10 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
           unsigned(std::lround((channel==0?red:channel==1?green:blue)*255)):
           im.pixels[source+(im.channels==3?channel:0)]);
       };
-      // Opacity already includes the image mask and clip coverage.
-      // Pass full geometric coverage to the CMYK compositor so neither
-      // factor is multiplied a second time.
-      const unsigned geometry=255u;
+      // The knockout shape covers the image mask and clip intersection,
+      // independently of the paint alpha. Geometry is not an extra alpha
+      // multiplier: paint_ink uses it to replace covered backdrop pixels.
+      const unsigned geometry=(base_opacity*clip_coverage+127u)/255u;
       if(!im.cmyk_pixels.empty()){
        const size_t native_index=(size_t(iy)*im.width+ix)*4;
        const unsigned native_ink[4]={
