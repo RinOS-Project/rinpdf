@@ -210,6 +210,9 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
  auto transparent_blend_mode=[&]()->unsigned{
   return blend_mode=="Multiply"?1u:blend_mode=="Screen"?2u:0u;
  };
+ // Reuse one scratch surface across text shows on this page.
+ // A direct glyph-coverage API can eventually remove this surface.
+ std::vector<uint8_t> text_coverage_scratch;
  auto paint_text=[&](auto&& draw)->bool{
   // Recover glyph coverage on a contrasting background before applying
   // non-Normal blending. A direct draw would blend the glyph twice.
@@ -227,11 +230,12 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
    }
    if(!contrast)return false;
    const size_t pitch=size_t(width)*4;
-   std::vector<uint8_t> scratch(pitch*height,uint8_t(bg));
-   for(size_t i=3;i<scratch.size();i+=4)scratch[i]=255;
+   text_coverage_scratch.assign(pitch*height,uint8_t(bg));
+   for(size_t i=3;i<text_coverage_scratch.size();i+=4)
+    text_coverage_scratch[i]=255;
    uint8_t* destination=rgba;
    const size_t original_stride=stride;
-   rgba=scratch.data();stride=pitch;
+   rgba=text_coverage_scratch.data();stride=pitch;
    const bool ok=draw();
    rgba=destination;stride=original_stride;
    if(!ok)return false;
@@ -246,7 +250,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
    for(unsigned y=scan_y0;y<scan_y1;++y)
     for(unsigned x=scan_x0;x<scan_x1;++x){
      const size_t i=(size_t(y)*width+x)*4;
-     const unsigned observed=scratch[i+chosen];
+     const unsigned observed=text_coverage_scratch[i+chosen];
      const unsigned delta=observed>bg?observed-bg:bg-observed;
      const unsigned coverage=std::min(255u,(delta*255u+contrast/2)/contrast);
      const unsigned alpha=(coverage*opacity+127)/255;
