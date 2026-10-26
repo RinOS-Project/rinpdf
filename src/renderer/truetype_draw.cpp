@@ -29,7 +29,8 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
  double* next_y,
  const std::string& pdf_language,
  std::vector<uint8_t>* coverage_out){
- if(!rgba||!width||!height||width>512||height>512||
+ if(!rgba||!width||!height||width>1024||height>1024||
+    size_t(width)*height>1048576u||
     stride<size_t(width)*4||!std::isfinite(em)||em<=0||em>1000||
     !std::isfinite(start_x)||!std::isfinite(baseline)||
     !std::isfinite(sx)||!std::isfinite(sy)||sx<=0||sy<=0||
