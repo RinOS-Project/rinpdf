@@ -211,11 +211,10 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
   return blend_mode=="Multiply"?1u:blend_mode=="Screen"?2u:0u;
  };
  auto paint_text=[&](auto&& draw)->bool{
-  // Text in a transparency group can use the same supported separable
-  // blend modes as filled paths. Opaque-page/CMYK text still needs a
-  // dedicated coverage-aware blend path, so reject those cases for now.
-  if(blend_mode!="Normal"&&(!transparent_target||cmyk_target))return false;
-  if(transparent_target||cmyk_target){
+  // Recover glyph coverage on a contrasting background before applying
+  // non-Normal blending. A direct draw would blend the glyph twice.
+  if(blend_mode!="Normal"&&cmyk_target)return false;
+  if(transparent_target||cmyk_target||blend_mode!="Normal"){
    // Derive coverage from one draw on a contrasting opaque background.
    const unsigned color[3]={unsigned(std::lround(red*255)),
       unsigned(std::lround(green*255)),unsigned(std::lround(blue*255))};
@@ -254,7 +253,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
          uint8_t(alpha),0,uint8_t(coverage));
        if(!painted)return false;
       }
-     }else{
+     }else if(transparent_target){
       if(coverage&&!transparent_target->mark_shape(x,y,uint8_t(coverage)))return false;
       // Even zero-opacity glyphs knock out earlier objects by shape.
       if(coverage&&(alpha||transparent_target->knockout)){
@@ -267,6 +266,12 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
                     transparent_blend_mode(),uint8_t(coverage));
        if(!painted)return false;
       }
+     }else if(alpha){
+      uint8_t* pixel=destination+size_t(y)*original_stride+size_t(x)*4;
+      const unsigned mixed_r=blend_channel(color[0],pixel[0]);
+      const unsigned mixed_g=blend_channel(color[1],pixel[1]);
+      const unsigned mixed_b=blend_channel(color[2],pixel[2]);
+      composite_opaque_rgb(pixel,mixed_r,mixed_g,mixed_b,alpha);
      }
     }
    return true;
