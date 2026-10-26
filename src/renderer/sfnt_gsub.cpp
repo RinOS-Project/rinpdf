@@ -96,12 +96,6 @@ bool active_features(const uint8_t* d,size_t n,uint16_t scripts,
         !read16(d,n,script+8+size_t(j)*6,relative))return false;
      if(current==language_tag){selected=relative;break;}
     }
-   }else if(!selected&&lang_count==1){
-    // With exactly one language system and no default, use the only
-    // available language rather than dropping all vertical features.
-    uint16_t relative=0;
-    if(!read16(d,n,script+8,relative))return false;
-    selected=relative;
    }
    // A script without a default LangSys may still supply a matching
    // language-specific LangSys; otherwise continue to the next script.
