@@ -996,8 +996,9 @@ struct Reader {
       const bool dct=filter&&filter->kind==Value::Kind::Name&&
         (filter->text=="DCTDecode"||filter->text=="DCT");
       if(dct){
-       // The JPEG backend only decodes native Gray/RGB samples.
-       if(indexed||separation||calibrated||lab||channels==4||
+       // Decode native Gray/RGB/CMYK JPEG samples. The CMYK path
+       // preserves ink samples for native transparency groups.
+       if(indexed||separation||calibrated||lab||
           bits->integer!=8)return false;
        // JPEG image data is compressed independently of PDF Flate filters.
        // DecodeParms predictors are not valid for this path.
@@ -1008,6 +1009,18 @@ struct Reader {
              image.pixels)){return false;}
        apply_color_key();
        apply_device_decode();
+       if(channels==4){
+        image.cmyk_pixels=image.pixels;
+        std::vector<uint8_t> rgb(size_t(image.width)*image.height*3);
+        for(size_t i=0;i<size_t(image.width)*image.height;++i){
+         const unsigned k=image.pixels[4*i+3];
+         for(unsigned c=0;c<3;++c)
+          rgb[3*i+c]=uint8_t(((255-unsigned(image.pixels[4*i+c]))*
+                                    (255-k)+127)/255);
+        }
+        image.pixels=std::move(rgb);
+        image.channels=3;
+       }
        return true;
       }
       // Predictor handling is centralized in decode_stream for both
