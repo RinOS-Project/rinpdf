@@ -925,7 +925,7 @@ struct Reader {
           !boolean("EncodedByteAlign",false,byte_align)||
           !boolean("BlackIs1",false,black_is_one)||
           columns!=image.width||rows!=image.height||damaged!=0||
-          (k!=-1&&k!=0)||
+          (k < -1 || k > 32767)||
           range.offset>size||range.length>size-range.offset||
           !decode_ccitt_image(data+range.offset,range.length,
              image.width,image.height,int(k),byte_align,black_is_one,
