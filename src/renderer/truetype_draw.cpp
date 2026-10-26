@@ -4,6 +4,7 @@
 #include "glyph_outline.h"
 #include "glyph_lru_cache.h"
 #include "path_mask.h"
+#include "rgba_composite.h"
 #include "../parser/font_encoding.h"
 #include <algorithm>
 #include <cmath>
@@ -261,22 +262,7 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
      if(clip_mask)alpha=(alpha*(*clip_mask)[size_t(y)*width+x]+127)/255;
      if(!alpha)continue;
      auto* pixel=rgba+size_t(y)*stride+size_t(x)*4;
-     // Blend straight-alpha RGBA correctly, including transparent
-     // destination pixels and antialiased glyph edges. Setting alpha to
-     // 255 here would turn partially covered edges fully opaque.
-     const unsigned dst_alpha=pixel[3];
-     const unsigned remaining=(255-alpha)*dst_alpha;
-     const unsigned out_alpha=alpha+(remaining+127)/255;
-     if(!out_alpha)continue;
-     const auto blend=[&](unsigned source,unsigned destination)->uint8_t{
-      const unsigned premul=alpha*source+
-        (remaining*destination+127)/255;
-      return uint8_t(std::min(255u,(premul+out_alpha/2)/out_alpha));
-     };
-     pixel[0]=blend(red,pixel[0]);
-     pixel[1]=blend(green,pixel[1]);
-     pixel[2]=blend(blue,pixel[2]);
-     pixel[3]=uint8_t(out_alpha);
+     composite_solid_rgba(pixel,red,green,blue,alpha);
     }
   }
  }
