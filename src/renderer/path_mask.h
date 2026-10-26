@@ -18,7 +18,7 @@ struct CoverageRegion {
 bool rasterize_path_coverage_region_2x(
  const std::vector<std::vector<MaskPoint>>& subpaths,
  unsigned width,unsigned height,FillRule rule,CoverageRegion& region);
-// 2x2 supersampled coverage in [0,255], limited to 262144 output pixels.
+// 2x2 supersampled coverage in [0,255], limited to 1048576 output pixels.
 bool rasterize_path_coverage_2x(const std::vector<std::vector<MaskPoint>>& subpaths,
  unsigned width,unsigned height,FillRule rule,std::vector<uint8_t>& coverage);
 bool intersect_path_masks(std::vector<uint8_t>& current,const std::vector<uint8_t>& incoming);
