@@ -161,6 +161,8 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
  };
  // Restricted embedded TrueType rendering for explicitly WinAnsi encoded
  // simple fonts. Unknown mappings and transformed text fail closed.
+ // When set, embedded font drawing returns coverage without touching RGBA.
+ std::vector<uint8_t>* text_coverage_sink=nullptr;
  auto truetype_show=[&](const std::vector<TextRun>& runs)->bool{
   const auto it=fonts.find(selected_font);
   if(it==fonts.end()||
@@ -190,7 +192,8 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
        it->second.subtype=="Type0"?&it->second.cid_widths:nullptr,
        it->second.encoding=="Identity-V"?&it->second.vertical_metrics:nullptr,
        &next_vertical,marked_languages.empty()?it->second.language:
-         (active_marked_language.empty()?it->second.language:active_marked_language)))return false;
+         (active_marked_language.empty()?it->second.language:active_marked_language),
+       text_coverage_sink))return false;
   const bool vertical=it->second.encoding=="Identity-V";
   const double advance=vertical?next_vertical-text_y:next-text_x;
   const double new_x=text_x+advance*(vertical?text_c:text_a);
@@ -229,16 +232,26 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
     }
    }
    if(!contrast)return false;
+   std::vector<uint8_t> direct_coverage;
+   // Only the embedded-font renderer supports direct coverage currently.
+   // Other font implementations retain the contrasting-RGBA fallback.
+   const bool direct_font=!selected_font.empty()&&
+     fonts.find(selected_font)!=fonts.end()&&
+     !fonts.at(selected_font).embedded_truetype.empty();
    const size_t pitch=size_t(width)*4;
-   text_coverage_scratch.assign(pitch*height,uint8_t(bg));
+   if(!direct_font){
+    text_coverage_scratch.assign(pitch*height,uint8_t(bg));
    for(size_t i=3;i<text_coverage_scratch.size();i+=4)
     text_coverage_scratch[i]=255;
    uint8_t* destination=rgba;
    const size_t original_stride=stride;
-   rgba=text_coverage_scratch.data();stride=pitch;
+    rgba=text_coverage_scratch.data();stride=pitch;
+   }else text_coverage_sink=&direct_coverage;
    const bool ok=draw();
+   text_coverage_sink=nullptr;
    rgba=destination;stride=original_stride;
    if(!ok)return false;
+   if(direct_font&&direct_coverage.size()!=size_t(width)*height)return false;
    const unsigned opacity=unsigned(std::lround(fill_alpha*255));
    // Text renderers receive the same rectangular clip, so no glyph
    // coverage can be painted outside these bounds. Avoid scanning the
@@ -250,9 +263,11 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
    for(unsigned y=scan_y0;y<scan_y1;++y)
     for(unsigned x=scan_x0;x<scan_x1;++x){
      const size_t i=(size_t(y)*width+x)*4;
-     const unsigned observed=text_coverage_scratch[i+chosen];
-     const unsigned delta=observed>bg?observed-bg:bg-observed;
-     const unsigned coverage=std::min(255u,(delta*255u+contrast/2)/contrast);
+     const unsigned coverage=direct_font?direct_coverage[size_t(y)*width+x]:
+       std::min(255u,(([&](){
+        const unsigned observed=text_coverage_scratch[i+chosen];
+        return observed>bg?observed-bg:bg-observed;
+       }())*255u+contrast/2)/contrast);
      const unsigned alpha=(coverage*opacity+127)/255;
      if(cmyk_target){
       if(coverage){
