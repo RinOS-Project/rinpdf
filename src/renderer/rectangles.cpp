@@ -836,15 +836,14 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
       continue;
      }
      // Source-over on the renderer's opaque page buffer.
+     unsigned mixed[3]{};
      for(unsigned channel=0;channel<3;++channel){
       const unsigned src=im.stencil?
          unsigned(std::lround((channel==0?red:channel==1?green:blue)*255)):
          im.pixels[source+(im.channels==3?channel:0)];
-      const unsigned dst=rgba[target+channel];
-      rgba[target+channel]=uint8_t(
-        (blend_channel(src,dst)*opacity+dst*(255-opacity)+127)/255);
+      mixed[channel]=blend_channel(src,rgba[target+channel]);
      }
-     rgba[target+3]=255;
+     composite_opaque_rgb(rgba+target,mixed[0],mixed[1],mixed[2],opacity);
     }
     continue;
    }
