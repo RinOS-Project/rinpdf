@@ -1,6 +1,7 @@
 #include "sfnt.h"
 #include <cmath>
 #include <cstdint>
+#include <optional>
 #include <vector>
 namespace rinpdf::renderer {
 bool sfnt_cff_outline_commands(const SfntFont& font,uint16_t glyph,
@@ -53,6 +54,10 @@ bool sfnt_cff_outline_commands(const SfntFont& font,uint16_t glyph,
  };
  struct Frame{const uint8_t* bytes;size_t length,pos;};
  std::vector<Frame> frames;
+ frames.reserve(10);
+ // Local subroutines share one font dictionary throughout this glyph.
+ // Resolve ROS once on first callsubr, including inside nested subroutines.
+ std::optional<bool> cid_keyed;
  const uint8_t* current=program;
  size_t current_length=length;
  size_t executed=0;
@@ -132,10 +137,13 @@ bool sfnt_cff_outline_commands(const SfntFont& font,uint16_t glyph,
     stack.pop_back();
     const uint8_t* sub=nullptr;
     size_t sub_length=0;
-    bool cid_keyed=false;
-    if(op==10&&!sfnt_cff_is_cid_keyed(font,cid_keyed))return false;
+    if(op==10&&!cid_keyed.has_value()){
+     bool identified=false;
+     if(!sfnt_cff_is_cid_keyed(font,identified))return false;
+     cid_keyed=identified;
+    }
     const bool resolved=op==10?
-       (cid_keyed?
+       (*cid_keyed?
          sfnt_cff_cid_local_subroutine(font,glyph,int32_t(number),sub,sub_length):
          sfnt_cff_local_subroutine(font,int32_t(number),sub,sub_length)):
        sfnt_cff_global_subroutine(font,int32_t(number),sub,sub_length);
