@@ -236,8 +236,15 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
    rgba=destination;stride=original_stride;
    if(!ok)return false;
    const unsigned opacity=unsigned(std::lround(fill_alpha*255));
-   for(unsigned y=0;y<height;++y)
-    for(unsigned x=0;x<width;++x){
+   // Text renderers receive the same rectangular clip, so no glyph
+   // coverage can be painted outside these bounds. Avoid scanning the
+   // entire scratch page for a small clipped text run.
+   const unsigned scan_x0=std::min(width,clip.x0);
+   const unsigned scan_y0=std::min(height,clip.y0);
+   const unsigned scan_x1=std::min(width,clip.x1);
+   const unsigned scan_y1=std::min(height,clip.y1);
+   for(unsigned y=scan_y0;y<scan_y1;++y)
+    for(unsigned x=scan_x0;x<scan_x1;++x){
      const size_t i=(size_t(y)*width+x)*4;
      const unsigned observed=scratch[i+chosen];
      const unsigned delta=observed>bg?observed-bg:bg-observed;
