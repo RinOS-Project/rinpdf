@@ -839,8 +839,10 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
           unsigned(std::lround((channel==0?red:channel==1?green:blue)*255)):
           im.pixels[source+(im.channels==3?channel:0)]);
       };
-      const unsigned geometry=(im.stencil?base_opacity:255u)*
-                              clip_coverage/255u;
+      // Opacity already includes the image mask and clip coverage.
+      // Pass full geometric coverage to the CMYK compositor so neither
+      // factor is multiplied a second time.
+      const unsigned geometry=255u;
       if(!im.cmyk_pixels.empty()){
        const size_t native_index=(size_t(iy)*im.width+ix)*4;
        const unsigned native_ink[4]={
