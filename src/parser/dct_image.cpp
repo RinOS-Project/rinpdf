@@ -62,6 +62,9 @@ bool decode_dct_image(const uint8_t* bytes,size_t length,
     decoder.jpeg_color_space!=JCS_YCbCr){
   jpeg_destroy_decompress(&decoder);return false;
  }
+ // libjpeg's CMYK output uses inverted ink samples for Adobe-tagged
+ // CMYK/YCCK streams. Normalize those to PDF DeviceCMYK ink amounts.
+ const bool inverted_cmyk=channels==4&&decoder.saw_Adobe_marker;
  decoder.out_color_space=channels==1?JCS_GRAYSCALE:
                          channels==3?JCS_RGB:JCS_CMYK;
  if(!jpeg_start_decompress(&decoder)||
@@ -83,6 +86,9 @@ bool decode_dct_image(const uint8_t* bytes,size_t length,
   jpeg_destroy_decompress(&decoder);return false;
  }
  jpeg_destroy_decompress(&decoder);
+ if(inverted_cmyk){
+  for(auto& sample:result)sample=uint8_t(255u-sample);
+ }
  pixels=std::move(result);
  return true;
 #else
