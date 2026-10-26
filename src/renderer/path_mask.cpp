@@ -100,27 +100,33 @@ bool rasterize_path_coverage_region_2x(const std::vector<std::vector<MaskPoint>>
   const unsigned y1=unsigned(std::clamp(std::ceil(max_y)+1.0,0.0,double(height)));
   if(x0<x1&&y0<y1){
    const unsigned local_width=x1-x0,local_height=y1-y0;
-   if(size_t(local_width)*local_height>1048576)return false;
+   // Process large regions in horizontal bands. Each supersampled
+   // scratch mask stays within the 4 MiB rasterizer budget.
    std::vector<uint8_t> result(size_t(local_width)*local_height,0);
-   std::vector<std::vector<MaskPoint>> scaled;
-   scaled.reserve(subpaths.size());
-   for(const auto& path:subpaths){
-    auto& dest=scaled.emplace_back();
-    dest.reserve(path.size());
-    for(const auto& point:path)
-     dest.push_back({(point.x-double(x0))*2,(point.y-double(y0))*2});
-   }
-   std::vector<uint8_t> samples;
-   if(!rasterize_path_mask(scaled,local_width*2,local_height*2,rule,samples))
-    return false;
-   const size_t sample_stride=size_t(local_width)*2;
-   for(unsigned y=0;y<local_height;++y)
-    for(unsigned x=0;x<local_width;++x){
-     const size_t i=size_t(y*2)*sample_stride+x*2;
-     const unsigned sum=samples[i]+samples[i+1]+
-      samples[i+sample_stride]+samples[i+sample_stride+1];
-     result[size_t(y)*local_width+x]=uint8_t((sum*255+2)/4);
+   const unsigned band_rows=std::max(1u,1048576u/local_width);
+   for(unsigned row=0;row<local_height;row+=band_rows){
+    const unsigned rows=std::min(band_rows,local_height-row);
+    std::vector<std::vector<MaskPoint>> scaled;
+    scaled.reserve(subpaths.size());
+    for(const auto& path:subpaths){
+     auto& dest=scaled.emplace_back();
+     dest.reserve(path.size());
+     for(const auto& point:path)
+      dest.push_back({(point.x-double(x0))*2,
+                      (point.y-double(y0+row))*2});
     }
+    std::vector<uint8_t> samples;
+    if(!rasterize_path_mask(scaled,local_width*2,rows*2,rule,samples))
+     return false;
+    const size_t sample_stride=size_t(local_width)*2;
+    for(unsigned y=0;y<rows;++y)
+     for(unsigned x=0;x<local_width;++x){
+      const size_t i=size_t(y*2)*sample_stride+x*2;
+      const unsigned sum=samples[i]+samples[i+1]+
+       samples[i+sample_stride]+samples[i+sample_stride+1];
+      result[size_t(row+y)*local_width+x]=uint8_t((sum*255+2)/4);
+     }
+   }
    region.x=x0;region.y=y0;region.width=local_width;
    region.height=local_height;region.pixels=std::move(result);
   }
