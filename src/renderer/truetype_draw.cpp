@@ -211,6 +211,9 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
      if(!parser::cid_width(*cid_widths,cid,width1000))return false;
      glyph_advance=width1000*em/1000;
     }
+    // PDF word spacing applies to the single-byte character code 0x20,
+    // including simple fonts whose Differences map that byte elsewhere.
+    // CID text strings use two-byte character codes and never receive Tw.
     cursor+=vertical?(vertical_metric.w1y*em/1000-matrix.character_spacing):
             (glyph_advance+matrix.character_spacing+
              (!cid_map&&ch==32?matrix.word_spacing:0))*matrix.horizontal_scale;
