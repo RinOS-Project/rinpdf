@@ -47,6 +47,11 @@ bool decode_dct_image(const uint8_t* bytes,size_t length,
     decoder.num_components!=static_cast<int>(channels)){
   jpeg_destroy_decompress(&decoder);return false;
  }
+ // Preserve four-component CMYK samples; reject unsupported JPEG color models.
+ if(channels==4&&decoder.jpeg_color_space!=JCS_CMYK&&
+    decoder.jpeg_color_space!=JCS_YCCK){
+  jpeg_destroy_decompress(&decoder);return false;
+ }
  decoder.out_color_space=channels==1?JCS_GRAYSCALE:
                          channels==3?JCS_RGB:JCS_CMYK;
  if(!jpeg_start_decompress(&decoder)||
