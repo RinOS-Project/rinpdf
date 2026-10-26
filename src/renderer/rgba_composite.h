@@ -10,11 +10,15 @@ inline void composite_solid_rgba(uint8_t* pixel,uint8_t r,uint8_t g,
  alpha=std::min(alpha,255u);
  const unsigned dst_alpha=pixel[3];
  const unsigned retained=(255-alpha)*dst_alpha;
- const unsigned output_alpha=alpha+(retained+127)/255;
- if(!output_alpha)return;
+ // Keep alpha at 16-bit precision until the final channel division.
+ // Rounding alpha first produces visible colour errors at very low opacity.
+ const unsigned alpha_numerator=alpha*255+retained;
+ if(!alpha_numerator)return;
+ const unsigned output_alpha=(alpha_numerator+127)/255;
  auto channel=[&](unsigned src,unsigned dst)->uint8_t{
-  const unsigned numerator=alpha*src+(retained*dst+127)/255;
-  return uint8_t(std::min(255u,(numerator+output_alpha/2)/output_alpha));
+  const unsigned numerator=alpha*255*src+retained*dst;
+  return uint8_t(std::min(255u,
+      (numerator+alpha_numerator/2)/alpha_numerator));
  };
  pixel[0]=channel(r,pixel[0]);
  pixel[1]=channel(g,pixel[1]);
