@@ -47,7 +47,8 @@ bool decode_dct_image(const uint8_t* bytes,size_t length,
     decoder.num_components!=static_cast<int>(channels)){
   jpeg_destroy_decompress(&decoder);return false;
  }
- decoder.out_color_space=channels==1?JCS_GRAYSCALE:\n                         channels==3?JCS_RGB:JCS_CMYK;
+ decoder.out_color_space=channels==1?JCS_GRAYSCALE:
+                         channels==3?JCS_RGB:JCS_CMYK;
  if(!jpeg_start_decompress(&decoder)||
     decoder.output_width!=width||decoder.output_height!=height||
     decoder.output_components!=static_cast<int>(channels)){
