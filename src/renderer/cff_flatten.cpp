@@ -22,11 +22,16 @@ bool cff_flatten_commands(const CffCommands& commands,double tolerance,
   if(!std::isfinite(command.end.x)||!std::isfinite(command.end.y))
    return false;
   if(command.kind==CffSegment::Kind::Move){
+   // The downstream antialiased rasterizer accepts at most 4096 points
+   // per contour and 65536 overall. Enforce the tighter contour limit here.
    if(paths.size()>=256)return false;
    paths.push_back({command.end});
+   ++total;
   }else if(command.kind==CffSegment::Kind::Line){
-   if(paths.empty()||++total>16384)return false;
+   if(paths.empty()||paths.back().size()>=4096||
+      total>=16384)return false;
    paths.back().push_back(command.end);
+   ++total;
   }else if(command.kind==CffSegment::Kind::Cubic){
    if(paths.empty()||
       !std::isfinite(command.first.x)||!std::isfinite(command.first.y)||
@@ -54,8 +59,9 @@ bool cff_flatten_commands(const CffCommands& commands,double tolerance,
     if(!std::isfinite(d1)||!std::isfinite(d2))return false;
     const bool flat=d1<=tolerance&&d2<=tolerance;
     if(flat){
-     if(++total>16384)return false;
+     if(paths.back().size()>=4096||total>=16384)return false;
      paths.back().push_back(q.d);
+     ++total;
     }else{
      if(q.depth>=12||pending.size()>4096)return false;
      const auto ab=mid(q.a,q.b),bc=mid(q.b,q.c),cd=mid(q.c,q.d);
