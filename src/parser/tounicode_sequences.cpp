@@ -143,7 +143,7 @@ bool parse_tounicode_sequences(const uint8_t* data,size_t size,
    if((long_range.first.code>>shift)<=short_range.second.code&&
       (long_range.second.code>>shift)>=short_range.first.code)return false;
   }
- if(parent_mapping&&parent_codespaces){
+ if(inherited&&parent_mapping&&parent_codespaces){
   // Local definitions override inherited mappings without silently discarding
   // any inherited mappings or the parent's code boundaries.
   for(const auto& entry:*parent_mapping){
