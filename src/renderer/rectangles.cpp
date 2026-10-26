@@ -875,8 +875,8 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
       };
       // SMask/constant alpha changes opacity, not the geometric shape
       // of a regular image. Image masks use their stencil coverage.
-      const unsigned geometry=(im.stencil?base_opacity:255u)*
-                              clip_coverage/255u;
+      const unsigned geometry=im.stencil?
+        (base_opacity*clip_coverage+127u)/255u:clip_coverage;
       if(!transparent_target->mark_shape(px,py,uint8_t(geometry)))return false;
       if(!transparent_target->blend_pixel(
             px,py,component(0),component(1),component(2),uint8_t(opacity),
