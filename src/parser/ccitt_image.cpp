@@ -61,7 +61,7 @@ bool decode_ccitt_image(const uint8_t* data,size_t length,
  grayscale.clear();
  if(!data||!length||length>32*1024*1024||!width||!height||
     width>4096||height>4096||size_t(width)*height>16*1024*1024||
-    (k!=-1&&k!=0))return false;
+    (k < -1 || k > 32767))return false;
 #if defined(RINPDF_HAVE_TIFF)
  // Wrap the raw fax stream in an in-memory classic TIFF IFD. This uses
  // libtiff's CCITT Group 3/4 codec without temporary files.
@@ -83,7 +83,7 @@ bool decode_ccitt_image(const uint8_t* data,size_t length,
  tag(277,3,1);tag(278,4,height);tag(279,4,uint32_t(length));
  // Group 3 uses T4Options (292), while Group 4 uses T6Options
  // (293). EncodedByteAlign applies only to Group 3 fax data.
- tag(k==-1?293:292,4,k==-1?0u:(byte_align?4u:0u));
+ tag(k==-1?293:292,4,k==-1?0u:\n     ((k>0?1u:0u)|(byte_align?4u:0u)));
  put32(tiff,10+tags*12,0);
  std::memcpy(tiff.data()+header,data,length);
  Memory memory{tiff.data(),tiff.size()};
