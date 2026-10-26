@@ -157,6 +157,7 @@ bool sfnt_vertical_substitution(const SfntFont& font,uint16_t glyph,
        script_tag,language_tag))return false;
  // Prefer vrt2 to vert, which are mutually alternative vertical features.
  for(unsigned pass=0;pass<2;++pass){
+  bool substituted=false;
   const uint32_t wanted=pass==0?0x76727432:0x76657274;
   for(unsigned i=0;i<feature_count;++i){
    const size_t rec=features+2+size_t(i)*6;
@@ -167,6 +168,8 @@ bool sfnt_vertical_substitution(const SfntFont& font,uint16_t glyph,
    uint16_t count=0;
    if(relative<2||!read16(data,n,feature+2,count)||
       count>4096||feature>n||n-feature<4+size_t(count)*2)return false;
+   uint16_t current=glyph;
+   bool feature_changed=false;
    for(unsigned j=0;j<count;++j){
     uint16_t lookup_index=0,lookup_relative=0,type=0,sub_count=0;
     if(!read16(data,n,feature+4+size_t(j)*2,lookup_index)||
@@ -197,11 +200,13 @@ bool sfnt_vertical_substitution(const SfntFont& font,uint16_t glyph,
      }
      bool found=false;
      if(!single_lookup(data,n,sub,
-           glyph,font.glyph_count,replacement,found))return false;
-     if(found)return true;
+           current,font.glyph_count,replacement,found))return false;
+     if(found){current=replacement;feature_changed=true;break;}
     }
    }
+   if(feature_changed){replacement=current;substituted=true;}
   }
+  if(substituted)return true;
  }
  return true;
 }
