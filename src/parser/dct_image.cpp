@@ -22,7 +22,7 @@ bool decode_dct_image(const uint8_t* bytes,size_t length,
  unsigned width,unsigned height,unsigned channels,std::vector<uint8_t>& pixels){
  pixels.clear();
  if(!bytes||!length||!width||!height||
-    (channels!=1&&channels!=3)||width>4096||height>4096||
+    (channels!=1&&channels!=3&&channels!=4)||width>4096||height>4096||
     length>32*1024*1024)return false;
  const size_t expected=size_t(width)*height*channels;
  if(expected>32*1024*1024)return false;
@@ -47,7 +47,7 @@ bool decode_dct_image(const uint8_t* bytes,size_t length,
     decoder.num_components!=static_cast<int>(channels)){
   jpeg_destroy_decompress(&decoder);return false;
  }
- decoder.out_color_space=channels==1?JCS_GRAYSCALE:JCS_RGB;
+ decoder.out_color_space=channels==1?JCS_GRAYSCALE:\n                         channels==3?JCS_RGB:JCS_CMYK;
  if(!jpeg_start_decompress(&decoder)||
     decoder.output_width!=width||decoder.output_height!=height||
     decoder.output_components!=static_cast<int>(channels)){
