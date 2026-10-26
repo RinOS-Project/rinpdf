@@ -877,6 +877,8 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
       // of a regular image. Image masks use their stencil coverage.
       const unsigned geometry=im.stencil?
         (base_opacity*clip_coverage+127u)/255u:clip_coverage;
+      // blend_pixel consumes geometry for knockout replacement; shape
+      // tracking remains independent and is updated exactly once here.
       if(!transparent_target->mark_shape(px,py,uint8_t(geometry)))return false;
       if(!transparent_target->blend_pixel(
             px,py,component(0),component(1),component(2),uint8_t(opacity),
