@@ -842,7 +842,11 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
       // The knockout shape covers the image mask and clip intersection,
       // independently of the paint alpha. Geometry is not an extra alpha
       // multiplier: paint_ink uses it to replace covered backdrop pixels.
-      const unsigned geometry=(base_opacity*clip_coverage+127u)/255u;
+      // Non-stencil images paint their entire image footprint, even when
+      // a soft mask makes the paint fully transparent. In knockout groups
+      // that footprint still replaces earlier siblings.
+      const unsigned geometry=im.stencil?
+        (base_opacity*clip_coverage+127u)/255u:clip_coverage;
       if(!im.cmyk_pixels.empty()){
        const size_t native_index=(size_t(iy)*im.width+ix)*4;
        const unsigned native_ink[4]={
