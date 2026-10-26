@@ -144,6 +144,11 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
        start_x-vertical_metric.v1x*em/1000:cursor;
     const double origin_y=vertical?
        baseline+cursor-vertical_metric.v1y*em/1000:baseline;
+    // The PDF vertical origin metrics may shift glyphs independently of
+    // their advance. Reject nonfinite positions before path generation.
+    if(!std::isfinite(origin_x)||!std::isfinite(origin_y)||
+       std::abs(origin_x)>10000000||std::abs(origin_y)>10000000)
+     return false;
     Paint paint;
     // The font-space flattening tolerance and size are constant across
     // this call. Copy cached contours before applying per-glyph transforms.
