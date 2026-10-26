@@ -142,12 +142,21 @@ bool parse_tounicode_sequences(const uint8_t* data,size_t size,
   }
   // A child may declare additional, non-overlapping codespaces.
   // Merge them by value rather than relying on declaration order.
-  for(const auto& parent:*parent_codespaces){
+  for(size_t i=0;i<parent_codespaces->size();++i){
+   const auto& parent=(*parent_codespaces)[i];
    if(!parent.first.width||parent.first.width>4||
       parent.first.width!=parent.second.width||
       parent.first.code>parent.second.code)return false;
    const uint64_t max_code=(uint64_t{1}<<(8*parent.first.width))-1;
    if(parent.second.code>max_code)return false;
+   // Reject overlapping parent ranges as well; a parent supplied by an
+   // external caller is not necessarily the output of our own parser.
+   for(size_t j=0;j<i;++j){
+    const auto& previous=(*parent_codespaces)[j];
+    if(previous.first.width==parent.first.width&&
+       !(parent.second.code<previous.first.code||
+         parent.first.code>previous.second.code))return false;
+   }
    bool duplicate=false;
    for(const auto& local:codespaces){
     if(local.first.width!=parent.first.width)continue;
