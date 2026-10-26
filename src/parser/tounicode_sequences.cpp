@@ -137,14 +137,25 @@ bool parse_tounicode_sequences(const uint8_t* data,size_t size,
    if(mapped.size()>=4096&&!mapped.count(entry.first))return false;
    mapped.emplace(entry.first,entry.second);
   }
-  if(codespaces.empty())codespaces=*parent_codespaces;
-  else if(!parent_codespaces->empty()){
-   // Explicit local and inherited code spaces must agree.
-   if(codespaces.size()!=parent_codespaces->size())return false;
-   for(size_t i=0;i<codespaces.size();++i){
-    const auto& l=codespaces[i];const auto& p=(*parent_codespaces)[i];
-    if(l.first.width!=p.first.width||l.first.code!=p.first.code||
-       l.second.width!=p.second.width||l.second.code!=p.second.code)return false;
+  // A child may declare additional, non-overlapping codespaces.
+  // Merge them by value rather than relying on declaration order.
+  for(const auto& parent:*parent_codespaces){
+   if(!parent.first.width||parent.first.width>4||
+      parent.first.width!=parent.second.width||
+      parent.first.code>parent.second.code)return false;
+   const uint64_t max_code=(uint64_t{1}<<(8*parent.first.width))-1;
+   if(parent.second.code>max_code)return false;
+   bool duplicate=false;
+   for(const auto& local:codespaces){
+    if(local.first.width!=parent.first.width)continue;
+    if(local.first.code==parent.first.code&&
+       local.second.code==parent.second.code){duplicate=true;break;}
+    if(!(parent.second.code<local.first.code||
+         parent.first.code>local.second.code))return false;
+   }
+   if(!duplicate){
+    if(codespaces.size()>=32)return false;
+    codespaces.push_back(parent);
    }
   }
  }
