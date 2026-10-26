@@ -239,14 +239,17 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      fonts.find(selected_font)!=fonts.end()&&
      !fonts.at(selected_font).embedded_truetype.empty();
    const size_t pitch=size_t(width)*4;
-   if(!direct_font){
-    text_coverage_scratch.assign(pitch*height,uint8_t(bg));
-   for(size_t i=3;i<text_coverage_scratch.size();i+=4)
-    text_coverage_scratch[i]=255;
    uint8_t* destination=rgba;
    const size_t original_stride=stride;
-    rgba=text_coverage_scratch.data();stride=pitch;
-   }else text_coverage_sink=&direct_coverage;
+   if(!direct_font){
+    text_coverage_scratch.assign(pitch*height,uint8_t(bg));
+    for(size_t i=3;i<text_coverage_scratch.size();i+=4)
+     text_coverage_scratch[i]=255;
+    rgba=text_coverage_scratch.data();
+    stride=pitch;
+   }else{
+    text_coverage_sink=&direct_coverage;
+   }
    const bool ok=draw();
    text_coverage_sink=nullptr;
    rgba=destination;stride=original_stride;
