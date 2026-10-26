@@ -76,6 +76,13 @@ bool decode_dct_image(const uint8_t* bytes,size_t length,
     (!decoder.saw_Adobe_marker||decoder.Adobe_transform!=2)){
   jpeg_destroy_decompress(&decoder);return false;
  }
+ // The APP14 transform and libjpeg's detected JPEG colorspace must agree.
+ // Reject contradictory metadata instead of silently applying wrong ink math.
+ if(channels==4&&decoder.saw_Adobe_marker&&
+    ((decoder.Adobe_transform==0&&decoder.jpeg_color_space!=JCS_CMYK)||
+     (decoder.Adobe_transform==2&&decoder.jpeg_color_space!=JCS_YCCK))){
+  jpeg_destroy_decompress(&decoder);return false;
+ }
  const bool inverted_cmyk=channels==4&&decoder.saw_Adobe_marker;
  decoder.out_color_space=channels==1?JCS_GRAYSCALE:
                          channels==3?JCS_RGB:JCS_CMYK;
