@@ -220,13 +220,29 @@ static bool decode_lzw(const uint8_t* input,size_t length,
  if(!row64||row64>limit||bpp64>row64)return false;
  const size_t row=size_t(row64),bpp=size_t(bpp64);
  if(predictor==2){
-  // TIFF differencing is component-wise. This implementation supports
-  // byte-aligned samples; packed samples are rejected rather than corrupted.
-  if(bpc!=8)return false;
+  // TIFF horizontal differencing operates on samples, not bytes.
+  // PDF 16-bit components are stored big-endian, so reconstruct each
+  // complete 16-bit component before advancing to the next sample.
+  if(bpc!=8&&bpc!=16)return false;
   if(bytes.size()%row)return false;
-  for(size_t offset=0;offset<bytes.size();offset+=row)
-   for(size_t i=bpp;i<row;++i)
-    bytes[offset+i]=uint8_t(bytes[offset+i]+bytes[offset+i-bpp]);
+  if(bpc==8){
+   for(size_t offset=0;offset<bytes.size();offset+=row)
+    for(size_t i=bpp;i<row;++i)
+     bytes[offset+i]=uint8_t(bytes[offset+i]+bytes[offset+i-bpp]);
+  }else{
+   const size_t components=size_t(colors)*columns;
+   const size_t component_stride=size_t(colors)*2;
+   for(size_t offset=0;offset<bytes.size();offset+=row)
+    for(size_t sample=colors;sample<components;++sample){
+     const size_t i=offset+sample*2;
+     const size_t previous=i-component_stride;
+     const unsigned current=(unsigned(bytes[i])<<8)|bytes[i+1];
+     const unsigned left=(unsigned(bytes[previous])<<8)|bytes[previous+1];
+     const unsigned restored=(current+left)&0xffffu;
+     bytes[i]=uint8_t(restored>>8);
+     bytes[i+1]=uint8_t(restored);
+    }
+  }
   return true;
  }
  const size_t encoded_row=row+1;
