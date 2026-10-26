@@ -97,6 +97,8 @@ bool active_features(const uint8_t* d,size_t n,uint16_t scripts,
      if(current==language_tag){selected=relative;break;}
     }
    }
+   // A script without a default LangSys may still supply a matching
+   // language-specific LangSys; otherwise continue to the next script.
    if(selected==0)continue;
    const size_t lang=script+selected;
    uint16_t required=0,features=0;
