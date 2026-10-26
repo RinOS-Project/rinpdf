@@ -45,13 +45,26 @@ bool sfnt_cff_outline_commands(const SfntFont& font,uint16_t glyph,
  };
  auto curve=[&](double a,double b,double c,double d,double e,double f)->bool{
   if(!path_started||segments>=8192||result.size()>=8192)return false;
-  if(!coordinate(a,b))return false;
-  const CffPoint p1{x,y};
-  if(!coordinate(c,d))return false;
-  const CffPoint p2{x,y};
-  if(!coordinate(e,f))return false;
+  // Compute all cubic points before committing the current position.
+  // Invalid later operands must not leave an intermediate control point
+  // as the interpreter's cursor.
+  auto step=[](CffPoint& point,double dx,double dy)->bool{
+   if(!std::isfinite(dx)||!std::isfinite(dy))return false;
+   const double nx=point.x+dx,ny=point.y+dy;
+   if(!std::isfinite(nx)||!std::isfinite(ny)||
+      std::abs(nx)>1000000||std::abs(ny)>1000000)return false;
+   point={nx,ny};
+   return true;
+  };
+  CffPoint p1{x,y};
+  if(!step(p1,a,b))return false;
+  CffPoint p2=p1;
+  if(!step(p2,c,d))return false;
+  CffPoint end=p2;
+  if(!step(end,e,f))return false;
+  result.push_back({CffSegment::Kind::Cubic,p1,p2,end});
+  x=end.x;y=end.y;
   ++segments;
-  result.push_back({CffSegment::Kind::Cubic,p1,p2,{x,y}});
   return true;
  };
  struct Frame{const uint8_t* bytes;size_t length,pos;};
