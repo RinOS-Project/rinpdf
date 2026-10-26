@@ -48,18 +48,14 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
  // preserve the requested starting text position.
  const bool vertical=encoding=="Identity-V";
  if(vertical&&(!cid_map||!cid_widths||!vertical_metrics||!next_y))return false;
+ SfntFont sfnt;
+ if(!parse_sfnt(bytes.data(),bytes.size(),sfnt))return false;
  if(runs.empty()){
-  // Empty text has no glyphs to decode, but the font itself must still
-  // be valid: a malformed embedded font must not be accepted silently.
-  SfntFont empty_font;
-  if(!parse_sfnt(bytes.data(),bytes.size(),empty_font))return false;
   next_x=start_x;
   if(vertical)*next_y=baseline;
   if(coverage_out)coverage_out->assign(size_t(width)*height,0);
   return true;
  }
- SfntFont sfnt;
- if(!parse_sfnt(bytes.data(),bytes.size(),sfnt))return false;
  const bool cff_font=std::any_of(sfnt.tables.begin(),sfnt.tables.end(),
    [](const SfntTable& t){return t.tag==0x43464620;});
  // A text run frequently repeats glyph IDs. Cache validated outlines and
