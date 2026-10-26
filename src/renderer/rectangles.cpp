@@ -3,6 +3,7 @@
 #include "premultiplied_cmyk_surface.h"
 #include "icc_matrix_profile.h"
 #include "path_mask.h"
+#include "rgba_composite.h"
 #include "cubic_arc.h"
 #include "cubic_dash.h"
 #include "text_show.h"
@@ -2134,10 +2135,10 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
      continue;
     }
     uint8_t* pixel=rgba+(size_t)y*stride+(size_t)x*4;
-    pixel[0]=(uint8_t)((alpha*blend_channel(cr,pixel[0])+(255-alpha)*pixel[0]+127)/255);
-    pixel[1]=(uint8_t)((alpha*blend_channel(cg,pixel[1])+(255-alpha)*pixel[1]+127)/255);
-    pixel[2]=(uint8_t)((alpha*blend_channel(cb,pixel[2])+(255-alpha)*pixel[2]+127)/255);
-    pixel[3]=255;
+    const unsigned mixed_r=blend_channel(cr,pixel[0]);
+    const unsigned mixed_g=blend_channel(cg,pixel[1]);
+    const unsigned mixed_b=blend_channel(cb,pixel[2]);
+    composite_opaque_rgb(pixel,mixed_r,mixed_g,mixed_b,alpha);
    }
    path.clear();polygons.clear();polygon_matrices.clear();rect_matrices.clear();cubic_strokes.clear();
   }else if(word=="f"||word=="F"||word=="f*"){
@@ -2205,10 +2206,10 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
       return false;
      continue;
     }
-    pixel[0]=(uint8_t)((alpha*blend_channel(cr,pixel[0])+(255-alpha)*pixel[0]+127)/255);
-    pixel[1]=(uint8_t)((alpha*blend_channel(cg,pixel[1])+(255-alpha)*pixel[1]+127)/255);
-    pixel[2]=(uint8_t)((alpha*blend_channel(cb,pixel[2])+(255-alpha)*pixel[2]+127)/255);
-    pixel[3]=255;
+    const unsigned mixed_r=blend_channel(cr,pixel[0]);
+    const unsigned mixed_g=blend_channel(cg,pixel[1]);
+    const unsigned mixed_b=blend_channel(cb,pixel[2]);
+    composite_opaque_rgb(pixel,mixed_r,mixed_g,mixed_b,alpha);
    }
    path.clear();polygons.clear();polygon_matrices.clear();rect_matrices.clear();cubic_strokes.clear();
   }else if(word=="n"){
