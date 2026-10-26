@@ -213,7 +213,10 @@ bool sfnt_vertical_substitution(const SfntFont& font,uint16_t glyph,
      if(!read16(data,n,lookup+6+size_t(k)*2,sub_relative)||
         sub_relative<6||sub_relative>=n-lookup)return false;
      size_t sub=lookup+sub_relative;
-     if(type==7){
+     // Each extension subtable carries its own lookup type. Never let a
+     // previous subtable change the interpretation of the next one.
+     uint16_t sub_type=type;
+     if(sub_type==7){
       // ExtensionSubst format 1 holds a 32-bit offset relative to itself.
       uint16_t format=0,extension_type=0;
       uint32_t extension_offset=0;
@@ -223,11 +226,11 @@ bool sfnt_vertical_substitution(const SfntFont& font,uint16_t glyph,
          format!=1||extension_offset<8||
          extension_offset>=n-sub)return false;
       if(extension_type!=1&&extension_type!=3)continue;
-      type=extension_type;
+      sub_type=extension_type;
       sub+=extension_offset;
      }
      bool found=false;
-     if(!(type==3?
+     if(!(sub_type==3?
           alternate_lookup(data,n,sub,current,font.glyph_count,replacement,found):
           single_lookup(data,n,sub,current,font.glyph_count,replacement,found)))
       return false;
