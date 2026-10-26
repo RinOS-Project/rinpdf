@@ -44,6 +44,14 @@ bool render_embedded_truetype_runs(const std::vector<uint8_t>& bytes,
     std::abs(matrix.word_spacing)>10000)return false;
  if(clip_x1==0&&clip_y1==0){clip_x1=width;clip_y1=height;}
  if(clip_x0>clip_x1||clip_y0>clip_y1||clip_x1>width||clip_y1>height)return false;
+ // Empty glyph runs need no SFNT parsing or raster work, but still
+ // preserve the requested starting text position.
+ if(runs.empty()){
+  next_x=start_x;
+  if(encoding=="Identity-V"&&next_y)*next_y=baseline;
+  if(coverage_out)coverage_out->assign(size_t(width)*height,0);
+  return true;
+ }
  const bool vertical=encoding=="Identity-V";
  if(vertical&&(!cid_map||!cid_widths||!vertical_metrics||!next_y))return false;
  SfntFont sfnt;
