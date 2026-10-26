@@ -819,11 +819,11 @@ struct Reader {
       if(!channels||(!indexed&&bits->integer!=8&&channels!=1))
        return false;
       // Color-key masking compares original integer samples, before
-      // Decode and color-space conversion. Restrict it to 8-bit devices.
+      // Decode and color-space conversion. Packed DeviceGray uses raw bit values.
       std::array<unsigned,8> mask_bounds{};
       bool has_color_key=false;
       if(const Value* mask=get(range.dictionary,"Mask")){
-       if(bits->integer!=8||indexed||separation||calibrated||lab||
+       if(indexed||separation||calibrated||lab||
           icc_channels||cs->kind!=Value::Kind::Name||
           (cs->text!="DeviceGray"&&cs->text!="DeviceRGB"&&
            cs->text!="DeviceCMYK")||
@@ -834,7 +834,7 @@ struct Reader {
         for(unsigned j=0;j<2;++j){
          const Value& v=mask->array[2*c+j];
          if(v.kind!=Value::Kind::Integer||
-            v.integer<0||v.integer>255)return false;
+            v.integer<0||v.integer>((1u<<unsigned(bits->integer))-1u))return false;
          mask_bounds[2*c+j]=unsigned(v.integer);
         }
         if(mask_bounds[2*c]>mask_bounds[2*c+1])return false;
@@ -1062,17 +1062,21 @@ struct Reader {
        // DeviceGray samples of 1, 2, or 4 bits are MSB-first and
        // normalized to 8-bit grayscale. Each row has separate padding.
        image.pixels.resize(size_t(image.width)*image.height);
+       if(has_color_key)image.alpha.assign(size_t(image.width)*image.height,255);
        const unsigned max_sample=(1u<<sample_bits)-1u;
        for(size_t y=0;y<image.height;++y)
         for(size_t x=0;x<image.width;++x){
          const size_t bit=x*sample_bits;
          const unsigned sample=(decoded[y*packed_stride+bit/8]>>
                     (8-sample_bits-(bit%8)))&max_sample;
-         image.pixels[y*image.width+x]=uint8_t(
+         const size_t index=y*image.width+x;
+         if(has_color_key&&sample>=mask_bounds[0]&&sample<=mask_bounds[1])
+          image.alpha[index]=0;
+         image.pixels[index]=uint8_t(
                     (sample*255u+max_sample/2u)/max_sample);
         }
       }else image.pixels=std::move(decoded);
-      apply_color_key();
+      if(!packed_gray)apply_color_key();
       apply_device_decode();
       if(indexed){
        std::vector<uint8_t> rgb(size_t(image.width)*image.height*3);
