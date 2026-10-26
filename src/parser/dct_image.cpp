@@ -56,6 +56,12 @@ bool decode_dct_image(const uint8_t* bytes,size_t length,
  if(channels==1&&decoder.jpeg_color_space!=JCS_GRAYSCALE){
   jpeg_destroy_decompress(&decoder);return false;
  }
+ // RGB JPEGs may be encoded as YCbCr; libjpeg performs that conversion.
+ // An unknown or CMYK JPEG must not be accepted as a three-channel image.
+ if(channels==3&&decoder.jpeg_color_space!=JCS_RGB&&
+    decoder.jpeg_color_space!=JCS_YCbCr){
+  jpeg_destroy_decompress(&decoder);return false;
+ }
  decoder.out_color_space=channels==1?JCS_GRAYSCALE:
                          channels==3?JCS_RGB:JCS_CMYK;
  if(!jpeg_start_decompress(&decoder)||
