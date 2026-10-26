@@ -191,7 +191,7 @@ bool sfnt_vertical_substitution(const SfntFont& font,uint16_t glyph,
          !read16(data,n,sub+2,extension_type)||
          !read32(data,n,sub+4,extension_offset)||
          format!=1||extension_offset<8||
-         extension_offset>n-sub)return false;
+         extension_offset>=n-sub)return false;
       if(extension_type!=1)continue;
       sub+=extension_offset;
      }
