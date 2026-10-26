@@ -1480,7 +1480,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
    rect_matrices.clear();
    const unsigned char cr=(unsigned char)std::lround(stroke_red*255),cg=(unsigned char)std::lround(stroke_green*255),cb=(unsigned char)std::lround(stroke_blue*255);
    size_t stroke_work=0;
-   const bool stroke_aa=(size_t)width*height<=1048576;
+   const bool stroke_aa=(size_t)width*height<=4194304;
    std::vector<uint8_t> stroke_samples((size_t)width*height,0);
    auto segment=[&](Point p,Point q,Matrix mat,bool join_disk=false,bool start_cap=true,bool end_cap=true){
     double x0=(p.x-box.x0)*sx,y0=(box.y1-p.y)*sy;
@@ -2222,7 +2222,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
    }
    std::vector<uint8_t> coverage;
    const FillRule rule=word=="f*"?FillRule::EvenOdd:FillRule::NonZero;
-   const bool antialias=(size_t)width*height<=1048576;
+   const bool antialias=(size_t)width*height<=4194304;
    if(antialias){
     if(!rasterize_path_coverage_2x(shapes,width,height,rule,coverage))return false;
    }else{
@@ -2267,7 +2267,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
    if(pending_path_clip){
     auto shapes=shapes_from_path();
     std::vector<uint8_t> mask;
-    if((size_t)width*height<=1048576){
+    if((size_t)width*height<=4194304){
      if(!rasterize_path_coverage_2x(shapes,width,height,pending_rule,mask))return false;
     }else{
      if(!rasterize_path_mask(shapes,width,height,pending_rule,mask))return false;
@@ -2282,7 +2282,7 @@ bool render_rectangles_box_with_fonts(const uint8_t *contents,size_t size,unsign
    if(pending_rect_clip){
     auto shapes=shapes_from_path();
     std::vector<uint8_t> mask;
-    if((size_t)width*height<=1048576){
+    if((size_t)width*height<=4194304){
      if(!rasterize_path_coverage_2x(shapes,width,height,pending_rule,mask))return false;
     }else{
      if(!rasterize_path_mask(shapes,width,height,pending_rule,mask))return false;
