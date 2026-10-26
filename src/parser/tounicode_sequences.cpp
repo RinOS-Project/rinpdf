@@ -130,19 +130,6 @@ bool parse_tounicode_sequences(const uint8_t* data,size_t size,
   if(end.kind!=TokenKind::Keyword||
      end.value!=(chars?"endbfchar":"endbfrange"))return false;
  }
- // Codespaces with different byte lengths must also be prefix-free.
- // Otherwise greedy decoding could split a code at the wrong boundary.
- for(size_t i=0;i<codespaces.size();++i)
-  for(size_t j=i+1;j<codespaces.size();++j){
-   const auto& short_range=codespaces[i].first.width<
-     codespaces[j].first.width?codespaces[i]:codespaces[j];
-   const auto& long_range=codespaces[i].first.width<
-     codespaces[j].first.width?codespaces[j]:codespaces[i];
-   if(short_range.first.width==long_range.first.width)continue;
-   const unsigned shift=8*(long_range.first.width-short_range.first.width);
-   if((long_range.first.code>>shift)<=short_range.second.code&&
-      (long_range.second.code>>shift)>=short_range.first.code)return false;
-  }
  if(inherited&&parent_mapping&&parent_codespaces){
   // Local definitions override inherited mappings without silently discarding
   // any inherited mappings or the parent's code boundaries.
@@ -161,6 +148,19 @@ bool parse_tounicode_sequences(const uint8_t* data,size_t size,
    }
   }
  }
+ // Codespaces with different byte lengths must also be prefix-free.
+ // Otherwise greedy decoding could split a code at the wrong boundary.
+ for(size_t i=0;i<codespaces.size();++i)
+  for(size_t j=i+1;j<codespaces.size();++j){
+   const auto& short_range=codespaces[i].first.width<
+     codespaces[j].first.width?codespaces[i]:codespaces[j];
+   const auto& long_range=codespaces[i].first.width<
+     codespaces[j].first.width?codespaces[j]:codespaces[i];
+   if(short_range.first.width==long_range.first.width)continue;
+   const unsigned shift=8*(long_range.first.width-short_range.first.width);
+   if((long_range.first.code>>shift)<=short_range.second.code&&
+      (long_range.second.code>>shift)>=short_range.first.code)return false;
+  }
  if(mapped.empty())return false;
  if(!codespaces.empty())for(const auto& entry:mapped){
   bool covered=false;
