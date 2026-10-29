@@ -971,7 +971,8 @@ struct Reader {
           !mw||mw->kind!=Value::Kind::Integer||mw->integer!=w->integer||
           !mh||mh->kind!=Value::Kind::Integer||mh->integer!=h->integer||
           !mb||mb->kind!=Value::Kind::Integer||
-          (mb->integer!=8&&mb->integer!=16)||
+          (mb->integer!=1&&mb->integer!=2&&mb->integer!=4&&
+           mb->integer!=8&&mb->integer!=16)||
           !mc||mc->kind!=Value::Kind::Name||mc->text!="DeviceGray"||
           get(mask_range.dictionary,"SMask")||
           get(mask_range.dictionary,"Mask")||
@@ -1006,15 +1007,28 @@ struct Reader {
          return false;
        }else{
         std::vector<uint8_t> samples;
-        const size_t mask_bytes=mask_pixels*(mb->integer==16?2u:1u);
+        const unsigned mask_bits=unsigned(mb->integer);
+        const size_t mask_stride=(size_t(image.width)*mask_bits+7)/8;
+        const size_t mask_bytes=mask_stride*image.height;
         if(!decode_stream(data,size,mask_range,samples,mask_bytes)||
            samples.size()!=mask_bytes)return false;
-        if(mb->integer==16){
+        if(mask_bits==16){
          image.alpha.resize(mask_pixels);
          for(size_t i=0;i<mask_pixels;++i){
           const unsigned value=(unsigned(samples[2*i])<<8)|samples[2*i+1];
           image.alpha[i]=uint8_t((value*255u+32767u)/65535u);
          }
+        }else if(mask_bits<8){
+         image.alpha.resize(mask_pixels);
+         const unsigned max_sample=(1u<<mask_bits)-1u;
+         for(size_t y=0;y<image.height;++y)
+          for(size_t x=0;x<image.width;++x){
+           const size_t bit=x*mask_bits;
+           const unsigned value=(samples[y*mask_stride+bit/8]>>
+                         (8-mask_bits-unsigned(bit%8)))&max_sample;
+           image.alpha[y*image.width+x]=uint8_t(
+                         (value*255u+max_sample/2u)/max_sample);
+          }
         }else image.alpha=std::move(samples);
        }
        if(image.alpha.size()!=mask_pixels)return false;
