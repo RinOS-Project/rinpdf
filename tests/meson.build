@@ -115,3 +115,5 @@ test('rinpdf-nested-transparent-forms',executable('rinpdf-nested-transparent-for
 test('rinpdf-nonisolated-transparency-group',executable('rinpdf-nonisolated-transparency-group','nonisolated_transparency_group.cpp',dependencies:rinpdf_dep))
 
 test('rinpdf-knockout-transparency-group',executable('rinpdf-knockout-transparency-group','knockout_transparency_group.cpp',dependencies:rinpdf_dep))
+
+test('rinpdf-smask-bit-depth-integration',executable('rinpdf-smask-bit-depth-integration','smask_bit_depth_integration.cpp',dependencies:rinpdf_dep))
