@@ -50,7 +50,7 @@ static bool check(unsigned bits,const std::string& samples,
 }
 int main(){
  if(!check(1,std::string("\x40",1),{0,255,0}))return 1;
- if(!check(2,std::string("\x1b",1),{0,85,255}))return 2;
+ if(!check(2,std::string("\x1b",1),{0,85,170}))return 2;
  if(!check(4,std::string("\x08\xf0",2),{0,136,255}))return 3;
  if(!check(16,std::string("\0\0\x80\0\xff\xff",6),{0,128,255}))return 4;
  return 0;
