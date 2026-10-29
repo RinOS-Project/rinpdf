@@ -863,9 +863,9 @@ struct Reader {
         if(!std::isfinite(decode_endpoints[i])||
            decode_endpoints[i]<0||decode_endpoints[i]>1)return false;
        }
-       if(bits->integer!=8&&
-          !((decode_endpoints[0]==0&&decode_endpoints[1]==1)||
-            (decode_endpoints[0]==1&&decode_endpoints[1]==0)))return false;
+       // Packed samples are expanded to eight-bit components before
+       // applying Decode, so all DeviceRGB/CMYK component ranges work.
+       // Each channel is mapped independently by apply_device_decode().
        has_device_decode=true;
       }
       auto apply_device_decode=[&](){
