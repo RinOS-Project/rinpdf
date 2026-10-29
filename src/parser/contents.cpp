@@ -970,7 +970,8 @@ struct Reader {
        if(!ms||ms->kind!=Value::Kind::Name||ms->text!="Image"||
           !mw||mw->kind!=Value::Kind::Integer||mw->integer!=w->integer||
           !mh||mh->kind!=Value::Kind::Integer||mh->integer!=h->integer||
-          !mb||mb->kind!=Value::Kind::Integer||mb->integer!=8||
+          !mb||mb->kind!=Value::Kind::Integer||
+          (mb->integer!=8&&mb->integer!=16)||
           !mc||mc->kind!=Value::Kind::Name||mc->text!="DeviceGray"||
           get(mask_range.dictionary,"SMask")||
           get(mask_range.dictionary,"Mask")||
@@ -996,17 +997,27 @@ struct Reader {
        const bool mask_jpeg=mask_filter&&
           mask_filter->kind==Value::Kind::Name&&
           (mask_filter->text=="DCTDecode"||mask_filter->text=="DCT");
+       const size_t mask_pixels=size_t(image.width)*image.height;
        if(mask_jpeg){
-        if(mask_range.offset>size||
+        if(mb->integer!=8||mask_range.offset>size||
            mask_range.length>size-mask_range.offset||
            !decode_dct_image(data+mask_range.offset,mask_range.length,
                              image.width,image.height,1,image.alpha))
          return false;
-       }else if(!decode_stream(data,size,mask_range,image.alpha,
-                               size_t(w->integer)*size_t(h->integer)))
-        return false;
-       if(image.alpha.size()!=size_t(w->integer)*size_t(h->integer))
-        return false;
+       }else{
+        std::vector<uint8_t> samples;
+        const size_t mask_bytes=mask_pixels*(mb->integer==16?2u:1u);
+        if(!decode_stream(data,size,mask_range,samples,mask_bytes)||
+           samples.size()!=mask_bytes)return false;
+        if(mb->integer==16){
+         image.alpha.resize(mask_pixels);
+         for(size_t i=0;i<mask_pixels;++i){
+          const unsigned value=(unsigned(samples[2*i])<<8)|samples[2*i+1];
+          image.alpha[i]=uint8_t((value*255u+32767u)/65535u);
+         }
+        }else image.alpha=std::move(samples);
+       }
+       if(image.alpha.size()!=mask_pixels)return false;
        if(invert_alpha)
         for(auto& value:image.alpha)value=uint8_t(255u-value);
       }
