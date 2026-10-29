@@ -816,9 +816,9 @@ struct Reader {
       const unsigned channels=indexed?1:separation?device_inputs:lab?3:calibrated?calibrated:icc_channels?icc_channels:
         cs->text=="DeviceGray"?1:cs->text=="DeviceRGB"?3:
         cs->text=="DeviceCMYK"?4:0;
-      if(!channels||(!indexed&&bits->integer!=8&&
-         bits->integer!=16&&channels!=1)||
-         (bits->integer==16&&(indexed||separation||calibrated||lab||icc_channels)))
+      if(!channels||
+         (bits->integer!=8&&(separation||calibrated||lab||icc_channels))||
+         (bits->integer==16&&indexed))
        return false;
       // Color-key masking compares original integer samples, before
       // Decode and color-space conversion. Packed DeviceGray uses raw bit values.
@@ -853,7 +853,8 @@ struct Reader {
            cs->text!="DeviceCMYK")||
           decode->kind!=Value::Kind::Array||
           decode->array.size()!=2*channels)return false;
-       if(bits->integer!=8&&bits->integer!=16&&channels!=1)return false;
+       if(bits->integer!=8&&bits->integer!=16&&
+          (indexed||separation||calibrated||lab||icc_channels))return false;
        for(size_t i=0;i<2*channels;++i){
         const Value& v=decode->array[i];
         if(v.kind==Value::Kind::Integer)decode_endpoints[i]=double(v.integer);
@@ -950,8 +951,7 @@ struct Reader {
        return true;
       }
       if(!indexed&&bits->integer!=8&&bits->integer!=16&&
-         !(channels==1&&(bits->integer==1||bits->integer==2||
-                         bits->integer==4)))return false;
+         bits->integer!=1&&bits->integer!=2&&bits->integer!=4)return false;
       // Support a same-size, 8-bit grayscale SMask image. Restrict the
       // initial implementation to raw/Flate data without predictors.
       if(const Value* smask=get(range.dictionary,"SMask")){
@@ -1055,9 +1055,10 @@ struct Reader {
           !check("BitsPerComponent",unsigned(bits->integer)))return false;
       }
       const unsigned sample_bits=unsigned(bits->integer);
-      const size_t packed_stride=(size_t(image.width)*sample_bits+7)/8;
-      const bool packed_gray=!indexed&&channels==1&&sample_bits<8;
-      const size_t decoded_size=(indexed&&sample_bits<8)||packed_gray?
+      const size_t packed_stride=(size_t(image.width)*sample_bits*
+                                  (indexed?1u:channels)+7)/8;
+      const bool packed_device=!indexed&&sample_bits<8;
+      const size_t decoded_size=sample_bits<8?
          packed_stride*image.height:expected*(sample_bits==16?2u:1u);
       std::vector<uint8_t> decoded;
       if(!decode_stream(data,size,range,decoded,decoded_size)||
@@ -1072,22 +1073,27 @@ struct Reader {
           (decoded[y*packed_stride+bit/8]>>(8-sample_bits-(bit%8)))&
           sample_mask);
         }
-      }else if(packed_gray){
-       // DeviceGray samples of 1, 2, or 4 bits are MSB-first and
-       // normalized to 8-bit grayscale. Each row has separate padding.
-       image.pixels.resize(size_t(image.width)*image.height);
-       if(has_color_key)image.alpha.assign(size_t(image.width)*image.height,255);
+      }else if(packed_device){
+       // Each row is independently byte-padded. Unpack interleaved
+       // DeviceGray/RGB/CMYK components before applying PDF Decode.
+       image.pixels.resize(expected);
+       if(has_color_key)
+        image.alpha.assign(size_t(image.width)*image.height,255);
        const unsigned max_sample=(1u<<sample_bits)-1u;
        for(size_t y=0;y<image.height;++y)
         for(size_t x=0;x<image.width;++x){
-         const size_t bit=x*sample_bits;
-         const unsigned sample=(decoded[y*packed_stride+bit/8]>>
-                    (8-sample_bits-(bit%8)))&max_sample;
-         const size_t index=y*image.width+x;
-         if(has_color_key&&sample>=mask_bounds[0]&&sample<=mask_bounds[1])
-          image.alpha[index]=0;
-         image.pixels[index]=uint8_t(
-                    (sample*255u+max_sample/2u)/max_sample);
+         bool transparent=has_color_key;
+         for(unsigned c=0;c<channels;++c){
+          const size_t bit=(x*channels+c)*sample_bits;
+          const unsigned sample=(decoded[y*packed_stride+bit/8]>>
+                       (8-sample_bits-(bit%8)))&max_sample;
+          if(has_color_key&&(sample<mask_bounds[2*c]||
+                             sample>mask_bounds[2*c+1]))
+           transparent=false;
+          image.pixels[(y*image.width+x)*channels+c]=uint8_t(
+                       (sample*255u+max_sample/2u)/max_sample);
+         }
+         if(transparent)image.alpha[y*image.width+x]=0;
         }
       }else if(sample_bits==16){
        // Preserve the original 16-bit integer samples for PDF color-key
@@ -1108,7 +1114,7 @@ struct Reader {
         if(has_color_key&&transparent)image.alpha[pixel]=0;
        }
       }else image.pixels=std::move(decoded);
-      if(!packed_gray&&sample_bits!=16)apply_color_key();
+      if(!packed_device&&sample_bits!=16)apply_color_key();
       apply_device_decode();
       if(indexed){
        std::vector<uint8_t> rgb(size_t(image.width)*image.height*3);
