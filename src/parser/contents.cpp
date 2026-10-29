@@ -1095,17 +1095,17 @@ struct Reader {
        image.pixels.resize(expected);
        if(has_color_key)
         image.alpha.assign(size_t(image.width)*image.height,255);
-       for(size_t i=0;i<expected;++i){
-        const unsigned value=(unsigned(decoded[2*i])<<8)|decoded[2*i+1];
-        if(has_color_key){
-         const unsigned channel=unsigned(i%channels);
-         const bool in_range=value>=mask_bounds[2*channel]&&
-                             value<=mask_bounds[2*channel+1];
-         const size_t pixel=i/channels;
-         if(channel==0)image.alpha[pixel]=in_range?0:255;
-         else if(!in_range)image.alpha[pixel]=255;
+       for(size_t pixel=0;pixel<size_t(image.width)*image.height;++pixel){
+        bool transparent=has_color_key;
+        for(unsigned channel=0;channel<channels;++channel){
+         const size_t i=pixel*channels+channel;
+         const unsigned value=(unsigned(decoded[2*i])<<8)|decoded[2*i+1];
+         if(has_color_key&&(value<mask_bounds[2*channel]||
+                            value>mask_bounds[2*channel+1]))
+          transparent=false;
+         image.pixels[i]=uint8_t((value*255u+32767u)/65535u);
         }
-        image.pixels[i]=uint8_t((value*255u+32767u)/65535u);
+        if(has_color_key&&transparent)image.alpha[pixel]=0;
        }
       }else image.pixels=std::move(decoded);
       if(!packed_gray&&sample_bits!=16)apply_color_key();
