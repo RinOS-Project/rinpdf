@@ -975,8 +975,7 @@ struct Reader {
            mb->integer!=8&&mb->integer!=16)||
           !mc||mc->kind!=Value::Kind::Name||mc->text!="DeviceGray"||
           get(mask_range.dictionary,"SMask")||
-          get(mask_range.dictionary,"Mask")||
-          get(mask_range.dictionary,"DecodeParms"))return false;
+          get(mask_range.dictionary,"Mask"))return false;
        // Soft-mask grayscale may reverse its opacity mapping via Decode.
        // Do not accept arbitrary ranges until the full mask color model
        // and matte processing are implemented.
@@ -1006,6 +1005,18 @@ struct Reader {
                              image.width,image.height,1,image.alpha))
          return false;
        }else{
+        // The stream decoder handles Flate/LZW PNG and TIFF predictors.
+        // Validate their image geometry against this soft-mask raster.
+        if(const Value* parms=get(mask_range.dictionary,"DecodeParms")){
+         if(parms->kind!=Value::Kind::Dictionary)return false;
+         auto match=[&](const char* key,unsigned expected){
+          const Value* v=get(*parms,key);
+          return !v||(v->kind==Value::Kind::Integer&&
+                      v->integer==expected);
+         };
+         if(!match("Columns",image.width)||!match("Colors",1)||
+            !match("BitsPerComponent",unsigned(mb->integer)))return false;
+        }
         std::vector<uint8_t> samples;
         const unsigned mask_bits=unsigned(mb->integer);
         const size_t mask_stride=(size_t(image.width)*mask_bits+7)/8;
