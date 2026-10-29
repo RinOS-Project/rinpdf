@@ -999,7 +999,9 @@ struct Reader {
           (mask_filter->text=="DCTDecode"||mask_filter->text=="DCT");
        const size_t mask_pixels=size_t(image.width)*image.height;
        if(mask_jpeg){
-        if(mb->integer!=8||mask_range.offset>size||
+        // JPEG does not accept PDF predictor parameters.
+        if(get(mask_range.dictionary,"DecodeParms")||
+           mb->integer!=8||mask_range.offset>size||
            mask_range.length>size-mask_range.offset||
            !decode_dct_image(data+mask_range.offset,mask_range.length,
                              image.width,image.height,1,image.alpha))
@@ -1008,14 +1010,28 @@ struct Reader {
         // The stream decoder handles Flate/LZW PNG and TIFF predictors.
         // Validate their image geometry against this soft-mask raster.
         if(const Value* parms=get(mask_range.dictionary,"DecodeParms")){
-         if(parms->kind!=Value::Kind::Dictionary)return false;
-         auto match=[&](const char* key,unsigned expected){
-          const Value* v=get(*parms,key);
-          return !v||(v->kind==Value::Kind::Integer&&
-                      v->integer==expected);
+         auto valid_geometry=[&](const Value& dictionary){
+          if(dictionary.kind!=Value::Kind::Dictionary)return false;
+          auto match=[&](const char* key,unsigned expected){
+           const Value* v=get(dictionary,key);
+           return !v||(v->kind==Value::Kind::Integer&&
+                       v->integer==expected);
+          };
+          return match("Columns",image.width)&&match("Colors",1)&&
+                 match("BitsPerComponent",unsigned(mb->integer));
          };
-         if(!match("Columns",image.width)||!match("Colors",1)||
-            !match("BitsPerComponent",unsigned(mb->integer)))return false;
+         if(parms->kind==Value::Kind::Dictionary){
+          if(!valid_geometry(*parms))return false;
+         }else if(parms->kind==Value::Kind::Array){
+          const Value* filters=get(mask_range.dictionary,"Filter");
+          if(!filters||filters->kind!=Value::Kind::Array||
+             filters->array.size()!=parms->array.size())return false;
+          for(size_t i=0;i<parms->array.size();++i){
+           const Value& param=parms->array[i];
+           if(param.kind!=Value::Kind::Null&&!valid_geometry(param))
+            return false;
+          }
+         }else if(parms->kind!=Value::Kind::Null)return false;
         }
         std::vector<uint8_t> samples;
         const unsigned mask_bits=unsigned(mb->integer);
